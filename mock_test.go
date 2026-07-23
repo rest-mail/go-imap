@@ -166,6 +166,8 @@ func (m *mockMailbox) wasMarkedRead(uid uint32) bool {
 type imapHarness struct {
 	t    *testing.T
 	mock *mockBackend
+	user string
+	pass string
 	conn net.Conn
 	cr   *bufio.Reader
 	cw   *bufio.Writer
@@ -176,8 +178,18 @@ type imapHarness struct {
 
 func newIMAPHarness(t *testing.T, mock *mockBackend) *imapHarness {
 	t.Helper()
+	h := newIMAPHarnessWith(t, mock, mock.user, mock.pass)
+	h.mock = mock
+	return h
+}
+
+// newIMAPHarnessWith drives a Session over net.Pipe against any Backend, so tests
+// can exercise backends beyond the base mockBackend (e.g. one implementing the
+// optional UIDPLUS/Mover interfaces). user/pass are the credentials login uses.
+func newIMAPHarnessWith(t *testing.T, backend Backend, user, pass string) *imapHarness {
+	t.Helper()
 	client, server := net.Pipe()
-	sess := NewSession(server, mock, "imap.test", nil, NopLimiter{})
+	sess := NewSession(server, backend, "imap.test", nil, NopLimiter{})
 
 	done := make(chan struct{})
 	go func() {
@@ -187,7 +199,8 @@ func newIMAPHarness(t *testing.T, mock *mockBackend) *imapHarness {
 
 	h := &imapHarness{
 		t:    t,
-		mock: mock,
+		user: user,
+		pass: pass,
 		conn: client,
 		cr:   bufio.NewReader(client),
 		cw:   bufio.NewWriter(client),
@@ -274,7 +287,7 @@ func literalSuffix(line string) (string, int, bool) {
 
 func (h *imapHarness) login(tag string) {
 	h.t.Helper()
-	_, status := h.command(tag, "LOGIN %s %s", h.mock.user, h.mock.pass)
+	_, status := h.command(tag, "LOGIN %s %s", h.user, h.pass)
 	if !strings.Contains(status, " OK") {
 		h.t.Fatalf("LOGIN status = %q", status)
 	}
