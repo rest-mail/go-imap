@@ -1,7 +1,7 @@
 # imap
 
-[![CI](https://github.com/rest-mail/imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/imap/actions/workflows/ci.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/imap.svg)](https://pkg.go.dev/github.com/rest-mail/imap)
+[![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 
 An IMAP4rev1 ([RFC 3501](https://www.rfc-editor.org/rfc/rfc3501)) server engine
 for Go, with zero external dependencies (standard library only).
@@ -30,7 +30,7 @@ written, so responses never interleave.
 ## Install
 
 ```sh
-go get github.com/rest-mail/imap
+go get github.com/rest-mail/go-imap
 ```
 
 ## Usage
@@ -43,7 +43,7 @@ package main
 import (
 	"crypto/tls"
 
-	"github.com/rest-mail/imap"
+	"github.com/rest-mail/go-imap"
 )
 
 // store is your mail store. Authenticate returns a Mailbox scoped to the user.
