@@ -151,6 +151,10 @@ func (s *Session) Handle() {
 			s.tagged(tag, "OK", "CLOSE completed")
 		case "EXPUNGE":
 			s.handleExpunge(tag)
+		case "UNSELECT":
+			s.handleUnselect(tag)
+		case "ENABLE":
+			s.handleEnable(tag, args)
 		case "GETQUOTA":
 			s.handleGetQuota(tag, args)
 		case "GETQUOTAROOT":
@@ -170,14 +174,7 @@ func (s *Session) Handle() {
 }
 
 func (s *Session) handleCapability(tag string) {
-	caps := "IMAP4rev1 UIDPLUS IDLE MOVE QUOTA"
-	if !s.usingTLS && s.tlsConfig != nil {
-		caps += " STARTTLS"
-	}
-	if s.usingTLS || s.tlsConfig == nil {
-		caps += " AUTH=PLAIN"
-	}
-	s.send("* CAPABILITY %s", caps)
+	s.send("* CAPABILITY %s", s.capabilities())
 	s.tagged(tag, "OK", "CAPABILITY completed")
 }
 
@@ -223,7 +220,7 @@ func (s *Session) handleLogin(tag, args string) {
 	username := unquote(parts[0])
 	password := unquote(parts[1])
 
-	s.authenticate(tag, username, password, "[CAPABILITY IMAP4rev1] LOGIN completed")
+	s.authenticate(tag, username, password, "LOGIN completed")
 }
 
 func (s *Session) handleAuthenticate(tag, args string) {
@@ -252,9 +249,21 @@ func (s *Session) handleAuthenticate(tag, args string) {
 	s.authenticate(tag, parts[1], parts[2], "AUTHENTICATE completed")
 }
 
+// resolveUIDValidity picks the UIDVALIDITY reported for folder in SELECT/EXAMINE:
+// the mailbox's real value when it implements [UIDPlusMailbox], else the legacy
+// constant 1 (unchanged pre-UIDPLUS behaviour).
+func (s *Session) resolveUIDValidity(folder string) uint32 {
+	if v, ok := s.uidValidity(folder); ok {
+		return v
+	}
+	return 1
+}
+
 // authenticate runs the shared LOGIN/AUTHENTICATE credential check, wiring the
 // resulting Mailbox and applying limiter accounting. okMsg is the tagged OK text
-// sent on success.
+// sent on success; a [CAPABILITY ...] response code carrying the post-auth
+// capability list (which reflects the concrete Mailbox's optional interfaces) is
+// prepended so clients see extensions like UIDPLUS without re-probing.
 func (s *Session) authenticate(tag, username, password, okMsg string) {
 	ip := extractIP(s.conn.RemoteAddr().String())
 
@@ -281,7 +290,7 @@ func (s *Session) authenticate(tag, username, password, okMsg string) {
 	s.mailbox = mailbox
 
 	slog.Info("imap: authenticated", "remote", s.conn.RemoteAddr(), "user", username)
-	s.tagged(tag, "OK", okMsg)
+	s.tagged(tag, "OK", "[CAPABILITY "+s.capabilities()+"] "+okMsg)
 }
 
 func (s *Session) handleList(tag, args string) {
@@ -370,7 +379,7 @@ func (s *Session) handleSelect(tag, args string) {
 	s.send("* %d EXISTS", total)
 	s.send("* %d RECENT", unread)
 	s.send("* OK [UNSEEN %d]", unread)
-	s.send("* OK [UIDVALIDITY 1]")
+	s.send("* OK [UIDVALIDITY %d]", s.resolveUIDValidity(folder))
 	if total > 0 {
 		s.send("* OK [UIDNEXT %d]", s.messages[0].UID+1)
 	} else {
@@ -835,17 +844,10 @@ func (s *Session) handleCopy(tag, args string) {
 
 	seqNums := parseSequenceSet(seqStr, len(s.messages))
 
-	for _, seq := range seqNums {
-		if seq < 1 || seq > len(s.messages) {
-			continue
-		}
-		msg := s.messages[seq-1]
-		if err := s.mailbox.Copy(msg.UID, dest); err != nil {
-			slog.Warn("imap: copy failed", "uid", msg.UID, "error", err)
-			continue
-		}
+	if code := s.copyMessages(seqNums, dest); code != "" {
+		s.tagged(tag, "OK", "["+code+"] COPY completed")
+		return
 	}
-
 	s.tagged(tag, "OK", "COPY completed")
 }
 
@@ -865,29 +867,7 @@ func (s *Session) handleMove(tag, args string) {
 	dest := unquote(strings.TrimSpace(parts[1]))
 
 	seqNums := parseSequenceSet(seqStr, len(s.messages))
-
-	// Move = update folder + expunge from current view (in reverse for stable seq nums)
-	for i := len(seqNums) - 1; i >= 0; i-- {
-		seq := seqNums[i]
-		if seq < 1 || seq > len(s.messages) {
-			continue
-		}
-		msg := s.messages[seq-1]
-		if err := s.mailbox.Move(msg.UID, dest); err != nil {
-			slog.Warn("imap: move failed", "uid", msg.UID, "error", err)
-			continue
-		}
-		// Send EXPUNGE for this sequence number
-		s.send("* %d EXPUNGE", seq)
-		// Remove from local message list
-		s.messages = append(s.messages[:seq-1], s.messages[seq:]...)
-	}
-
-	if s.selected != nil {
-		s.selected.total = int64(len(s.messages))
-	}
-
-	s.tagged(tag, "OK", "MOVE completed")
+	s.moveMessages(tag, "MOVE", seqNums, dest)
 }
 
 func (s *Session) handleExpunge(tag string) {
@@ -1084,6 +1064,22 @@ func (s *Session) handleAppend(tag, args string) {
 		}
 	}
 
+	// With UIDPLUS, report the assigned UID in an APPENDUID resp-code (RFC 4315).
+	if up, ok := s.mailbox.(UIDPlusMailbox); ok {
+		uid, err := up.AppendUID(folder, flags, data)
+		if err != nil {
+			slog.Warn("imap: append failed", "error", err)
+			s.tagged(tag, "NO", "APPEND failed")
+			return
+		}
+		if v, ok := s.uidValidity(folder); ok {
+			s.tagged(tag, "OK", fmt.Sprintf("[APPENDUID %d %d] APPEND completed", v, uid))
+			return
+		}
+		s.tagged(tag, "OK", "APPEND completed")
+		return
+	}
+
 	if err := s.mailbox.Append(folder, flags, data); err != nil {
 		slog.Warn("imap: append failed", "error", err)
 		s.tagged(tag, "NO", "APPEND failed")
@@ -1233,6 +1229,8 @@ func (s *Session) handleUID(tag, args string) {
 		s.handleUIDMove(tag, subArgs)
 	case "SEARCH":
 		s.handleUIDSearch(tag, subArgs)
+	case "EXPUNGE":
+		s.handleUIDExpunge(tag, subArgs)
 	default:
 		s.tagged(tag, "BAD", "Unknown UID command")
 	}
@@ -1462,17 +1460,10 @@ func (s *Session) handleUIDCopy(tag, args string) {
 	dest := unquote(strings.TrimSpace(parts[1]))
 
 	seqNums := s.parseUIDSet(uidSetStr)
-	for _, seq := range seqNums {
-		if seq < 1 || seq > len(s.messages) {
-			continue
-		}
-		msg := s.messages[seq-1]
-		if err := s.mailbox.Copy(msg.UID, dest); err != nil {
-			slog.Warn("imap: uid copy failed", "uid", msg.UID, "error", err)
-			continue
-		}
+	if code := s.copyMessages(seqNums, dest); code != "" {
+		s.tagged(tag, "OK", "["+code+"] UID COPY completed")
+		return
 	}
-
 	s.tagged(tag, "OK", "UID COPY completed")
 }
 
@@ -1487,24 +1478,7 @@ func (s *Session) handleUIDMove(tag, args string) {
 	dest := unquote(strings.TrimSpace(parts[1]))
 
 	seqNums := s.parseUIDSet(uidSetStr)
-
-	for i := len(seqNums) - 1; i >= 0; i-- {
-		seq := seqNums[i]
-		if seq < 1 || seq > len(s.messages) {
-			continue
-		}
-		msg := s.messages[seq-1]
-		if err := s.mailbox.Move(msg.UID, dest); err != nil {
-			continue
-		}
-		s.send("* %d EXPUNGE", seq)
-		s.messages = append(s.messages[:seq-1], s.messages[seq:]...)
-	}
-
-	if s.selected != nil {
-		s.selected.total = int64(len(s.messages))
-	}
-	s.tagged(tag, "OK", "UID MOVE completed")
+	s.moveMessages(tag, "UID MOVE", seqNums, dest)
 }
 
 func (s *Session) handleUIDSearch(tag, args string) {

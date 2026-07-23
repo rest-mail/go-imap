@@ -5,9 +5,16 @@
 // view over their folders and messages, expressed as neutral [Message] values;
 // the [Server] speaks the wire protocol — CAPABILITY, STARTTLS, LOGIN,
 // AUTHENTICATE PLAIN, LIST/LSUB, SELECT/EXAMINE, STATUS, FETCH, UID FETCH,
-// SEARCH, STORE, COPY, MOVE, EXPUNGE, APPEND, IDLE, QUOTA and more. The engine
-// holds no assumptions about where mail lives: a Backend can be a database, a
-// maildir, or a remote API.
+// SEARCH, STORE, COPY, MOVE, EXPUNGE, UNSELECT, ENABLE, APPEND, IDLE, QUOTA and
+// more. The engine holds no assumptions about where mail lives: a Backend can be
+// a database, a maildir, or a remote API.
+//
+// Extensions that need more from the store are opt-in: a Mailbox that also
+// implements [UIDPlusMailbox] turns on UIDPLUS ([RFC 4315]) — APPENDUID/COPYUID
+// response codes and UID EXPUNGE — and one that implements [Mover] turns on an
+// atomic server-side MOVE ([RFC 6851]). The advertised CAPABILITY list reflects
+// only the optional interfaces the concrete Mailbox satisfies, so a backend
+// implementing just [Mailbox] is unaffected.
 //
 // Message bodies served by FETCH BODY[] are whatever [Mailbox.Fetch] returns,
 // byte-for-byte. Higher-level folder operations (deleting or renaming a folder)
@@ -16,6 +23,8 @@
 // model where a folder exists once a message names it.
 //
 // [RFC 3501]: https://www.rfc-editor.org/rfc/rfc3501
+// [RFC 4315]: https://www.rfc-editor.org/rfc/rfc4315
+// [RFC 6851]: https://www.rfc-editor.org/rfc/rfc6851
 package imap
 
 import "time"
@@ -99,6 +108,48 @@ type Mailbox interface {
 	Append(dest string, f FlagUpdate, raw []byte) error
 	// Quota returns storage use and limit in bytes (GETQUOTA/GETQUOTAROOT).
 	Quota() (used, limit int64, err error)
+}
+
+// UIDPlusMailbox is the optional interface a [Mailbox] may also implement to
+// enable the UIDPLUS extension ([RFC 4315]). When the authenticated Mailbox
+// satisfies it, the [Server] advertises the UIDPLUS capability, reports the real
+// UIDVALIDITY in SELECT/EXAMINE, emits APPENDUID and COPYUID response codes on
+// APPEND / COPY / MOVE, and honours UID EXPUNGE. A Mailbox that does not
+// implement it keeps exact pre-UIDPLUS behaviour: the capability is not
+// advertised and no response codes are sent.
+//
+// The three methods mirror the base [Mailbox.Append] and [Mailbox.Copy] but
+// return the UID the store assigned, which the resp-codes require; a base
+// implementation can simply call its UID-returning form and discard the result.
+//
+// [RFC 4315]: https://www.rfc-editor.org/rfc/rfc4315
+type UIDPlusMailbox interface {
+	// UIDValidity returns the UIDVALIDITY of folder — the value SELECT/EXAMINE
+	// reports and that scopes the UIDs quoted in APPENDUID and COPYUID. A zero
+	// value or error makes the Server fall back to reporting UIDVALIDITY 1 and
+	// omit the affected response code.
+	UIDValidity(folder string) (uint32, error)
+	// AppendUID delivers raw into dest exactly like [Mailbox.Append] and returns
+	// the UID assigned to the stored message, for the APPENDUID response code.
+	AppendUID(dest string, f FlagUpdate, raw []byte) (uid uint32, err error)
+	// CopyUID duplicates the message named by srcUID into dest exactly like
+	// [Mailbox.Copy] and returns the UID assigned to the copy, for COPYUID.
+	CopyUID(srcUID uint32, dest string) (uid uint32, err error)
+}
+
+// Mover is the optional interface a [Mailbox] may also implement to perform an
+// atomic server-side MOVE ([RFC 6851]). Without it the [Server] still supports
+// MOVE and UID MOVE by calling [Mailbox.Move] once per message; with it the move
+// runs as a single backend operation and, when the Mailbox also implements
+// [UIDPlusMailbox], the returned destination UID is reported in a COPYUID
+// response code. The MOVE capability is advertised for every backend either way.
+//
+// [RFC 6851]: https://www.rfc-editor.org/rfc/rfc6851
+type Mover interface {
+	// MoveUID relocates the message named by srcUID to dest as one atomic
+	// operation and returns the UID assigned to it in dest, for COPYUID. A
+	// backend that cannot report the new UID may return 0.
+	MoveUID(srcUID uint32, dest string) (uid uint32, err error)
 }
 
 // Limiter is the per-IP connection and authentication guard the [Server]
