@@ -224,6 +224,14 @@ func (s *Session) handleLogin(tag, args string) {
 }
 
 func (s *Session) handleAuthenticate(tag, args string) {
+	// Gate cleartext SASL the same way LOGIN is gated: when TLS is configured
+	// but not yet active, refuse before soliciting any credential so the base64
+	// PLAIN response is never sent over the wire (RFC 3501 / RFC 2595).
+	if !s.usingTLS && s.tlsConfig != nil {
+		s.tagged(tag, "NO", "[PRIVACYREQUIRED] STARTTLS required")
+		return
+	}
+
 	// Simplified — only support PLAIN
 	if !strings.EqualFold(strings.TrimSpace(args), "PLAIN") {
 		s.tagged(tag, "NO", "Unsupported mechanism")
