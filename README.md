@@ -1,31 +1,52 @@
-# imap
+# go-imap
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
+[![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
 An IMAP4rev1 ([RFC 3501](https://www.rfc-editor.org/rfc/rfc3501)) server engine
-for Go, with zero external dependencies (standard library only).
+for Go — standard library only, no external dependencies.
 
-You supply a `Backend` that authenticates users and returns a `Mailbox` view over
-their folders and messages, expressed as neutral `Message` values; the `Server`
-speaks the wire protocol — `CAPABILITY`, `STARTTLS`, `LOGIN`, `AUTHENTICATE
-PLAIN`, `LIST`/`LSUB`, `SELECT`/`EXAMINE`, `STATUS`, `FETCH`, `UID
-FETCH`/`STORE`/`COPY`/`MOVE`/`SEARCH`/`EXPUNGE`, `STORE`, `COPY`, `MOVE`,
-`EXPUNGE`, `CLOSE`, `UNSELECT` (RFC 3691), `ENABLE` (RFC 5161), `APPEND`, `IDLE`
-and `QUOTA` (RFC 2087). The engine holds no assumptions about where mail lives: a
-`Backend` can be a database, a maildir, or a remote API.
+## About
 
-Two extensions — `UIDPLUS` (RFC 4315: `APPENDUID`/`COPYUID` resp-codes and
-`UID EXPUNGE`) and atomic server-side `MOVE` (RFC 6851) — light up only when the
-concrete backend opts in through the optional interfaces below; a backend that
-implements just `Mailbox` behaves exactly as before, and the advertised
-`CAPABILITY` list reflects only what the backend actually supports.
+You supply a `Backend` that authenticates users and returns a `Mailbox` view
+over their folders and messages, expressed as neutral `Message` values; the
+`Server` speaks the wire protocol. The engine holds no assumptions about where
+mail lives — a `Backend` can be a database, a maildir, or a remote API.
 
-`FETCH BODY[]` serves exactly the bytes `Mailbox.Fetch` returns; `BODY.PEEK[]`
-never sets `\Seen` while a plain `BODY[]` fetch does (RFC 3501 §6.4.5). UID
-ranges expand across non-contiguous UIDs and `UID FETCH *` resolves to the
-newest message. The IDLE poller is fully stopped before the tagged completion is
-written, so responses never interleave.
+The store surface is deliberately small. `Backend` has one method,
+`Authenticate`; the `Mailbox` it returns lists folders, returns a folder's
+messages, and fetches, stores, moves, copies, deletes and appends by UID. The
+server caches the message slice for the selected folder and derives sequence
+numbers, flags, `ENVELOPE` and `SEARCH` results from it, calling `Fetch` only
+when a body is requested. Folders are implicit — there is no folder-management
+method, so a folder exists once a message names it.
+
+Richer extensions light up only when the concrete backend opts in through the
+optional interfaces below, and the advertised `CAPABILITY` list is derived from
+what your type actually implements, so it never over-promises.
+
+## Features
+
+- IMAP4rev1 server engine (RFC 3501) driven by a `Backend` you implement;
+  store-agnostic, built on neutral `Message` values.
+- `STARTTLS` and implicit TLS; `LOGIN` and `AUTHENTICATE PLAIN`, with plaintext
+  authentication withheld until the connection is protected.
+- `SELECT`/`EXAMINE`, `FETCH` and `UID FETCH` (`BODY[]`, `BODY.PEEK[]`,
+  `BODY[HEADER]`, `BODY[TEXT]`, `FLAGS`, `ENVELOPE`, `INTERNALDATE`,
+  `RFC822.SIZE`, `UID`), `SEARCH`, `STORE`, `COPY`, `EXPUNGE` and `APPEND`.
+- `BODY.PEEK[]` never sets `\Seen`; a plain `BODY[]` fetch does (RFC 3501
+  §6.4.5). UID ranges expand across non-contiguous UIDs and `UID FETCH *`
+  resolves to the newest message.
+- `IDLE` (RFC 2177), with the poll goroutine fully stopped before each tagged
+  completion so responses never interleave, and `QUOTA` (RFC 2087).
+- `UNSELECT` (RFC 3691) and `ENABLE` (RFC 5161) baseline commands.
+- Optional `UIDPLUS` (RFC 4315) via `UIDPlusMailbox` and atomic server-side
+  `MOVE` (RFC 6851) via `Mover` — advertised only when your `Mailbox`
+  implements them.
+- Pluggable per-IP `Limiter` for connection caps and auth-failure bans
+  (`NopLimiter` for none).
+- Zero external dependencies.
 
 ## Install
 
@@ -33,9 +54,11 @@ written, so responses never interleave.
 go get github.com/rest-mail/go-imap
 ```
 
-## Usage
+## Quickstart
 
-Implement `Backend` and `Mailbox`, then hand the server a listener config:
+Implement `Backend` and `Mailbox`, then hand the server a TLS config and a set of
+ports. The `account` type below is a sketch — fill in the method bodies against
+your own store.
 
 ```go
 package main
@@ -63,18 +86,18 @@ func (a *account) Folders() ([]imap.Folder, error) {
 func (a *account) Messages(folder string) ([]imap.Message, error) {
 	// oldest-first; UID stable and ascending with arrival
 	return []imap.Message{
-		{UID: 101, Size: 4213, Seen: false, Subject: "hello",
+		{UID: 101, Size: 4213, Subject: "hello",
 			From: imap.Address{Name: "Alice", Email: "alice@example.com"}},
 	}, nil
 }
 
-func (a *account) Fetch(uid uint32) ([]byte, error)                  { /* full RFC 5322 bytes */ return nil, nil }
-func (a *account) Store(uid uint32, f imap.FlagUpdate) error         { /* \Seen/\Flagged changes */ return nil }
-func (a *account) Move(uid uint32, dest string) error                { return nil }
-func (a *account) Delete(uid uint32) error                           { /* EXPUNGE */ return nil }
-func (a *account) Copy(uid uint32, dest string) error                { return nil }
+func (a *account) Fetch(uid uint32) ([]byte, error)                        { /* full RFC 5322 bytes */ return nil, nil }
+func (a *account) Store(uid uint32, f imap.FlagUpdate) error               { /* \Seen/\Flagged changes */ return nil }
+func (a *account) Move(uid uint32, dest string) error                      { return nil }
+func (a *account) Delete(uid uint32) error                                 { /* EXPUNGE */ return nil }
+func (a *account) Copy(uid uint32, dest string) error                      { return nil }
 func (a *account) Append(dest string, f imap.FlagUpdate, raw []byte) error { return nil }
-func (a *account) Quota() (used, limit int64, err error)             { return 0, 0, nil }
+func (a *account) Quota() (used, limit int64, err error)                   { return 0, 0, nil }
 
 func main() {
 	cert, _ := tls.LoadX509KeyPair("cert.pem", "key.pem")
@@ -85,51 +108,63 @@ func main() {
 	if err := srv.ListenAndServe(imap.Ports{IMAP: 143, IMAPTLS: 993}); err != nil {
 		panic(err)
 	}
-	select {} // serve until Shutdown
+	select {} // serve until srv.Shutdown()
 }
 ```
 
 For a single accepted connection (e.g. behind your own listener), construct a
 session directly with `imap.NewSession(conn, backend, hostname, tlsConfig,
-limiter)` and call `Handle()`.
+limiter)` and call `Handle()`. A runnable, self-contained version of this wiring
+— driving one session over an in-memory pipe — is in
+[`example_test.go`](example_test.go).
 
-### Optional extensions (UIDPLUS, MOVE)
+## Implementing optional extensions
 
 Richer extensions are opt-in through **optional interfaces** the server
 type-asserts on your `Mailbox` at runtime. You never have to implement them: a
-`Mailbox` that satisfies only the base interface keeps its exact behaviour and
-the server advertises neither `UIDPLUS` nor a COPYUID-bearing `MOVE`. Implement
-an interface and the matching capability and response codes turn on automatically
-— the `CAPABILITY` list stays honest because it is derived from what your
-concrete type implements.
+`Mailbox` that satisfies only the base interface keeps its exact behaviour, and
+the server advertises neither `UIDPLUS` nor a `COPYUID`-bearing `MOVE`. Implement
+an interface and the matching capability and response codes turn on automatically.
 
 - **`UIDPlusMailbox`** enables `UIDPLUS` (RFC 4315). It adds `UIDValidity`,
   `AppendUID` and `CopyUID` — the UID-returning forms of `Append`/`Copy` — so the
   server can emit `[APPENDUID uidvalidity uid]` on `APPEND`, `[COPYUID …]` on
   `COPY`/`MOVE`, report the real `UIDVALIDITY` in `SELECT`, and honour
   `UID EXPUNGE`.
-- **`Mover`** enables an atomic server-side `MOVE`/`UID MOVE` (RFC 6851) via
-  `MoveUID`. Without it, `MOVE` still works by calling `Mailbox.Move` per message;
-  with it (plus `UIDPlusMailbox`) `MOVE` reports the destination UID in a
-  `COPYUID` response code.
+- **`Mover`** makes `MOVE`/`UID MOVE` (RFC 6851) a single atomic backend
+  operation via `MoveUID`. `MOVE` is a baseline capability either way — without
+  `Mover` it works by calling `Mailbox.Move` per message; with it (plus
+  `UIDPlusMailbox`) it reports the destination UID in a `COPYUID` response code.
 
 ```go
 // Opt in by adding methods to your existing Mailbox type — no base changes.
-func (a *account) UIDValidity(folder string) (uint32, error)            { /* per-folder UIDVALIDITY */ return 1, nil }
+func (a *account) UIDValidity(folder string) (uint32, error)                            { /* per-folder UIDVALIDITY */ return 1, nil }
 func (a *account) AppendUID(dest string, f imap.FlagUpdate, raw []byte) (uint32, error) { /* store, return new UID */ return 0, nil }
-func (a *account) CopyUID(srcUID uint32, dest string) (uint32, error)   { /* copy, return new UID */ return 0, nil }
-func (a *account) MoveUID(srcUID uint32, dest string) (uint32, error)   { /* atomic move, return new UID */ return 0, nil }
+func (a *account) CopyUID(srcUID uint32, dest string) (uint32, error)                   { /* copy, return new UID */ return 0, nil }
+func (a *account) MoveUID(srcUID uint32, dest string) (uint32, error)                   { /* atomic move, return new UID */ return 0, nil }
 ```
 
 `CONDSTORE`/`QRESYNC` (RFC 7162) are not implemented; the `ENABLE` command is
 accepted and, having no enable-able extension yet, is a no-op.
 
-### Rate limiting
+## API highlights
 
-`NewServer` accepts a `Limiter` — a small structural interface
-(`Accept`/`Release`/`RecordAuthFail`/`IsBanned`/`ResetAuth`) the engine consults
-for per-IP connection caps and auth-failure bans. Pass `nil` (or `imap.NopLimiter{}`)
-for none, or wire in your own; any type with those methods satisfies it.
+- `NewServer(hostname, backend, tlsConfig, limiter) *Server` and
+  `(*Server).ListenAndServe(Ports)` / `(*Server).Shutdown()` — run the listeners.
+- `NewSession(conn, backend, hostname, tlsConfig, limiter) *Session` and
+  `(*Session).Handle()` — drive one already-accepted connection.
+- `Backend` and `Mailbox` — the seam you implement; `Message`, `Address`,
+  `Folder` and `FlagUpdate` are the neutral value types they exchange.
+- `UIDPlusMailbox` and `Mover` — the optional interfaces that gate `UIDPLUS` and
+  atomic `MOVE`.
+- `Limiter` (with `NopLimiter`) — the per-IP connection and auth-failure guard;
+  a small structural interface (`Accept`/`Release`/`RecordAuthFail`/`IsBanned`/
+  `ResetAuth`) any type can satisfy.
+
+## Documentation
+
+Full API reference:
+[pkg.go.dev/github.com/rest-mail/go-imap](https://pkg.go.dev/github.com/rest-mail/go-imap).
 
 ## License
 

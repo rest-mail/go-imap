@@ -1,29 +1,64 @@
 // Package imap implements an IMAP4rev1 ([RFC 3501]) server engine with zero
 // external dependencies (standard library only).
 //
-// A caller supplies a [Backend] that authenticates users and returns a [Mailbox]
-// view over their folders and messages, expressed as neutral [Message] values;
-// the [Server] speaks the wire protocol — CAPABILITY, STARTTLS, LOGIN,
+// You supply a [Backend] that authenticates users and returns a [Mailbox] view
+// over their folders and messages, expressed as neutral [Message] values; the
+// [Server] speaks the wire protocol. The engine holds no assumptions about where
+// mail lives — a Backend can be a database, a maildir, or a remote API.
+//
+// # Backend and Mailbox
+//
+// [Backend] has a single method, Authenticate, which a [Server] calls once per
+// session when the client issues LOGIN or AUTHENTICATE. It returns a [Mailbox]:
+// the authenticated account's view of its mail, every method scoped to that user.
+// The Server caches the slice [Mailbox.Messages] returns for the selected folder
+// and derives sequence numbers, UIDs, flags, ENVELOPE and SEARCH results from it,
+// calling [Mailbox.Fetch] only when a body is requested — and FETCH BODY[] then
+// serves whatever Fetch returns, byte-for-byte. Folders are implicit: there is no
+// folder-management method, so a folder exists once a message names it, and
+// deleting or renaming one is composed from [Mailbox.Messages] and [Mailbox.Move].
+//
+// The commands the engine answers include CAPABILITY, STARTTLS, LOGIN,
 // AUTHENTICATE PLAIN, LIST/LSUB, SELECT/EXAMINE, STATUS, FETCH, UID FETCH,
-// SEARCH, STORE, COPY, MOVE, EXPUNGE, UNSELECT, ENABLE, APPEND, IDLE, QUOTA and
-// more. The engine holds no assumptions about where mail lives: a Backend can be
-// a database, a maildir, or a remote API.
+// SEARCH, STORE, COPY, MOVE, EXPUNGE, UID EXPUNGE, CLOSE, UNSELECT ([RFC 3691]),
+// ENABLE ([RFC 5161]), APPEND, IDLE ([RFC 2177]) and QUOTA ([RFC 2087]).
 //
-// Extensions that need more from the store are opt-in: a Mailbox that also
-// implements [UIDPlusMailbox] turns on UIDPLUS ([RFC 4315]) — APPENDUID/COPYUID
-// response codes and UID EXPUNGE — and one that implements [Mover] turns on an
-// atomic server-side MOVE ([RFC 6851]). The advertised CAPABILITY list reflects
-// only the optional interfaces the concrete Mailbox satisfies, so a backend
-// implementing just [Mailbox] is unaffected.
+// # Optional extensions
 //
-// Message bodies served by FETCH BODY[] are whatever [Mailbox.Fetch] returns,
-// byte-for-byte. Higher-level folder operations (deleting or renaming a folder)
-// are composed from [Mailbox.Messages] and [Mailbox.Move]; there is no
-// folder-management method on the Backend, matching the "folders are implicit"
-// model where a folder exists once a message names it.
+// Extensions that need more from the store are opt-in through optional interfaces
+// the Server type-asserts on the concrete [Mailbox] after authentication. A
+// Mailbox that also implements [UIDPlusMailbox] turns on UIDPLUS ([RFC 4315]) —
+// APPENDUID/COPYUID response codes, the real UIDVALIDITY in SELECT/EXAMINE, and
+// UID EXPUNGE — and one that implements [Mover] turns the baseline MOVE
+// ([RFC 6851]) into a single atomic backend operation. The advertised CAPABILITY
+// list reflects only the optional interfaces the concrete Mailbox satisfies, so a
+// backend implementing just [Mailbox] is unaffected and the list never
+// over-promises.
+//
+// # TLS and authentication
+//
+// A non-nil *tls.Config enables both STARTTLS on the cleartext port and an
+// implicit-TLS listener. When TLS is configured, LOGIN is refused on a cleartext
+// connection until the client issues STARTTLS, and AUTH=PLAIN is advertised only
+// once the connection is protected; with no TLS config at all the server offers
+// AUTH=PLAIN in the clear, for development. LOGIN and AUTHENTICATE PLAIN share one
+// credential check against [Backend.Authenticate], and each failure is reported to
+// the [Limiter] — the per-IP connection and auth-failure guard the Server
+// consults. Pass [NopLimiter] (or nil) to impose no limits.
+//
+// # Running a server
+//
+// [NewServer] builds a Server; [Server.ListenAndServe] opens the configured
+// [Ports] and serves in the background until [Server.Shutdown]. To drive a single
+// already-accepted connection behind your own listener, construct a [Session] with
+// [NewSession] and call [Session.Handle].
 //
 // [RFC 3501]: https://www.rfc-editor.org/rfc/rfc3501
+// [RFC 2087]: https://www.rfc-editor.org/rfc/rfc2087
+// [RFC 2177]: https://www.rfc-editor.org/rfc/rfc2177
+// [RFC 3691]: https://www.rfc-editor.org/rfc/rfc3691
 // [RFC 4315]: https://www.rfc-editor.org/rfc/rfc4315
+// [RFC 5161]: https://www.rfc-editor.org/rfc/rfc5161
 // [RFC 6851]: https://www.rfc-editor.org/rfc/rfc6851
 package imap
 
