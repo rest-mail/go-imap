@@ -168,8 +168,19 @@ func parseSequenceSet(seqStr string, total int) []int {
 			if start > end {
 				start, end = end, start
 			}
+			// Clamp to [1, total] BEFORE iterating. A crafted set such as
+			// "1:4294967295" against a 3-message mailbox would otherwise loop
+			// ~4.3 billion times to yield the same three sequence numbers — an
+			// authenticated CPU DoS (issue #8). Clamping bounds the loop to the
+			// messages that can actually exist.
+			if start < 1 {
+				start = 1
+			}
+			if end > total {
+				end = total
+			}
 			for i := start; i <= end; i++ {
-				if i >= 1 && i <= total && !seen[i] {
+				if !seen[i] {
 					result = append(result, i)
 					seen[i] = true
 				}
@@ -198,6 +209,76 @@ func resolveSeqNum(s string, total int) int {
 		return 0
 	}
 	return n
+}
+
+// seqRange is a normalized, inclusive [start, end] span from an IMAP sequence
+// set. It records the bounds only — it is never expanded into individual
+// numbers, so membership testing is O(1) regardless of how wide the declared
+// span is.
+type seqRange struct {
+	start, end uint32
+}
+
+// parseUIDRanges parses an IMAP UID set (e.g. "1,3:5,100:*") into normalized
+// inclusive ranges WITHOUT expanding them. A pathological span such as
+// "1:4294967295" therefore costs O(number of comma parts) rather than
+// O(span) — the fix for the quadratic UID SEARCH DoS in issue #8, where the set
+// was previously re-expanded once per message. "*" resolves to maxUID (the
+// largest UID currently in the mailbox); a part whose "*" endpoint has no UID to
+// resolve to (empty mailbox) or that fails to parse is dropped.
+func parseUIDRanges(setStr string, maxUID uint32) []seqRange {
+	var ranges []seqRange
+	for _, part := range strings.Split(setStr, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if strings.Contains(part, ":") {
+			rangeParts := strings.SplitN(part, ":", 2)
+			start, ok1 := parseUIDBound(rangeParts[0], maxUID)
+			end, ok2 := parseUIDBound(rangeParts[1], maxUID)
+			if !ok1 || !ok2 {
+				continue
+			}
+			if start > end {
+				start, end = end, start
+			}
+			ranges = append(ranges, seqRange{start: start, end: end})
+		} else {
+			v, ok := parseUIDBound(part, maxUID)
+			if !ok {
+				continue
+			}
+			ranges = append(ranges, seqRange{start: v, end: v})
+		}
+	}
+	return ranges
+}
+
+// parseUIDBound resolves one endpoint of a UID range. "*" becomes maxUID (valid
+// only when the mailbox holds at least one message); a non-numeric or
+// out-of-uint32 token is rejected.
+func parseUIDBound(s string, maxUID uint32) (uint32, bool) {
+	s = strings.TrimSpace(s)
+	if s == "*" {
+		return maxUID, maxUID > 0
+	}
+	v, err := strconv.ParseUint(s, 10, 32)
+	if err != nil {
+		return 0, false
+	}
+	return uint32(v), true
+}
+
+// uidInRanges reports whether uid falls within any of the given ranges. It is
+// the membership test that replaces per-message range expansion.
+func uidInRanges(uid uint32, ranges []seqRange) bool {
+	for _, r := range ranges {
+		if uid >= r.start && uid <= r.end {
+			return true
+		}
+	}
+	return false
 }
 
 // parseFlags extracts IMAP flags from a parenthesized list like "(\Seen \Flagged)".
