@@ -167,8 +167,11 @@ func (s *Session) Handle() {
 
 	slog.Info("imap: new connection", "remote", s.conn.RemoteAddr())
 
-	// Send greeting
-	s.send("* OK [CAPABILITY IMAP4rev1 STARTTLS AUTH=PLAIN] %s IMAP4rev1 ready", s.hostname)
+	// Send greeting. The CAPABILITY response code is built from the live session
+	// state (via s.capabilities()) rather than hardcoded, so it reflects the TLS
+	// state and the LOGINDISABLED policy and never advertises what the server
+	// would refuse (RFC 3501 §7.1.1).
+	s.send("* OK [CAPABILITY %s] %s IMAP4rev1 ready", s.capabilities(), s.hostname)
 
 	for {
 		_ = s.conn.SetDeadline(time.Now().Add(30 * time.Minute))
@@ -325,7 +328,9 @@ func (s *Session) handleSTARTTLS(tag string) bool {
 }
 
 func (s *Session) handleLogin(tag, args string) {
-	if !s.usingTLS && s.tlsConfig != nil {
+	// Enforce the same policy the greeting advertises via LOGINDISABLED: refuse
+	// plaintext LOGIN until TLS is established (RFC 3501 §7.1.1, RFC 2595).
+	if s.loginDisabled() {
 		s.tagged(tag, "NO", "[PRIVACYREQUIRED] STARTTLS required")
 		return
 	}
@@ -346,7 +351,7 @@ func (s *Session) handleAuthenticate(tag, args string) {
 	// Gate cleartext SASL the same way LOGIN is gated: when TLS is configured
 	// but not yet active, refuse before soliciting any credential so the base64
 	// PLAIN response is never sent over the wire (RFC 3501 / RFC 2595).
-	if !s.usingTLS && s.tlsConfig != nil {
+	if s.loginDisabled() {
 		s.tagged(tag, "NO", "[PRIVACYREQUIRED] STARTTLS required")
 		return
 	}
