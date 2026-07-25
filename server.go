@@ -1,6 +1,7 @@
 package imap
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"log/slog"
@@ -14,9 +15,22 @@ type Server struct {
 	backend   Backend
 	tlsConfig *tls.Config
 	limiter   Limiter
+
+	// shutdown is closed once, by the first Shutdown or Close, to tell the
+	// accept loops to stop.
+	shutdown chan struct{}
+
+	// wg tracks every goroutine the server owns: each accept loop and each
+	// in-flight session. Shutdown waits on it to drain active sessions.
+	wg sync.WaitGroup
+
+	// mu guards listeners, conns and closed. It also serializes the wg.Add for
+	// a new session against the closed flag, so no session is launched (and
+	// missed by Shutdown's wait) after shutdown has begun.
+	mu        sync.Mutex
 	listeners []net.Listener
-	wg        sync.WaitGroup
-	shutdown  chan struct{}
+	conns     map[net.Conn]struct{}
+	closed    bool
 }
 
 // NewServer creates an IMAP Server backed by the given [Backend]. hostname is
@@ -32,6 +46,7 @@ func NewServer(hostname string, backend Backend, tlsConfig *tls.Config, limiter 
 		tlsConfig: tlsConfig,
 		limiter:   limiter,
 		shutdown:  make(chan struct{}),
+		conns:     make(map[net.Conn]struct{}),
 	}
 }
 
@@ -43,7 +58,7 @@ type Ports struct {
 
 // ListenAndServe starts IMAP listeners on the specified ports. A zero port is
 // skipped. It returns once the listeners are open; connections are served in the
-// background until [Server.Shutdown].
+// background until [Server.Shutdown] or [Server.Close].
 func (s *Server) ListenAndServe(ports Ports) error {
 	if ports.IMAP > 0 {
 		if err := s.listen(ports.IMAP, false); err != nil {
@@ -77,7 +92,9 @@ func (s *Server) listen(port int, implicitTLS bool) error {
 		slog.Info("imap: listening", "port", port)
 	}
 
+	s.mu.Lock()
 	s.listeners = append(s.listeners, listener)
+	s.mu.Unlock()
 
 	s.wg.Add(1)
 	go func() {
@@ -108,7 +125,18 @@ func (s *Server) acceptLoop(listener net.Listener, implicitTLS bool) {
 			continue
 		}
 
+		// Register the connection (and its wg slot) before serving it. If the
+		// server is already shutting down, refuse the connection and stop
+		// accepting — the listener is being torn down anyway.
+		if !s.trackConn(conn) {
+			s.limiter.Release(ip)
+			_ = conn.Close()
+			return
+		}
+
 		go func() {
+			defer s.wg.Done()
+			defer s.untrackConn(conn)
 			defer s.limiter.Release(ip)
 			session := NewSession(conn, s.backend, s.hostname, s.tlsConfig, s.limiter)
 			if implicitTLS {
@@ -119,15 +147,85 @@ func (s *Server) acceptLoop(listener net.Listener, implicitTLS bool) {
 	}
 }
 
-// Shutdown gracefully stops the server: it closes all listeners and waits for
-// in-flight sessions to finish.
-func (s *Server) Shutdown() {
+// trackConn registers conn as in-flight and reserves its slot in the wait
+// group, unless the server has begun shutting down (in which case it returns
+// false and the caller must not serve the connection). Reserving the wg slot
+// under the same lock as the closed flag guarantees the Add happens-before the
+// closed=true that gates [Server.Shutdown]'s wait, so no session is ever missed.
+func (s *Server) trackConn(conn net.Conn) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return false
+	}
+	s.conns[conn] = struct{}{}
+	s.wg.Add(1)
+	return true
+}
+
+// untrackConn removes conn from the in-flight set once its session has ended.
+func (s *Server) untrackConn(conn net.Conn) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.conns, conn)
+}
+
+// beginShutdown marks the server closed and stops it accepting new connections:
+// it closes the shutdown channel and every listener. It is idempotent, so
+// Shutdown and Close may be called in any order, concurrently, or repeatedly
+// without panicking on a double close.
+func (s *Server) beginShutdown() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return
+	}
+	s.closed = true
 	close(s.shutdown)
 	for _, l := range s.listeners {
 		_ = l.Close()
 	}
-	s.wg.Wait()
-	slog.Info("imap: server stopped")
+}
+
+// Shutdown gracefully stops the server: it stops accepting new connections and
+// then blocks until every in-flight session has finished, or until ctx is done.
+// It returns nil once all sessions have drained, or ctx.Err() if the deadline
+// passes first (the sessions keep running; call [Server.Close] to force them to
+// stop). Shutdown mirrors the semantics of [net/http.Server.Shutdown].
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.beginShutdown()
+
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		slog.Info("imap: server stopped")
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// Close immediately stops the server: it stops accepting new connections and
+// force-closes every active connection, aborting any in-flight sessions without
+// waiting for them to drain. Unlike [Server.Shutdown] it does not block on the
+// sessions; use Shutdown for a graceful stop. Close mirrors the semantics of
+// [net/http.Server.Close] and always returns nil.
+func (s *Server) Close() error {
+	s.beginShutdown()
+
+	s.mu.Lock()
+	for c := range s.conns {
+		_ = c.Close()
+	}
+	s.mu.Unlock()
+
+	slog.Info("imap: server closed")
+	return nil
 }
 
 // extractIP extracts the IP address from a host:port string.

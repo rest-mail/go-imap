@@ -50,9 +50,11 @@
 // # Running a server
 //
 // [NewServer] builds a Server; [Server.ListenAndServe] opens the configured
-// [Ports] and serves in the background until [Server.Shutdown]. To drive a single
-// already-accepted connection behind your own listener, construct a [Session] with
-// [NewSession] and call [Session.Handle].
+// [Ports] and serves in the background. [Server.Shutdown] stops accepting and
+// then blocks until the in-flight sessions drain (or its context deadline
+// passes), while [Server.Close] stops at once, force-closing live connections.
+// To drive a single already-accepted connection behind your own listener,
+// construct a [Session] with [NewSession] and call [Session.Handle].
 //
 // [RFC 3501]: https://www.rfc-editor.org/rfc/rfc3501
 // [RFC 2087]: https://www.rfc-editor.org/rfc/rfc2087

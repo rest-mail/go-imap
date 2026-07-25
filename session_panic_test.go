@@ -62,8 +62,8 @@ func startPanicServer(t *testing.T, backend Backend) string {
 	srv := NewServer("imap.test", backend, nil, NopLimiter{})
 	go srv.acceptLoop(ln, false)
 	t.Cleanup(func() {
-		srv.Shutdown() // close srv.shutdown so acceptLoop exits on the next Accept error
-		_ = ln.Close()
+		_ = srv.Close() // stops accepting and force-closes any live session
+		_ = ln.Close()  // unblock the manually-started acceptLoop's Accept
 	})
 	return ln.Addr().String()
 }
