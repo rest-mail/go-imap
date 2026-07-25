@@ -428,6 +428,60 @@ func parseAstring(s string) (val, rest string, ok bool) {
 	return s, "", true
 }
 
+// splitTrailingLiteral inspects the tail of a command line for a literal-length
+// marker: a synchronizing literal "{n}" or a LITERAL+ non-synchronizing literal
+// "{n+}" (RFC 3501 §4.3, RFC 2088). A literal marker is only ever the final token
+// of a command line — the octets follow on the next physical line — so only a
+// line ending in '}' can carry one. On a match it returns the text preceding the
+// marker, the declared octet count, and sync (true for "{n}", false for "{n+}").
+// isLit is false when the tail is not a well-formed marker — a line not ending in
+// '}', no '{', an empty or non-numeric count, or a signed/garbage count — in
+// which case the line has no trailing literal and is parsed verbatim.
+//
+// The count is parsed with ParseUint (base 10, no sign), so "{+5}" or "{5x}" are
+// rejected rather than misread; the caller separately bounds the value against
+// MaxLiteralSize.
+func splitTrailingLiteral(line string) (prefix string, size int, sync, isLit bool) {
+	if !strings.HasSuffix(line, "}") {
+		return "", 0, false, false
+	}
+	open := strings.LastIndexByte(line, '{')
+	if open < 0 {
+		return "", 0, false, false
+	}
+	inner := line[open+1 : len(line)-1]
+	sync = true
+	if strings.HasSuffix(inner, "+") { // LITERAL+ non-synchronizing form
+		sync = false
+		inner = inner[:len(inner)-1]
+	}
+	n, err := strconv.ParseUint(inner, 10, 32)
+	if err != nil {
+		return "", 0, false, false
+	}
+	return line[:open], int(n), sync, true
+}
+
+// quoteLiteral re-encodes literal octets as an IMAP quoted-string so they can be
+// spliced back into the command line in place of the "{n}" marker and consumed by
+// the existing astring parsers (unquote / parseIMAPArgs). Any embedded '"' or
+// '\' is backslash-escaped (RFC 3501 §4.3) so it cannot terminate the string
+// early. Unlike quoteString it emits "" (never NIL) for empty input, so a {0}
+// literal becomes an explicit empty-string argument rather than a NIL token.
+func quoteLiteral(b []byte) string {
+	var sb strings.Builder
+	sb.Grow(len(b) + 2)
+	sb.WriteByte('"')
+	for _, c := range b {
+		if c == '"' || c == '\\' {
+			sb.WriteByte('\\')
+		}
+		sb.WriteByte(c)
+	}
+	sb.WriteByte('"')
+	return sb.String()
+}
+
 // parseFlags extracts IMAP flags from a parenthesized list like "(\Seen \Flagged)".
 func parseFlags(s string) []string {
 	s = strings.TrimSpace(s)

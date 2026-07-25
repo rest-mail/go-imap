@@ -8,9 +8,11 @@ change the exported API.
 ## Unreleased
 
 Correctness fixes for `STORE`/`UID STORE` flag handling (RFC 3501 §6.4.6) and
-`APPEND` argument parsing (§6.3.11). Adds two exported fields (`Message.Answered`,
-`FlagUpdate.Answered`) and one optional interface (`DateAppender`); struct
-literals using field names are unaffected, so these are backward-compatible
+`APPEND` argument parsing (§6.3.11), and general command-literal handling (§4.3)
+so a `{n}` literal works as any string argument, not only `APPEND`'s message.
+Adds two exported fields (`Message.Answered`, `FlagUpdate.Answered`), one optional
+interface (`DateAppender`), and one tunable package variable (`MaxLiteralSize`);
+struct literals using field names are unaffected, so these are backward-compatible
 additions. One breaking change: `Server.Shutdown` now takes a `context.Context`
 and actually drains in-flight sessions — callers pass a context and can switch
 to the new `Server.Close` for an immediate stop.
@@ -24,6 +26,10 @@ to the new `Server.Close` for an immediate stop.
   implements it, a client-supplied `APPEND` date-time is passed through so the
   store can set the message's `INTERNALDATE`; backends that do not implement it
   are unchanged (the date is parsed and validated but not stored).
+- `MaxLiteralSize`, a tunable package variable bounding a synchronizing literal
+  used as an ordinary string/astring command argument (see the `Fixed` note on
+  general literal handling). Defaults to 8 KiB; `APPEND`'s message literal keeps
+  its own separate, larger bound.
 
 ### Changed
 
@@ -41,6 +47,18 @@ to the new `Server.Close` for an immediate stop.
 
 ### Fixed
 
+- A synchronizing literal (`{n}`, RFC 3501 §4.3) is now accepted as any
+  string/astring argument of any command — `LOGIN`, `SELECT`, `CREATE`, `STATUS`,
+  `SEARCH`, and so on — not only as `APPEND`'s message. The command reader detects
+  a trailing `{n}`, sends the required `+` continuation, reads exactly `n` octets
+  as the argument value (8-bit clean; an embedded space or quote is preserved),
+  then continues parsing the rest of the command. Previously only `APPEND` handled
+  a literal, so a literal anywhere else drew no continuation and its octets were
+  misparsed as a new command, desyncing the connection. The non-synchronizing
+  `LITERAL+` form (`{n+}`, RFC 2088) is accepted without a continuation. A literal
+  used as an ordinary argument is bounded by `MaxLiteralSize` (checked before the
+  continuation, so an over-large one is refused without its octets being read);
+  `APPEND`'s large-message literal path is unchanged.
 - `STORE FLAGS (...)` (replace mode) now sets the message's flags to exactly the
   given set, per RFC 3501 §6.4.6. Previously bare `FLAGS` was mishandled as a
   removal, so `STORE 1 FLAGS (\Flagged)` cleared `\Flagged` instead of setting
