@@ -627,6 +627,14 @@ func bodySection(item string, loadRaw func() (string, bool)) (name, payload stri
 	}
 	section := strings.ToUpper(item[lb+1 : rb])
 
+	// A body item may carry a "<start.count>" partial specifier after the section
+	// bracket (RFC 3501 §6.4.5). Parse it before loading the body so a malformed
+	// specifier is rejected without paying for a fetch.
+	partial, pok := parseBodyPartial(item[rb+1:])
+	if !pok {
+		return "", "", peek, false
+	}
+
 	raw, rok := loadRaw()
 	if !rok {
 		return "", "", peek, false
@@ -634,25 +642,85 @@ func bodySection(item string, loadRaw func() (string, bool)) (name, payload stri
 
 	switch {
 	case section == "":
-		return "BODY[]", raw, peek, true
+		name, payload = "BODY[]", raw
 	case section == "HEADER":
-		return "BODY[HEADER]", headerSection(raw), peek, true
+		name, payload = "BODY[HEADER]", headerSection(raw)
 	case section == "TEXT":
-		return "BODY[TEXT]", textSection(raw), peek, true
+		name, payload = "BODY[TEXT]", textSection(raw)
 	case strings.HasPrefix(section, "HEADER.FIELDS.NOT"):
 		// HEADER.FIELDS.NOT (f...) returns every header EXCEPT the listed ones
 		// (RFC 3501 §6.4.5). Checked before the HEADER.FIELDS prefix below, which
 		// it would otherwise match.
 		fields := extractHeaderFieldNames(item)
-		return "BODY[HEADER.FIELDS.NOT (" + strings.Join(fields, " ") + ")]", selectHeaders(raw, fields, true), peek, true
+		name, payload = "BODY[HEADER.FIELDS.NOT ("+strings.Join(fields, " ")+")]", selectHeaders(raw, fields, true)
 	case strings.HasPrefix(section, "HEADER.FIELDS"):
 		fields := extractHeaderFieldNames(item)
-		return "BODY[HEADER.FIELDS (" + strings.Join(fields, " ") + ")]", filterHeaders(raw, fields), peek, true
+		name, payload = "BODY[HEADER.FIELDS ("+strings.Join(fields, " ")+")]", filterHeaders(raw, fields)
 	default:
 		// Unsupported section spec (e.g. a MIME part number) — fall back to the
 		// full message rather than nothing, preserving prior lenient behavior.
-		return "BODY[" + section + "]", raw, peek, true
+		name, payload = "BODY["+section+"]", raw
 	}
+
+	// A partial fetch returns only the requested octets and labels the response
+	// item with the origin octet — "BODY[section]<start>", the start ONLY, never
+	// the count (RFC 3501 §7.4.2).
+	if partial != nil {
+		payload = partialOctets(payload, partial.start, partial.count)
+		name = fmt.Sprintf("%s<%d>", name, partial.start)
+	}
+
+	return name, payload, peek, true
+}
+
+// bodyPartial is the parsed "<start.count>" partial specifier of a FETCH body
+// item (RFC 3501 §6.4.5). count is -1 when only a start was given (accepted
+// leniently — the request grammar normally requires both), meaning "return to
+// the end of the section".
+type bodyPartial struct {
+	start int
+	count int
+}
+
+// parseBodyPartial parses the text following a body section's closing ']'. An
+// empty rem means no partial was requested (nil, true — not an error). A
+// well-formed "<start>" or "<start.count>" yields the parsed spec. Anything else
+// is malformed (nil, false).
+func parseBodyPartial(rem string) (*bodyPartial, bool) {
+	if rem == "" {
+		return nil, true
+	}
+	if len(rem) < 2 || rem[0] != '<' || rem[len(rem)-1] != '>' {
+		return nil, false
+	}
+	startStr, countStr, hasCount := strings.Cut(rem[1:len(rem)-1], ".")
+	start, err := strconv.Atoi(startStr)
+	if err != nil || start < 0 {
+		return nil, false
+	}
+	count := -1
+	if hasCount {
+		c, err := strconv.Atoi(countStr)
+		if err != nil || c < 0 {
+			return nil, false
+		}
+		count = c
+	}
+	return &bodyPartial{start: start, count: count}, true
+}
+
+// partialOctets returns at most count octets of s beginning at zero-based octet
+// start (RFC 3501 §6.4.5): fewer if the section is shorter, empty if start is at
+// or past the end. count < 0 means "to the end of the section".
+func partialOctets(s string, start, count int) string {
+	if start >= len(s) {
+		return ""
+	}
+	s = s[start:]
+	if count >= 0 && count < len(s) {
+		s = s[:count]
+	}
+	return s
 }
 
 // buildBodyStructure parses a raw RFC 5322 message and returns its IMAP body
