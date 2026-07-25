@@ -238,12 +238,25 @@ func (s *Session) Handle() {
 		case "NOOP":
 			s.tagged(tag, "OK", "NOOP completed")
 		case "CHECK":
+			// CHECK is a Selected State command (RFC 3501 §6.4.1): reject it when
+			// no mailbox is selected — which also covers the non-authenticated
+			// state, since a mailbox can only be selected after authentication.
+			if s.selected == nil {
+				s.tagged(tag, "BAD", "CHECK valid only in selected state")
+				break
+			}
 			s.tagged(tag, "OK", "CHECK completed")
 		case "CLOSE":
+			// CLOSE is a Selected State command (RFC 3501 §6.4.2): reject it when
+			// no mailbox is selected rather than answering OK.
+			if s.selected == nil {
+				s.tagged(tag, "BAD", "CLOSE valid only in selected state")
+				break
+			}
 			// Implicitly expunge \Deleted messages (RFC 3501 §6.4.2), but never
 			// for a mailbox opened read-only via EXAMINE (§6.3.2). Unlike EXPUNGE,
 			// CLOSE does not send untagged EXPUNGE responses.
-			if s.selected != nil && !s.readOnly {
+			if !s.readOnly {
 				for _, msg := range s.messages {
 					if s.deleted[msg.UID] {
 						_ = s.mailbox.Delete(msg.UID)
