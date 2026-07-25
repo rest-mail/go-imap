@@ -222,6 +222,45 @@ func TestIMAP_UIDFetch_FlagsAndSize_NoBodyNoSeen(t *testing.T) {
 	}
 }
 
+// SELECT begins a new selection (RFC 3501 §6.3.1): the set of UIDs flagged
+// \Deleted in a prior mailbox must not carry over. UIDs are folder-scoped, so a
+// leaked \Deleted mark makes EXPUNGE delete a same-numbered UID in the newly
+// selected folder — cross-folder data loss. Here INBOX and Sent both hold UID 5;
+// flagging UID 5 \Deleted in INBOX (without expunging) then SELECTing Sent and
+// EXPUNGEing must NOT delete Sent's UID 5.
+func TestIMAP_DeletedFlag_DoesNotLeakAcrossSelect(t *testing.T) {
+	m := newMockBackend()
+	m.seed("INBOX", 5, 100, "Subject: Inbox 5\r\n\r\nbody\r\n")
+	m.seed("Sent", 5, 100, "Subject: Sent 5\r\n\r\nbody\r\n")
+	h := newIMAPHarness(t, m)
+	h.login("d1")
+	h.selectInbox("d2")
+
+	// Flag INBOX UID 5 \Deleted, but do not expunge it here.
+	if _, st := h.command("d3", "STORE 1 +FLAGS (\\Deleted)"); !strings.Contains(st, " OK") {
+		t.Fatalf("STORE status = %q", st)
+	}
+
+	// Switch to Sent — a fresh selection; no message here is flagged \Deleted.
+	if _, st := h.command("d4", "SELECT Sent"); !strings.Contains(st, " OK") {
+		t.Fatalf("SELECT Sent status = %q", st)
+	}
+
+	// EXPUNGE in Sent must be a no-op: nothing was flagged in this selection.
+	untagged, st := h.command("d5", "EXPUNGE")
+	if !strings.Contains(st, " OK") {
+		t.Fatalf("EXPUNGE status = %q", st)
+	}
+	for _, l := range untagged {
+		if strings.Contains(l, "EXPUNGE") {
+			t.Errorf("EXPUNGE in Sent emitted %q; the \\Deleted mark leaked from INBOX", l)
+		}
+	}
+	if m.mbox.wasDeleted(5) {
+		t.Errorf("UID 5 was deleted after SELECT Sent; \\Deleted leaked across SELECT (cross-folder data loss)")
+	}
+}
+
 // IDLE start/stop under -race guards the goroutine lifecycle fix: the poll
 // goroutine must be fully stopped before the tagged response is written.
 func TestIMAP_Idle_StartAndStop(t *testing.T) {
