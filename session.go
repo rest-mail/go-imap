@@ -58,6 +58,22 @@ type selectedMailbox struct {
 // separately enforced size bound and never flow through readLine.
 var MaxCommandLineLength = 8 * 1024
 
+// MaxLiteralSize bounds a synchronizing (or LITERAL+ non-synchronizing) literal
+// used as an ordinary string/astring command argument — a literal mailbox name,
+// LOGIN credential, SEARCH key, etc. (RFC 3501 §4.3). Such arguments are short by
+// nature; 8 KiB is far more than any real name or credential needs while
+// preventing an unauthenticated client from declaring a huge {N} to make the
+// server allocate and read unbounded octets before authenticating. The declared
+// size is checked BEFORE the "+" continuation is sent, so an over-large literal
+// is refused without its octets ever being invited. It is a package variable so
+// operators can tune it.
+//
+// This cap is deliberately independent of — and much smaller than — APPEND's own
+// message-literal limit: APPEND carries whole messages and keeps its separate,
+// larger bound on its dedicated read path (handleAppend), which this general
+// argument-literal handling never touches.
+var MaxLiteralSize = 8 * 1024
+
 // readLine reads one CRLF/LF-terminated line from the client and returns it with
 // any trailing CR/LF stripped, enforcing MaxCommandLineLength on the line length
 // (excluding the terminator).
@@ -116,6 +132,73 @@ func (s *Session) discardToLineEnd() error {
 			continue
 		}
 		return err
+	}
+}
+
+// readLiteralArgs materializes any synchronizing (or LITERAL+ non-synchronizing)
+// literals embedded in a command's argument text and returns the fully assembled
+// arguments (RFC 3501 §4.3). A literal — "{n}" / "{n+}" at the end of a line —
+// may stand in for any string/astring argument of any command, so this runs for
+// every command except APPEND (whose terminal message literal is read on its own
+// large-message path in handleAppend).
+//
+// For each trailing literal it: bounds the declared size against MaxLiteralSize
+// (before any continuation, so an over-large literal's octets are never invited);
+// sends a "+" continuation for a synchronizing literal (a LITERAL+ "{n+}" needs
+// none — its octets are already in flight); reads exactly n octets as the
+// argument value; reads the remainder of the command line that follows the
+// octets; and splices the octets back in place of the marker, re-encoded as a
+// quoted-string so the per-command parsers consume them unchanged (an embedded
+// quote/backslash is escaped; other 8-bit content, including CR/LF/NUL, is
+// preserved verbatim for those parsers to validate). The spliced-in continuation
+// may itself end in another literal, so this repeats until the assembled line
+// carries no trailing literal.
+//
+// ok is false after a tagged BAD has been sent for a malformed or over-large
+// literal, or after a read error/EOF (no response, the caller's next read will
+// surface it); the caller must not dispatch the command. Memory stays bounded:
+// the aggregate literal octets are capped at MaxLiteralSize and the assembled
+// line at MaxCommandLineLength, both independent of how the client chunks input.
+func (s *Session) readLiteralArgs(tag, args string) (assembled string, ok bool) {
+	total := 0 // aggregate literal octets across this command
+	for {
+		prefix, size, sync, isLit := splitTrailingLiteral(args)
+		if !isLit {
+			return args, true // no (further) trailing literal
+		}
+
+		// Bound the literal BEFORE soliciting its octets. A synchronizing literal
+		// is refused without a continuation, so the client never sends the octets.
+		if size > MaxLiteralSize || total+size > MaxLiteralSize {
+			s.tagged(tag, "BAD", fmt.Sprintf("Literal too large (limit %d bytes)", MaxLiteralSize))
+			return "", false
+		}
+		total += size
+
+		if sync {
+			s.send("+ Ready for literal data")
+		}
+
+		buf := make([]byte, size)
+		if _, err := io.ReadFull(s.reader, buf); err != nil {
+			return "", false // connection error mid-literal; caller's read surfaces it
+		}
+
+		// The command continues on the line following the literal octets.
+		cont, tooLong, err := s.readLine()
+		if err != nil {
+			return "", false
+		}
+		if tooLong {
+			s.tagged(tag, "BAD", fmt.Sprintf("Command line too long (limit %d bytes)", MaxCommandLineLength))
+			return "", false
+		}
+
+		args = prefix + quoteLiteral(buf) + cont
+		if len(args) > MaxCommandLineLength {
+			s.tagged(tag, "BAD", fmt.Sprintf("Command too long (limit %d bytes)", MaxCommandLineLength))
+			return "", false
+		}
 	}
 }
 
@@ -241,7 +324,25 @@ func (s *Session) Handle() {
 			continue
 		}
 
-		switch strings.ToUpper(cmd) {
+		ucmd := strings.ToUpper(cmd)
+
+		// A synchronizing literal {n} (or LITERAL+ {n+}) may stand in for any
+		// string/astring argument of any command (RFC 3501 §4.3): send the "+"
+		// continuation, read the octets, and splice them into the argument text so
+		// the per-command parsers below see a fully materialized command line —
+		// rather than misreading the octet line as a new command and desyncing.
+		// APPEND is the sole exception: its terminal message literal is read on
+		// handleAppend's large-message path, which needs the raw octets, not a
+		// re-encoded argument.
+		if ucmd != "APPEND" {
+			materialized, argsOK := s.readLiteralArgs(tag, args)
+			if !argsOK {
+				continue // tagged error already sent, or the connection failed
+			}
+			args = materialized
+		}
+
+		switch ucmd {
 		case "CAPABILITY":
 			s.handleCapability(tag)
 		case "STARTTLS":
