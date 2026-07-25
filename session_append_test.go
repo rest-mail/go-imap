@@ -149,3 +149,40 @@ func TestAppend_DateTimeHonored(t *testing.T) {
 		t.Errorf("\\Seen alongside a date-time was not applied: %+v", op.flags)
 	}
 }
+
+// TestAppend_EmitsExistsForSelectedMailbox pins RFC 3501 §6.3.11: an APPEND into
+// the mailbox the session currently has selected must volunteer an untagged
+// "* n EXISTS" so the client learns of the new message. The old handler never
+// sent it, so this untagged response was absent (RED).
+func TestAppend_EmitsExistsForSelectedMailbox(t *testing.T) {
+	b := newMockBackend()
+	h := newIMAPHarness(t, b)
+	h.login("a1")
+	h.selectInbox("a2") // INBOX starts empty
+
+	body := "Subject: New\r\n\r\nhi\r\n"
+	untagged, status := h.appendMsg("a3", "INBOX", "", body)
+	mustContain(t, status, " OK", "APPEND status")
+
+	if !containsLine(untagged, "* 1 EXISTS") {
+		t.Errorf("APPEND into selected INBOX untagged = %v, want it to include \"* 1 EXISTS\" (RFC 3501 §6.3.11)", untagged)
+	}
+}
+
+// TestAppend_NoExistsForOtherMailbox checks the EXISTS is scoped to the selected
+// mailbox: appending elsewhere must not fabricate an EXISTS for the current
+// selection.
+func TestAppend_NoExistsForOtherMailbox(t *testing.T) {
+	b := newMockBackend()
+	h := newIMAPHarness(t, b)
+	h.login("a1")
+	h.selectInbox("a2")
+
+	body := "Subject: Filed\r\n\r\nhi\r\n"
+	untagged, status := h.appendMsg("a3", "Archive", "", body)
+	mustContain(t, status, " OK", "APPEND status")
+
+	if anyContains(untagged, "EXISTS") {
+		t.Errorf("APPEND into Archive (INBOX selected) emitted an EXISTS: %v", untagged)
+	}
+}
