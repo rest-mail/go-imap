@@ -202,6 +202,77 @@ func TestUnquote_OnlyOpenQuote(t *testing.T) {
 	}
 }
 
+// A quoted-string body decodes its two RFC 3501 §4.3 escapes: \" -> " and
+// \\ -> \. Passwords and mailbox names carrying either character depend on this.
+func TestUnquote_EscapedQuote(t *testing.T) {
+	if result := unquote(`"pa\"ss"`); result != `pa"ss` {
+		t.Errorf("got %q, want %q", result, `pa"ss`)
+	}
+}
+
+func TestUnquote_EscapedBackslash(t *testing.T) {
+	if result := unquote(`"a\\b"`); result != `a\b` {
+		t.Errorf("got %q, want %q", result, `a\b`)
+	}
+}
+
+func TestUnquote_MixedEscapes(t *testing.T) {
+	// "\\\"" is the wire form of the two-character value \" (backslash, quote).
+	if result := unquote(`"\\\""`); result != `\"` {
+		t.Errorf("got %q, want %q", result, `\"`)
+	}
+}
+
+// A backslash before an ordinary character is not an escape (only \" and \\
+// are defined), so it is preserved literally.
+func TestUnquote_NonEscapeBackslashPreserved(t *testing.T) {
+	if result := unquote(`"a\b"`); result != `a\b` {
+		t.Errorf("got %q, want %q", result, `a\b`)
+	}
+}
+
+// An escaped quote inside a quoted argument must not terminate the token early:
+// the whole `"pa\"ss"` is one argument, kept with its quotes and escape intact.
+func TestParseIMAPArgs_EscapedQuoteInString(t *testing.T) {
+	result := parseIMAPArgs(`"pa\"ss" foo`)
+	if len(result) != 2 {
+		t.Fatalf("got %d tokens, want 2: %v", len(result), result)
+	}
+	if result[0] != `"pa\"ss"` {
+		t.Errorf("result[0] = %q, want %q", result[0], `"pa\"ss"`)
+	}
+	if result[1] != "foo" {
+		t.Errorf("result[1] = %q, want %q", result[1], "foo")
+	}
+}
+
+// A quoted-string may end with an escaped backslash; the following quote still
+// closes it.
+func TestParseIMAPArgs_TrailingEscapedBackslash(t *testing.T) {
+	result := parseIMAPArgs(`"foo\\" bar`)
+	if len(result) != 2 {
+		t.Fatalf("got %d tokens, want 2: %v", len(result), result)
+	}
+	if result[0] != `"foo\\"` {
+		t.Errorf("result[0] = %q, want %q", result[0], `"foo\\"`)
+	}
+	if result[1] != "bar" {
+		t.Errorf("result[1] = %q, want %q", result[1], "bar")
+	}
+}
+
+// A string whose only quote is escaped is unterminated: it does not close, so
+// the whole remainder is taken as one (unterminated) token.
+func TestParseIMAPArgs_EscapedQuoteUnterminated(t *testing.T) {
+	result := parseIMAPArgs(`"foo\"`)
+	if len(result) != 1 {
+		t.Fatalf("got %d tokens, want 1: %v", len(result), result)
+	}
+	if result[0] != `"foo\"` {
+		t.Errorf("result[0] = %q, want %q", result[0], `"foo\"`)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // decodeBase64
 // ---------------------------------------------------------------------------
