@@ -3,6 +3,7 @@ package imap
 import (
 	"bufio"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -42,6 +43,80 @@ type selectedMailbox struct {
 	unread int64
 }
 
+// MaxCommandLineLength bounds a single protocol line read from the client —
+// the command line in the main loop, the AUTHENTICATE continuation, the IDLE
+// DONE line, and the CRLF trailing an APPEND literal. RFC 3501 sizes command
+// lines in the low thousands of octets; 8 KiB leaves generous headroom while
+// preventing an unauthenticated client from streaming an unbounded "line" (no
+// terminator) to exhaust process memory. It is a package variable so operators
+// can tune it.
+//
+// This cap does NOT limit message payloads: those arrive as length-prefixed
+// IMAP literals (e.g. APPEND's {N}), which are read with io.ReadFull against a
+// separately enforced size bound and never flow through readLine.
+var MaxCommandLineLength = 8 * 1024
+
+// readLine reads one CRLF/LF-terminated line from the client and returns it with
+// any trailing CR/LF stripped, enforcing MaxCommandLineLength on the line length
+// (excluding the terminator).
+//
+// If the line exceeds the cap, readLine stops accumulating, drains the remainder
+// up to and including the next '\n' without retaining it, and returns
+// tooLong=true — so at most one buffer chunk beyond the cap is ever held, no
+// matter how much the client streams. Callers reject the command with a BAD
+// response instead of buffering the whole line. A read error (including EOF) is
+// returned in err with whatever partial line was read.
+func (s *Session) readLine() (line string, tooLong bool, err error) {
+	var buf []byte
+	for {
+		// ReadSlice yields chunks bounded by the reader's buffer, so a copy into
+		// buf below is required before the next read invalidates chunk.
+		chunk, e := s.reader.ReadSlice('\n')
+		buf = append(buf, chunk...)
+
+		if len(buf) > MaxCommandLineLength {
+			// Over the cap: stop accumulating (buf is discarded on return, so at
+			// most one chunk beyond the cap is ever held) and resync the stream.
+			if e == nil {
+				// Terminator already consumed; stream is at the next line.
+				return "", true, nil
+			}
+			if errors.Is(e, bufio.ErrBufferFull) {
+				if de := s.discardToLineEnd(); de != nil {
+					return "", true, de
+				}
+				return "", true, nil
+			}
+			return "", true, e // read error before any terminator
+		}
+
+		if e == nil {
+			return strings.TrimRight(string(buf), "\r\n"), false, nil
+		}
+		if errors.Is(e, bufio.ErrBufferFull) {
+			continue // more of the same (still-within-cap) line
+		}
+		// Real read error / EOF, possibly with a partial final line.
+		return strings.TrimRight(string(buf), "\r\n"), false, e
+	}
+}
+
+// discardToLineEnd consumes bytes up to and including the next '\n' without
+// retaining them, resynchronising the stream after an over-long line in
+// constant memory. Work is bounded by the connection's read deadline.
+func (s *Session) discardToLineEnd() error {
+	for {
+		_, err := s.reader.ReadSlice('\n')
+		if err == nil {
+			return nil
+		}
+		if errors.Is(err, bufio.ErrBufferFull) {
+			continue
+		}
+		return err
+	}
+}
+
 // NewSession creates an IMAP session over conn, authenticating against backend.
 // hostname is announced in the greeting. A nil limiter defaults to [NopLimiter].
 // Call [Session.Handle] to run it.
@@ -74,13 +149,17 @@ func (s *Session) Handle() {
 	for {
 		_ = s.conn.SetDeadline(time.Now().Add(30 * time.Minute))
 
-		line, err := s.reader.ReadString('\n')
+		line, tooLong, err := s.readLine()
 		if err != nil {
 			slog.Debug("imap: connection closed", "remote", s.conn.RemoteAddr(), "error", err)
 			return
 		}
+		if tooLong {
+			slog.Debug("imap: command line too long", "remote", s.conn.RemoteAddr(), "limit", MaxCommandLineLength)
+			s.send("* BAD Command line too long (limit %d bytes)", MaxCommandLineLength)
+			continue
+		}
 
-		line = strings.TrimRight(line, "\r\n")
 		if line == "" {
 			continue
 		}
@@ -242,11 +321,15 @@ func (s *Session) handleAuthenticate(tag, args string) {
 	}
 	s.send("+")
 
-	line, err := s.reader.ReadString('\n')
+	line, tooLong, err := s.readLine()
 	if err != nil {
 		return
 	}
-	decoded, err := decodeBase64(strings.TrimRight(line, "\r\n"))
+	if tooLong {
+		s.tagged(tag, "BAD", "Authentication response line too long")
+		return
+	}
+	decoded, err := decodeBase64(line)
 	if err != nil {
 		s.tagged(tag, "NO", "Invalid base64")
 		return
@@ -1228,8 +1311,8 @@ func (s *Session) handleAppend(tag, args string) {
 		return
 	}
 
-	// Read trailing CRLF
-	_, _ = s.reader.ReadString('\n')
+	// Read (and bound) the CRLF trailing the literal payload.
+	_, _, _ = s.readLine()
 
 	// Translate the parsed flags into a neutral FlagUpdate.
 	var flags FlagUpdate
@@ -1356,13 +1439,15 @@ func (s *Session) handleIdle(tag string) {
 	// Wait for DONE from client.
 	_ = s.conn.SetDeadline(time.Now().Add(29 * time.Minute))
 	for {
-		line, err := s.reader.ReadString('\n')
+		line, tooLong, err := s.readLine()
 		if err != nil {
 			close(done)
 			<-stopped // let any in-flight poll finish before we return
 			return
 		}
-		line = strings.TrimRight(line, "\r\n")
+		if tooLong {
+			continue // ignore over-long junk; keep waiting for DONE
+		}
 		if strings.ToUpper(line) == "DONE" {
 			break
 		}
