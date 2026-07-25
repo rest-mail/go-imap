@@ -108,7 +108,7 @@ func main() {
 	if err := srv.ListenAndServe(imap.Ports{IMAP: 143, IMAPTLS: 993}); err != nil {
 		panic(err)
 	}
-	select {} // serve until srv.Shutdown()
+	select {} // serve until srv.Shutdown(ctx) or srv.Close()
 }
 ```
 
@@ -150,7 +150,10 @@ accepted and, having no enable-able extension yet, is a no-op.
 ## API highlights
 
 - `NewServer(hostname, backend, tlsConfig, limiter) *Server` and
-  `(*Server).ListenAndServe(Ports)` / `(*Server).Shutdown()` — run the listeners.
+  `(*Server).ListenAndServe(Ports)` — run the listeners; `(*Server).Shutdown(ctx)`
+  stops accepting and drains in-flight sessions (or returns `ctx.Err()`), while
+  `(*Server).Close()` is the immediate hard stop that force-closes live
+  connections — the same split as `net/http.Server`.
 - `NewSession(conn, backend, hostname, tlsConfig, limiter) *Session` and
   `(*Session).Handle()` — drive one already-accepted connection.
 - `Backend` and `Mailbox` — the seam you implement; `Message`, `Address`,

@@ -11,7 +11,9 @@ Correctness fixes for `STORE`/`UID STORE` flag handling (RFC 3501 §6.4.6) and
 `APPEND` argument parsing (§6.3.11). Adds two exported fields (`Message.Answered`,
 `FlagUpdate.Answered`) and one optional interface (`DateAppender`); struct
 literals using field names are unaffected, so these are backward-compatible
-additions.
+additions. One breaking change: `Server.Shutdown` now takes a `context.Context`
+and actually drains in-flight sessions — callers pass a context and can switch
+to the new `Server.Close` for an immediate stop.
 
 ### Added
 
@@ -22,6 +24,20 @@ additions.
   implements it, a client-supplied `APPEND` date-time is passed through so the
   store can set the message's `INTERNALDATE`; backends that do not implement it
   are unchanged (the date is parsed and validated but not stored).
+
+### Changed
+
+- **`Server.Shutdown` now takes a `context.Context` and actually drains
+  in-flight sessions.** It previously waited only on the accept-loop goroutines —
+  which return the moment their listener closes — so it returned while client
+  sessions were still being served, contradicting its "waits for in-flight
+  sessions to finish" documentation. Each accepted connection is now tracked in
+  the server's `sync.WaitGroup`, and `Shutdown(ctx)` closes the listeners and
+  then blocks until every session finishes, or until `ctx` is done (returning
+  `ctx.Err()`), mirroring `net/http.Server.Shutdown`. A new `Server.Close()`
+  provides the immediate hard stop: it force-closes live connections without
+  waiting. Callers of the old no-argument `Shutdown()` must pass a context (e.g.
+  `srv.Shutdown(context.Background())`).
 
 ### Fixed
 
