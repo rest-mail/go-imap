@@ -475,6 +475,18 @@ func (s *Session) handleSelect(tag, args string, readOnly bool) {
 		folder = "INBOX"
 	}
 
+	// SELECT/EXAMINE begins a new selection (RFC 3501 §6.3.1/§6.3.2), and "if a
+	// SELECT command that fails is attempted, no mailbox is selected." Drop any
+	// prior selection up front so that a failure below leaves the session in the
+	// authenticated-but-unselected state — otherwise a later FETCH/STORE/SEARCH
+	// would keep operating on the previously selected mailbox. \Deleted marks are
+	// keyed by folder-scoped UIDs, so they must not carry over either (otherwise
+	// EXPUNGE could delete a same-numbered UID in the new mailbox).
+	s.selected = nil
+	s.readOnly = false
+	s.messages = nil
+	s.deleted = make(map[uint32]bool)
+
 	// Fetch messages for this folder
 	messages, err := s.mailbox.Messages(folder)
 	if err != nil {
@@ -484,10 +496,6 @@ func (s *Session) handleSelect(tag, args string, readOnly bool) {
 
 	s.readOnly = readOnly
 	s.messages = messages
-	// SELECT/EXAMINE begins a new selection (RFC 3501 §6.3.1). \Deleted marks are
-	// keyed by UID and UIDs are folder-scoped, so state from the prior mailbox must
-	// not carry over — otherwise EXPUNGE could delete a same-numbered UID here.
-	s.deleted = make(map[uint32]bool)
 	total := int64(len(s.messages))
 	var unread int64
 	for _, m := range s.messages {
