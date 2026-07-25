@@ -47,6 +47,13 @@ additions.
   rejected with a tagged `NO` instead of being discarded.
 - `APPEND`'s optional date-time is now parsed and validated; with a `DateAppender`
   backend it sets the stored message's `INTERNALDATE`. It was previously ignored.
+- The reserved mailbox name `INBOX` is now matched case-insensitively, per RFC
+  3501 §5.1. Previously only the exact spelling `INBOX` was recognised, so
+  `DELETE inbox` bypassed the standard-folder guard, `CREATE INBOX` (any case)
+  was wrongly accepted, and `SELECT`/`EXAMINE`/`STATUS` of `inbox` depended on
+  the backend to normalise. Any-case `INBOX` now resolves to the one real INBOX
+  across `SELECT`/`EXAMINE`/`STATUS`/`CREATE`/`DELETE`/`RENAME`/`APPEND`/`COPY`/
+  `MOVE`. All other mailbox names remain case-sensitive.
 
 ## v0.2.3 - 2026-07-25
 
