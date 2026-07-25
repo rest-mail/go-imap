@@ -84,6 +84,11 @@ func (s *Session) copyMessages(seqNums []int, dest string) string {
 // and UID MOVE. A backend that implements [Mover] moves atomically; otherwise
 // the move falls back to [Mailbox.Move] per message.
 func (s *Session) moveMessages(tag, cmdName string, seqNums []int, dest string) {
+	// MOVE expunges the source messages, so it changes the mailbox's permanent
+	// state and is refused on a read-only (EXAMINE) selection (RFC 3501 §6.3.2).
+	if s.refuseReadOnly(tag) {
+		return
+	}
 	mover, hasMover := s.mailbox.(Mover)
 
 	var srcUIDs, dstUIDs []uint32
@@ -138,6 +143,9 @@ func (s *Session) moveMessages(tag, cmdName string, seqNums []int, dest string) 
 // set, leaving other \Deleted messages in place. It is only reachable when the
 // mailbox implements [UIDPlusMailbox].
 func (s *Session) handleUIDExpunge(tag, args string) {
+	if s.refuseReadOnly(tag) {
+		return
+	}
 	if _, ok := s.mailbox.(UIDPlusMailbox); !ok {
 		s.tagged(tag, "BAD", "UID EXPUNGE requires UIDPLUS")
 		return
@@ -183,6 +191,7 @@ func (s *Session) handleUnselect(tag string) {
 		return
 	}
 	s.selected = nil
+	s.readOnly = false
 	s.messages = nil
 	s.deleted = make(map[uint32]bool)
 	s.tagged(tag, "OK", "UNSELECT completed")

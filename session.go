@@ -27,6 +27,7 @@ type Session struct {
 	auth     *authState
 	mailbox  Mailbox
 	selected *selectedMailbox
+	readOnly bool            // true when the selection was opened via EXAMINE (RFC 3501 §6.3.2)
 	messages []Message       // cached message list for current selection
 	deleted  map[uint32]bool // UIDs flagged \Deleted in this session
 }
@@ -108,9 +109,9 @@ func (s *Session) Handle() {
 		case "LSUB":
 			s.handleList(tag, args) // treat LSUB same as LIST
 		case "SELECT":
-			s.handleSelect(tag, args)
+			s.handleSelect(tag, args, false)
 		case "EXAMINE":
-			s.handleSelect(tag, args) // read-only select
+			s.handleSelect(tag, args, true) // read-only select (RFC 3501 §6.3.2)
 		case "STATUS":
 			s.handleStatus(tag, args)
 		case "FETCH":
@@ -136,9 +137,10 @@ func (s *Session) Handle() {
 		case "CHECK":
 			s.tagged(tag, "OK", "CHECK completed")
 		case "CLOSE":
-			// Implicitly expunge \Deleted messages (RFC 3501 §6.4.2)
-			// Unlike EXPUNGE, CLOSE does not send untagged EXPUNGE responses
-			if s.selected != nil {
+			// Implicitly expunge \Deleted messages (RFC 3501 §6.4.2), but never
+			// for a mailbox opened read-only via EXAMINE (§6.3.2). Unlike EXPUNGE,
+			// CLOSE does not send untagged EXPUNGE responses.
+			if s.selected != nil && !s.readOnly {
 				for _, msg := range s.messages {
 					if s.deleted[msg.UID] {
 						_ = s.mailbox.Delete(msg.UID)
@@ -146,6 +148,7 @@ func (s *Session) Handle() {
 				}
 			}
 			s.selected = nil
+			s.readOnly = false
 			s.messages = nil
 			s.deleted = make(map[uint32]bool)
 			s.tagged(tag, "OK", "CLOSE completed")
@@ -351,7 +354,10 @@ func (s *Session) handleList(tag, args string) {
 	s.tagged(tag, "OK", "LIST completed")
 }
 
-func (s *Session) handleSelect(tag, args string) {
+// handleSelect implements SELECT (readOnly=false) and EXAMINE (readOnly=true).
+// EXAMINE opens the mailbox read-only (RFC 3501 §6.3.2): the tagged OK carries
+// [READ-ONLY] and s.readOnly is set so state-mutating commands are refused.
+func (s *Session) handleSelect(tag, args string, readOnly bool) {
 	if !s.auth.authenticated {
 		s.tagged(tag, "NO", "Not authenticated")
 		return
@@ -369,6 +375,7 @@ func (s *Session) handleSelect(tag, args string) {
 		return
 	}
 
+	s.readOnly = readOnly
 	s.messages = messages
 	// SELECT/EXAMINE begins a new selection (RFC 3501 §6.3.1). \Deleted marks are
 	// keyed by UID and UIDs are folder-scoped, so state from the prior mailbox must
@@ -398,8 +405,13 @@ func (s *Session) handleSelect(tag, args string) {
 		s.send("* OK [UIDNEXT 1]")
 	}
 	s.send("* FLAGS (\\Seen \\Answered \\Flagged \\Deleted \\Draft)")
+	if readOnly {
+		// A read-only mailbox permits no permanent flag changes (RFC 3501 §6.3.2).
+		s.send("* OK [PERMANENTFLAGS ()]")
+		s.tagged(tag, "OK", "[READ-ONLY] EXAMINE completed")
+		return
+	}
 	s.send("* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Deleted \\Draft \\*)]")
-
 	s.tagged(tag, "OK", "[READ-WRITE] SELECT completed")
 }
 
@@ -809,6 +821,9 @@ func (s *Session) handleStore(tag, args string) {
 		s.tagged(tag, "NO", "No mailbox selected")
 		return
 	}
+	if s.refuseReadOnly(tag) {
+		return
+	}
 
 	// Parse: STORE <seq> +FLAGS (\Seen) or -FLAGS (\Seen)
 	parts := strings.SplitN(args, " ", 3)
@@ -914,6 +929,9 @@ func (s *Session) handleMove(tag, args string) {
 func (s *Session) handleExpunge(tag string) {
 	if s.selected == nil {
 		s.tagged(tag, "NO", "No mailbox selected")
+		return
+	}
+	if s.refuseReadOnly(tag) {
 		return
 	}
 
@@ -1362,6 +1380,9 @@ func (s *Session) handleUIDFetch(tag, args string) {
 }
 
 func (s *Session) handleUIDStore(tag, args string) {
+	if s.refuseReadOnly(tag) {
+		return
+	}
 	parts := strings.SplitN(args, " ", 2)
 	if len(parts) < 2 {
 		s.tagged(tag, "BAD", "UID STORE requires uid set and flags")
@@ -1486,6 +1507,18 @@ func (s *Session) send(format string, args ...interface{}) {
 
 func (s *Session) tagged(tag, status, msg string) {
 	s.writeString(tag + " " + status + " " + msg + "\r\n")
+}
+
+// refuseReadOnly answers a tagged NO and returns true when the current selection
+// was opened read-only via EXAMINE (RFC 3501 §6.3.2): no command may change the
+// mailbox's permanent state. State-mutating handlers (STORE, EXPUNGE, MOVE and
+// their UID variants) call this before touching the backend.
+func (s *Session) refuseReadOnly(tag string) bool {
+	if s.readOnly {
+		s.tagged(tag, "NO", "Mailbox is read-only")
+		return true
+	}
+	return false
 }
 
 // writeString emits str to the client and flushes. Protocol writes are
