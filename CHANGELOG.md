@@ -75,6 +75,14 @@ additions.
   (highest UID + 1), `UIDVALIDITY` (the mailbox's real value on a UIDPLUS backend,
   else 1, matching `SELECT`/`EXAMINE`) — are now reported, an unknown item is
   rejected with `BAD`, and `STATUS` neither selects the mailbox nor sets `\Seen`.
+- `AUTHENTICATE`'s continuation request is now the grammar-required `"+" SP`
+  form (RFC 3501 §7.5 / §6.2.2, RFC 4959): `+ ` followed by the (empty, for
+  PLAIN) base64 server challenge, rather than a bare `+`. A client that aborts
+  the SASL exchange by sending a lone `*` is now answered with a tagged `BAD`
+  ("authentication aborted"), per RFC 4959; previously the `*` was base64-decoded,
+  the decode failed, and the abort was mis-reported as `NO "Invalid base64"`,
+  conflating a deliberate cancel with a bad-credential decode error. A genuine
+  wrong-credential response is still a tagged `NO [AUTHENTICATIONFAILED]`.
 
 ## v0.2.3 - 2026-07-25
 

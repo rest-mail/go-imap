@@ -85,8 +85,8 @@ func TestIMAP_AuthenticateWorksWithoutTLSConfig(t *testing.T) {
 	h := newIMAPHarness(t, m) // nil tlsConfig
 
 	h.send("a1 AUTHENTICATE PLAIN")
-	if got := h.readLine(); got != "+" {
-		t.Fatalf("continuation = %q, want %q", got, "+")
+	if got := h.readLine(); got != "+ " {
+		t.Fatalf("continuation = %q, want %q", got, "+ ")
 	}
 	h.send("%s", plainCredential(m.user, m.pass))
 	if status := h.readLine(); !strings.Contains(status, "a1 OK") {
@@ -102,8 +102,8 @@ func TestIMAP_AuthenticateWorksAfterTLS(t *testing.T) {
 	h := newIMAPHarnessTLS(t, m, true) // TLS configured and active
 
 	h.send("a1 AUTHENTICATE PLAIN")
-	if got := h.readLine(); got != "+" {
-		t.Fatalf("continuation = %q, want %q", got, "+")
+	if got := h.readLine(); got != "+ " {
+		t.Fatalf("continuation = %q, want %q", got, "+ ")
 	}
 	h.send("%s", plainCredential(m.user, m.pass))
 	if status := h.readLine(); !strings.Contains(status, "a1 OK") {
