@@ -7,15 +7,38 @@ change the exported API.
 
 ## Unreleased
 
-Correctness fixes for `STORE`/`UID STORE` flag handling (RFC 3501 §6.4.6) and
-`APPEND` argument parsing (§6.3.11), and general command-literal handling (§4.3)
-so a `{n}` literal works as any string argument, not only `APPEND`'s message.
-Adds two exported fields (`Message.Answered`, `FlagUpdate.Answered`), one optional
-interface (`DateAppender`), and one tunable package variable (`MaxLiteralSize`);
-struct literals using field names are unaffected, so these are backward-compatible
-additions. One breaking change: `Server.Shutdown` now takes a `context.Context`
-and actually drains in-flight sessions — callers pass a context and can switch
-to the new `Server.Close` for an immediate stop.
+## v0.3.0 - 2026-07-25
+
+A minor release that collects the IMAP4rev1 correctness pass across the server's
+command set — `STORE`/`UID STORE` flag semantics (RFC 3501 §6.4.6), `APPEND`
+argument parsing (§6.3.11), general synchronizing-literal handling (§4.3) so a
+`{n}` literal works as any string argument (not only `APPEND`'s message), `FETCH`
+sections and partial ranges (§6.4.5), `SEARCH` key validation (§6.4.4), `STATUS`
+item selection (§6.3.10), `LIST`/`LSUB` case-sensitivity and response encoding
+(§5.1, §4.3), `IDLE` change reporting (RFC 2177), the connection greeting's
+advertised capabilities, and `AUTHENTICATE` continuation/abort handling — together
+with denial-of-service hardening (bounded command lines and literals, a
+linear-time wildcard matcher, and per-connection panic recovery). It adds two
+exported fields (`Message.Answered`, `FlagUpdate.Answered`), one optional interface
+(`DateAppender`), and two tunable package variables (`MaxLiteralSize`,
+`MaxCommandLineLength`); these are backward-compatible additions. It makes one
+breaking change to `Server.Shutdown` (see Breaking changes).
+
+### Breaking changes
+
+- **`Server.Shutdown` now takes a `context.Context` and returns an `error`, and
+  actually drains in-flight sessions.** It previously waited only on the
+  accept-loop goroutines — which return the moment their listener closes — so it
+  returned while client sessions were still being served, contradicting its
+  "waits for in-flight sessions to finish" documentation. Each accepted connection
+  is now tracked in the server's `sync.WaitGroup`, and `Shutdown(ctx)` closes the
+  listeners and then blocks until every session finishes, or until `ctx` is done
+  (returning `ctx.Err()`), mirroring `net/http.Server.Shutdown`. Callers of the
+  old no-argument `Shutdown()` must pass a context (e.g.
+  `srv.Shutdown(context.Background())`).
+- **New `Server.Close() error` for an immediate hard stop:** it force-closes live
+  connections without waiting, for callers that want the old fire-and-forget
+  behaviour rather than a graceful drain.
 
 ### Added
 
@@ -30,20 +53,9 @@ to the new `Server.Close` for an immediate stop.
   used as an ordinary string/astring command argument (see the `Fixed` note on
   general literal handling). Defaults to 8 KiB; `APPEND`'s message literal keeps
   its own separate, larger bound.
-
-### Changed
-
-- **`Server.Shutdown` now takes a `context.Context` and actually drains
-  in-flight sessions.** It previously waited only on the accept-loop goroutines —
-  which return the moment their listener closes — so it returned while client
-  sessions were still being served, contradicting its "waits for in-flight
-  sessions to finish" documentation. Each accepted connection is now tracked in
-  the server's `sync.WaitGroup`, and `Shutdown(ctx)` closes the listeners and
-  then blocks until every session finishes, or until `ctx` is done (returning
-  `ctx.Err()`), mirroring `net/http.Server.Shutdown`. A new `Server.Close()`
-  provides the immediate hard stop: it force-closes live connections without
-  waiting. Callers of the old no-argument `Shutdown()` must pass a context (e.g.
-  `srv.Shutdown(context.Background())`).
+- `MaxCommandLineLength`, a tunable package variable bounding a single command
+  line (defaults to 8 KiB), so an unauthenticated client cannot exhaust server
+  memory with one unbounded line.
 
 ### Fixed
 
@@ -159,6 +171,37 @@ to the new `Server.Close` for an immediate stop.
   server would accept. The greeting, the untagged `CAPABILITY` response, and the
   post-login `[CAPABILITY ...]` code now share one dynamic list; after `STARTTLS`
   the `STARTTLS`/`LOGINDISABLED` tokens drop and `AUTH=PLAIN` appears.
+- Mailbox names in `LIST`, `LSUB`, `STATUS`, and `QUOTAROOT` responses are now
+  encoded per the `astring` grammar (RFC 3501 §4.3): a name containing a space,
+  quote, backslash, or other special character is quoted or sent as a literal
+  rather than emitted bare, where a client would otherwise mis-parse the response.
+- `FETCH BODY[...]<start.count>` now returns only the requested partial range of
+  the section and labels the response with the origin octet as
+  `BODY[...]<start>` (RFC 3501 §6.4.5). Previously the partial specifier was
+  parsed but ignored and the whole section was returned.
+- `FETCH BODY[HEADER.FIELDS.NOT (...)]` now returns every header except those
+  listed, and both `HEADER.FIELDS` and `HEADER.FIELDS.NOT` preserve multi-line
+  (folded) header values instead of dropping the continuation lines.
+- A `FETCH` of a body section that implicitly sets `\Seen` now reflects the new
+  flag in the same response's `FLAGS` (RFC 3501 §6.4.5), so the client learns the
+  message became read without issuing a separate fetch.
+- `SELECT`/`EXAMINE` now report `UIDNEXT` as the highest existing UID plus one
+  (RFC 3501 §2.3.1.1) instead of a placeholder, so a client can predict the UID
+  the next appended message will receive.
+- A failed `SELECT` or `EXAMINE` now leaves the session in the authenticated,
+  no-mailbox-selected state rather than half-selecting the target, so a later
+  command cannot operate on a mailbox that was never successfully opened.
+- The server now sends an untagged `* BYE` before closing a connection that has
+  passed the inactivity autologout timer (RFC 3501 §5.4), so the client is told
+  the session was terminated rather than seeing an abrupt disconnect.
+- A single command line is now bounded by `MaxCommandLineLength` (8 KiB by
+  default), so an unauthenticated client can no longer exhaust server memory by
+  sending one unbounded line.
+- The `LIST`/`LSUB` wildcard matcher now runs in linear time, removing a
+  super-linear matching path an authenticated client could exploit with a crafted
+  pattern to pin CPU.
+- A panic while serving one connection is now recovered and confined to that
+  connection, so a single malformed client can no longer crash the whole server.
 
 ## v0.2.3 - 2026-07-25
 
