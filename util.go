@@ -727,46 +727,68 @@ func matchIMAPPattern(pattern, name string) bool {
 	pLower := strings.ToLower(pattern)
 	nLower := strings.ToLower(name)
 
-	return matchPatternRecursive(pLower, nLower)
+	return matchPatternGreedy(pLower, nLower)
 }
 
-func matchPatternRecursive(pattern, name string) bool {
-	for len(pattern) > 0 {
-		switch pattern[0] {
-		case '*':
-			// '*' matches everything — try matching rest of pattern at every position
-			pattern = pattern[1:]
-			if len(pattern) == 0 {
-				return true
-			}
-			for i := 0; i <= len(name); i++ {
-				if matchPatternRecursive(pattern, name[i:]) {
-					return true
-				}
-			}
-			return false
-		case '%':
-			// '%' matches everything except '/'
-			pattern = pattern[1:]
-			if len(pattern) == 0 {
-				return !strings.Contains(name, "/")
-			}
-			for i := 0; i <= len(name); i++ {
-				if i > 0 && name[i-1] == '/' {
-					break
-				}
-				if matchPatternRecursive(pattern, name[i:]) {
-					return true
-				}
-			}
-			return false
+// matchPatternGreedy matches name against an IMAP LIST pattern in linear time
+// using an iterative two-pointer scan with backtrack anchors, instead of the
+// naive recursive backtracker whose cost is exponential in the number of
+// wildcards (an authenticated CPU DoS). The matched set is identical to the
+// recursive definition:
+//
+//	'*' matches zero or more of any character, including the '/' separator.
+//	'%' matches zero or more characters other than the '/' separator.
+//
+// Two anchors are tracked because the wildcards are not equivalent: when a '%'
+// cannot extend across a '/', the match must fall back to the most recent '*'
+// (which can), so a single anchor is insufficient. The '%' anchor is discarded
+// whenever we fall back to and re-expand the '*', since matching restarts from
+// just after the star. Every anchor advances monotonically through the name, so
+// the total work is polynomial (no exponential blowup regardless of wildcard
+// count).
+func matchPatternGreedy(pattern, name string) bool {
+	lenP, lenN := len(pattern), len(name)
+	p, n := 0, 0
+
+	// Last '*' seen: resume pattern index and the name index it may re-expand to.
+	starP, starN := -1, 0
+	// Last '%' seen since that '*': resume pattern index and next name index it
+	// may consume (only if that char is not the '/' separator). -1 when inactive.
+	pctP, pctN := -1, 0
+
+	for n < lenN {
+		switch {
+		case p < lenP && pattern[p] == '*':
+			// Star matches empty for now; record it and forget any earlier '%'.
+			starP, starN = p+1, n
+			pctP = -1
+			p++
+		case p < lenP && pattern[p] == '%':
+			// Percent matches empty for now; record it.
+			pctP, pctN = p+1, n
+			p++
+		case p < lenP && pattern[p] == name[n]:
+			// Literal match.
+			p++
+			n++
+		case pctP != -1 && name[pctN] != '/':
+			// Extend the most recent '%' by one non-separator char.
+			pctN++
+			p, n = pctP, pctN
+		case starP != -1:
+			// Extend the most recent '*' by one char (any char). Restart from
+			// just after the star, discarding stale '%' state.
+			starN++
+			p, n = starP, starN
+			pctP = -1
 		default:
-			if len(name) == 0 || pattern[0] != name[0] {
-				return false
-			}
-			pattern = pattern[1:]
-			name = name[1:]
+			return false
 		}
 	}
-	return len(name) == 0
+
+	// Name consumed; only trailing wildcards may remain in the pattern.
+	for p < lenP && (pattern[p] == '*' || pattern[p] == '%') {
+		p++
+	}
+	return p == lenP
 }
