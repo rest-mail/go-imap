@@ -914,15 +914,16 @@ func partStructure(header textproto.MIMEHeader, body []byte, extension bool) str
 	}
 
 	if maintype == "multipart" && params["boundary"] != "" {
-		return multipartStructure(subtype, params, body, extension)
+		return multipartStructure(subtype, params, header, body, extension)
 	}
 	return singlePartStructure(maintype, subtype, params, header, body, extension)
 }
 
 // multipartStructure builds the parenthesized structure for a multipart entity:
 // the nested part structures concatenated with no separator, then the subtype,
-// then (for BODYSTRUCTURE) the extension fields (RFC 3501 §7.4.2).
-func multipartStructure(subtype string, params map[string]string, body []byte, extension bool) string {
+// then (for BODYSTRUCTURE) the extension fields (RFC 3501 §7.4.2). header is the
+// multipart's own header, the source of its body-ext-mpart disposition field.
+func multipartStructure(subtype string, params map[string]string, header textproto.MIMEHeader, body []byte, extension bool) string {
 	mr := multipart.NewReader(bytes.NewReader(body), params["boundary"])
 	var parts strings.Builder
 	for {
@@ -945,10 +946,15 @@ func multipartStructure(subtype string, params map[string]string, body []byte, e
 	b.WriteByte(' ')
 	b.WriteString(quoteUpper(subtype, "MIXED"))
 	if extension {
-		// body-ext-mpart: parameters, disposition, language, location.
+		// body-ext-mpart: parameters, disposition, language, location. The
+		// content-type parameters (including boundary) are reported; disposition is
+		// read from the multipart's Content-Disposition when present; language and
+		// location have no source.
 		b.WriteByte(' ')
 		b.WriteString(paramList(params))
-		b.WriteString(" NIL NIL NIL")
+		b.WriteByte(' ')
+		b.WriteString(dispositionField(header))
+		b.WriteString(" NIL NIL")
 	}
 	b.WriteByte(')')
 	return b.String()
@@ -1000,16 +1006,82 @@ func singlePartStructure(maintype, subtype string, params map[string]string, hea
 		nilOrQuote(header.Get("Content-Description")),
 		quoteString(strings.ToUpper(encoding)),
 		len(body))
-	if strings.EqualFold(maintype, "text") {
+	switch {
+	case strings.EqualFold(maintype, "message") && strings.EqualFold(subtype, "rfc822"):
+		// body-type-msg: after the basic fields, the envelope, body structure and
+		// line count of the encapsulated message. The part body IS that message,
+		// so it is parsed and described recursively (RFC 3501 §7.4.2).
+		enc := string(body)
+		fmt.Fprintf(&b, " %s %s %d",
+			buildEncapsulatedEnvelope(enc),
+			buildBodyStructure(enc, extension),
+			countLines(body))
+	case strings.EqualFold(maintype, "text"):
 		// body-type-text adds a line count after the octet size.
 		fmt.Fprintf(&b, " %d", countLines(body))
 	}
 	if extension {
-		// body-ext-1part: MD5, disposition, language, location.
-		b.WriteString(" NIL NIL NIL NIL")
+		// body-ext-1part: MD5, disposition, language, location. MD5, language and
+		// location have no source in the stored message; disposition is read from
+		// the part's Content-Disposition when present.
+		fmt.Fprintf(&b, " NIL %s NIL NIL", dispositionField(header))
 	}
 	b.WriteByte(')')
 	return b.String()
+}
+
+// dispositionField renders a part's Content-Disposition as an IMAP body-fld-dsp:
+// "(" disp-type SP body-fld-param ")" (RFC 3501 §7.4.2), e.g.
+// ("ATTACHMENT" ("FILENAME" "doc.pdf")), with the disposition type and parameter
+// names uppercased for consistency with the rest of the structure and parameter
+// values preserved verbatim. An absent or unparseable Content-Disposition yields
+// NIL.
+func dispositionField(header textproto.MIMEHeader) string {
+	cd := header.Get("Content-Disposition")
+	if cd == "" {
+		return "NIL"
+	}
+	disptype, params, err := mime.ParseMediaType(cd)
+	if err != nil || disptype == "" {
+		return "NIL"
+	}
+	return "(" + quoteString(strings.ToUpper(disptype)) + " " + paramList(params) + ")"
+}
+
+// buildEncapsulatedEnvelope constructs the IMAP ENVELOPE (RFC 3501 §7.4.2) of a
+// MESSAGE/RFC822 part's encapsulated message directly from its own headers — date,
+// subject, from, sender, reply-to, to, cc, bcc, in-reply-to and message-id — with
+// sender and reply-to defaulting to from. It differs from buildEnvelope, which
+// draws subject and the fallback addresses from the stored Message model; an
+// encapsulated message has no such model, so every field comes from the raw header
+// block. A header that cannot be parsed yields NIL, keeping the structure
+// well-formed.
+func buildEncapsulatedEnvelope(raw string) string {
+	m, err := mail.ReadMessage(strings.NewReader(raw))
+	if err != nil {
+		return "NIL"
+	}
+	hdr := m.Header
+
+	dateField := "NIL"
+	if d, err := hdr.Date(); err == nil {
+		dateField = quoteString(d.Format("Mon, 02 Jan 2006 15:04:05 -0700"))
+	} else if v := strings.TrimSpace(hdr.Get("Date")); v != "" {
+		dateField = quoteString(v)
+	}
+
+	subject := nilOrQuote(strings.TrimSpace(hdr.Get("Subject")))
+	from := headerAddressList(hdr, "From", "NIL")
+	sender := headerAddressList(hdr, "Sender", from)
+	replyTo := headerAddressList(hdr, "Reply-To", from)
+	to := headerAddressList(hdr, "To", "NIL")
+	cc := headerAddressList(hdr, "Cc", "NIL")
+	bcc := headerAddressList(hdr, "Bcc", "NIL")
+	inReplyTo := nilOrQuote(headerValue(hdr, "In-Reply-To"))
+	messageID := nilOrQuote(headerValue(hdr, "Message-Id"))
+
+	return fmt.Sprintf("(%s %s %s %s %s %s %s %s %s %s)",
+		dateField, subject, from, sender, replyTo, to, cc, bcc, inReplyTo, messageID)
 }
 
 // paramList renders a MIME parameter map as an IMAP parenthesized attribute/value
