@@ -90,6 +90,16 @@ additions.
   completed `OK`. When a mailbox is selected `CHECK` still completes `OK` and
   `CLOSE` still expunges `\Deleted` messages (unless read-only) and returns to
   the authenticated state.
+- The connection greeting's `[CAPABILITY ...]` code is now built from the live
+  session state instead of a hardcoded `IMAP4rev1 STARTTLS AUTH=PLAIN`, and
+  `LOGINDISABLED` is advertised whenever plaintext `LOGIN`/`AUTHENTICATE` is
+  refused until TLS (RFC 3501 §7.1.1, RFC 2595). Previously the greeting offered
+  `STARTTLS` even with no TLS configured (where it is refused) and offered
+  `AUTH=PLAIN` while omitting `LOGINDISABLED` on a cleartext link to a
+  TLS-requiring server, so the advertised capabilities disagreed with what the
+  server would accept. The greeting, the untagged `CAPABILITY` response, and the
+  post-login `[CAPABILITY ...]` code now share one dynamic list; after `STARTTLS`
+  the `STARTTLS`/`LOGINDISABLED` tokens drop and `AUTH=PLAIN` appears.
 
 ## v0.2.3 - 2026-07-25
 

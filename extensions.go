@@ -7,6 +7,19 @@ import (
 	"strings"
 )
 
+// loginDisabled reports whether plaintext LOGIN / AUTHENTICATE is currently
+// refused because the link must be encrypted first (RFC 2595, RFC 3501 §7.1.1).
+// The policy is derived rather than a tunable knob (secure by construction):
+// whenever a TLS config is present, credentials must travel encrypted, so a
+// still-cleartext link is refused until STARTTLS upgrades it. With no TLS
+// configured at all (development) there is nothing to require, and once the link
+// is already encrypted the requirement is satisfied. This single predicate backs
+// both the LOGINDISABLED advertisement and the LOGIN/AUTHENTICATE gates, so the
+// advertised capability can never disagree with what the server will accept.
+func (s *Session) loginDisabled() bool {
+	return !s.usingTLS && s.tlsConfig != nil
+}
+
 // capabilities returns the space-separated CAPABILITY tokens for the session's
 // current state. Extensions that depend on optional backend interfaces are
 // included only once the concrete [Mailbox] is known (post-authentication) and
@@ -18,6 +31,13 @@ func (s *Session) capabilities() string {
 	}
 	if !s.usingTLS && s.tlsConfig != nil {
 		caps = append(caps, "STARTTLS")
+	}
+	// RFC 3501 §7.1.1 / RFC 2595: when the server refuses plaintext LOGIN until
+	// TLS is established it MUST advertise LOGINDISABLED (and withhold the
+	// AUTH=PLAIN it would reject), so clients upgrade via STARTTLS first. This
+	// disappears once the link is encrypted.
+	if s.loginDisabled() {
+		caps = append(caps, "LOGINDISABLED")
 	}
 	if s.usingTLS || s.tlsConfig == nil {
 		caps = append(caps, "AUTH=PLAIN")
