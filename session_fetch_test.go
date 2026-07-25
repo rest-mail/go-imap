@@ -250,3 +250,140 @@ func TestBuildBodyStructure_Multipart(t *testing.T) {
 		t.Errorf("multipart parts should be adjacent with no separator: %s", got)
 	}
 }
+
+// BODY.PEEK[HEADER] must return the message's header block — the lines up to and
+// including the blank line that ends the header — labelled as BODY[HEADER] (the
+// .PEEK is not echoed, RFC 3501 §7.4.2), and must NOT set \Seen (§6.4.5). The
+// buggy dispatch reported in rest-mail/go-imap#16 matched only the non-peek
+// spelling "BODY[HEADER]", so "BODY.PEEK[HEADER]" fell through to the FLAGS+UID
+// catch-all and returned no body at all. Seq 1 is UID 5, raw
+// "Subject: Msg 5\r\n\r\nbody 5\r\n": its header is "Subject: Msg 5\r\n\r\n".
+func TestIMAP_BodyPeekHeader_ReturnsHeaderBlock_NoSeen(t *testing.T) {
+	m := newMockBackend()
+	seedThree(m)
+	h := newIMAPHarness(t, m)
+	h.login("ph1")
+	h.selectInbox("ph2")
+
+	untagged, status := h.command("ph3", "FETCH 1 BODY.PEEK[HEADER]")
+	if !strings.Contains(status, " OK") {
+		t.Fatalf("FETCH BODY.PEEK[HEADER] status = %q", status)
+	}
+	resp := strings.Join(untagged, "\n")
+	if !strings.Contains(resp, "BODY[HEADER] {") {
+		t.Errorf("BODY.PEEK[HEADER] must answer a non-empty BODY[HEADER] literal, not fall through; got: %q", resp)
+	}
+	if !strings.Contains(h.lastLiteral, "Subject: Msg 5") {
+		t.Errorf("BODY.PEEK[HEADER] literal must contain the header block; got: %q", h.lastLiteral)
+	}
+	if strings.Contains(h.lastLiteral, "body 5") {
+		t.Errorf("BODY.PEEK[HEADER] literal must not contain the body text; got: %q", h.lastLiteral)
+	}
+	if _, st := h.command("ph4", "NOOP"); !strings.Contains(st, " OK") {
+		t.Fatalf("NOOP status = %q", st)
+	}
+	if m.mbox.wasMarkedRead(5) {
+		t.Errorf("BODY.PEEK[HEADER] must NOT mark \\Seen, but UID 5 was marked read")
+	}
+}
+
+// BODY.PEEK[TEXT] must return the message body — everything after the
+// header-terminating blank line — labelled BODY[TEXT], without setting \Seen.
+// This is the [TEXT] twin of the rest-mail/go-imap#16 regression. Seq 1's body
+// is "body 5\r\n".
+func TestIMAP_BodyPeekText_ReturnsBodyText_NoSeen(t *testing.T) {
+	m := newMockBackend()
+	seedThree(m)
+	h := newIMAPHarness(t, m)
+	h.login("pt1")
+	h.selectInbox("pt2")
+
+	untagged, status := h.command("pt3", "FETCH 1 BODY.PEEK[TEXT]")
+	if !strings.Contains(status, " OK") {
+		t.Fatalf("FETCH BODY.PEEK[TEXT] status = %q", status)
+	}
+	resp := strings.Join(untagged, "\n")
+	if !strings.Contains(resp, "BODY[TEXT] {") {
+		t.Errorf("BODY.PEEK[TEXT] must answer a non-empty BODY[TEXT] literal, not fall through; got: %q", resp)
+	}
+	if !strings.Contains(h.lastLiteral, "body 5") {
+		t.Errorf("BODY.PEEK[TEXT] literal must contain the body text; got: %q", h.lastLiteral)
+	}
+	if strings.Contains(h.lastLiteral, "Subject") {
+		t.Errorf("BODY.PEEK[TEXT] literal must not contain header lines; got: %q", h.lastLiteral)
+	}
+	if _, st := h.command("pt4", "NOOP"); !strings.Contains(st, " OK") {
+		t.Fatalf("NOOP status = %q", st)
+	}
+	if m.mbox.wasMarkedRead(5) {
+		t.Errorf("BODY.PEEK[TEXT] must NOT mark \\Seen, but UID 5 was marked read")
+	}
+}
+
+// The non-peek BODY[HEADER] / BODY[TEXT] spellings return the same sections but,
+// being non-peek body-content fetches, DO set \Seen (RFC 3501 §6.4.5). This
+// pins the peek/non-peek distinction so a future "normalize .PEEK away" change
+// cannot accidentally drop the \Seen side effect of the non-peek form.
+func TestIMAP_BodyHeaderText_NonPeek_MarksSeen(t *testing.T) {
+	for _, tc := range []struct {
+		section, want string
+	}{
+		{"BODY[HEADER]", "Subject: Msg 5"},
+		{"BODY[TEXT]", "body 5"},
+	} {
+		m := newMockBackend()
+		seedThree(m)
+		h := newIMAPHarness(t, m)
+		h.login("nh1")
+		h.selectInbox("nh2")
+
+		_, status := h.command("nh3", "FETCH 1 %s", tc.section)
+		if !strings.Contains(status, " OK") {
+			t.Fatalf("FETCH %s status = %q", tc.section, status)
+		}
+		if !strings.Contains(h.lastLiteral, tc.want) {
+			t.Errorf("FETCH %s literal missing %q; got: %q", tc.section, tc.want, h.lastLiteral)
+		}
+		if _, st := h.command("nh4", "NOOP"); !strings.Contains(st, " OK") {
+			t.Fatalf("NOOP status = %q", st)
+		}
+		if !m.mbox.wasMarkedRead(5) {
+			t.Errorf("non-peek FETCH %s must mark \\Seen, but UID 5 was not marked read", tc.section)
+		}
+	}
+}
+
+// UID FETCH shares the same section handler, so its BODY.PEEK[HEADER] /
+// BODY.PEEK[TEXT] must serve the header/body just as the sequence-number twin
+// does — the issue reported the catch-all fall-through for the UID path too.
+func TestIMAP_UIDFetch_BodyPeekSections(t *testing.T) {
+	for _, tc := range []struct {
+		section, want, absent string
+	}{
+		{"BODY.PEEK[HEADER]", "Subject: Msg 5", "body 5"},
+		{"BODY.PEEK[TEXT]", "body 5", "Subject"},
+	} {
+		m := newMockBackend()
+		seedThree(m)
+		h := newIMAPHarness(t, m)
+		h.login("uh1")
+		h.selectInbox("uh2")
+
+		_, status := h.command("uh3", "UID FETCH 5 %s", tc.section)
+		if !strings.Contains(status, " OK") {
+			t.Fatalf("UID FETCH %s status = %q", tc.section, status)
+		}
+		if !strings.Contains(h.lastLiteral, tc.want) {
+			t.Errorf("UID FETCH %s literal missing %q; got: %q", tc.section, tc.want, h.lastLiteral)
+		}
+		if strings.Contains(h.lastLiteral, tc.absent) {
+			t.Errorf("UID FETCH %s literal must not contain %q; got: %q", tc.section, tc.absent, h.lastLiteral)
+		}
+		if _, st := h.command("uh4", "NOOP"); !strings.Contains(st, " OK") {
+			t.Fatalf("NOOP status = %q", st)
+		}
+		if m.mbox.wasMarkedRead(5) {
+			t.Errorf("UID FETCH %s (peek) must NOT mark \\Seen, but UID 5 was marked read", tc.section)
+		}
+	}
+}
