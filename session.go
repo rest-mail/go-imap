@@ -640,7 +640,7 @@ func (s *Session) handleList(tag, args string) {
 		case "Junk":
 			attrs = `\Junk`
 		}
-		s.send(`* LIST (%s) "/" "%s"`, attrs, f.Name)
+		s.send(`* LIST (%s) "/" %s`, attrs, encodeMailboxName(f.Name))
 	}
 	s.tagged(tag, "OK", "LIST completed")
 }
@@ -827,7 +827,7 @@ func (s *Session) handleStatus(tag, args string) {
 		}
 	}
 
-	s.send(`* STATUS "%s" (%s)`, folder, b.String())
+	s.send(`* STATUS %s (%s)`, encodeMailboxName(folder), b.String())
 	s.tagged(tag, "OK", "STATUS completed")
 }
 
@@ -1943,7 +1943,7 @@ func (s *Session) handleGetQuotaRoot(tag, args string) {
 		return
 	}
 
-	s.send("* QUOTAROOT %s \"\"", mailbox)
+	s.send("* QUOTAROOT %s \"\"", encodeMailboxName(mailbox))
 	s.send("* QUOTA \"\" (STORAGE %d %d)", used/1024, limit/1024)
 	s.tagged(tag, "OK", "GETQUOTAROOT completed")
 }
