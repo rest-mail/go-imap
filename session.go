@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -62,9 +63,32 @@ func NewSession(conn net.Conn, backend Backend, hostname string, tlsConfig *tls.
 	}
 }
 
+// recoverPanic contains a panic raised anywhere in a single client's serve
+// goroutine — typically a bug in a backend Mailbox method or a handler — so that
+// one failing session cannot crash the process and drop every other connection.
+// It logs the panic with a stack trace, tells the client the server is closing
+// this connection (untagged BYE, RFC 3501 §7.1.5), and closes the connection so
+// a recovered panic never leaves a hung socket. It must be deferred at the top
+// of every goroutine that serves or polls one client (the main [Session.Handle]
+// loop and the IDLE poll goroutine).
+func (s *Session) recoverPanic() {
+	if r := recover(); r != nil {
+		slog.Error("imap: recovered panic in session; closing connection",
+			"remote", s.conn.RemoteAddr(),
+			"panic", r,
+			"stack", string(debug.Stack()),
+		)
+		// Best-effort graceful failure; the close below guarantees the socket is
+		// torn down even if this write fails.
+		s.send("* BYE Internal server error, closing connection")
+		_ = s.conn.Close()
+	}
+}
+
 // Handle runs the IMAP state machine until the client disconnects or LOGOUTs.
 func (s *Session) Handle() {
 	defer func() { _ = s.conn.Close() }()
+	defer s.recoverPanic() // contain any panic from a backend method or handler
 
 	slog.Info("imap: new connection", "remote", s.conn.RemoteAddr())
 
@@ -1311,6 +1335,11 @@ func (s *Session) handleGetQuotaRoot(tag, args string) {
 	s.tagged(tag, "OK", "GETQUOTAROOT completed")
 }
 
+// idlePollInterval is how often the IDLE poll goroutine re-reads the selected
+// mailbox to announce new messages. It is a var, not a const, only so tests can
+// shorten it; production always uses the default.
+var idlePollInterval = 15 * time.Second
+
 func (s *Session) handleIdle(tag string) {
 	if !s.auth.authenticated {
 		s.tagged(tag, "NO", "Not authenticated")
@@ -1332,7 +1361,8 @@ func (s *Session) handleIdle(tag string) {
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
-		ticker := time.NewTicker(15 * time.Second)
+		defer s.recoverPanic() // a backend Messages panic here is a separate goroutine; contain it too
+		ticker := time.NewTicker(idlePollInterval)
 		defer ticker.Stop()
 		for {
 			select {
