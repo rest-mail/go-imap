@@ -540,16 +540,36 @@ func (s *Session) handleStatus(tag, args string) {
 		return
 	}
 
-	// Parse: STATUS <mailbox> (MESSAGES UNSEEN RECENT)
+	// Parse: STATUS <mailbox> (item …) — RFC 3501 §6.3.10. The client sends a
+	// parenthesized list of the status data items it wants; the response must
+	// return exactly those items, never a fixed subset.
 	parts := parseIMAPArgs(args)
-	if len(parts) < 1 {
-		s.tagged(tag, "BAD", "STATUS requires mailbox name")
+	if len(parts) < 2 {
+		s.tagged(tag, "BAD", "STATUS requires a mailbox name and item list")
 		return
 	}
 	// "INBOX" is case-insensitive (RFC 3501 §5.1); fold to canonical so any-case
 	// spelling reports the real INBOX's status.
 	folder := canonicalizeInbox(unquote(parts[0]))
 
+	items, ok := parseStatusItems(parts[1])
+	if !ok || len(items) == 0 {
+		s.tagged(tag, "BAD", "STATUS requires a non-empty parenthesized item list")
+		return
+	}
+	// Validate every requested item up front so an unknown one is a BAD syntax
+	// error before any untagged response is emitted.
+	for _, item := range items {
+		switch item {
+		case "MESSAGES", "RECENT", "UNSEEN", "UIDNEXT", "UIDVALIDITY":
+		default:
+			s.tagged(tag, "BAD", "Unknown STATUS item: "+item)
+			return
+		}
+	}
+
+	// STATUS must not change the selected mailbox or touch flags: read the
+	// folder's messages fresh, independent of any selected-folder cache.
 	messages, err := s.mailbox.Messages(folder)
 	if err != nil {
 		s.tagged(tag, "NO", "Failed to get status")
@@ -558,13 +578,44 @@ func (s *Session) handleStatus(tag, args string) {
 
 	total := len(messages)
 	var unseen int
+	var maxUID uint32
 	for _, m := range messages {
 		if !m.Seen {
 			unseen++
 		}
+		if m.UID > maxUID {
+			maxUID = m.UID
+		}
 	}
 
-	s.send(`* STATUS "%s" (MESSAGES %d RECENT %d UNSEEN %d)`, folder, total, unseen, unseen)
+	// Emit exactly the requested items, in the order the client asked for them.
+	var b strings.Builder
+	for i, item := range items {
+		if i > 0 {
+			b.WriteByte(' ')
+		}
+		switch item {
+		case "MESSAGES":
+			fmt.Fprintf(&b, "MESSAGES %d", total)
+		case "RECENT":
+			// This engine models no \Recent flag; it reports the unseen count as
+			// RECENT, consistent with the "* n RECENT" line SELECT/EXAMINE send.
+			fmt.Fprintf(&b, "RECENT %d", unseen)
+		case "UNSEEN":
+			fmt.Fprintf(&b, "UNSEEN %d", unseen)
+		case "UIDNEXT":
+			// The UID the next message will be assigned: strictly greater than
+			// every existing UID, i.e. highest-UID + 1 (RFC 3501 §2.3.1.1). An
+			// empty mailbox has maxUID 0, yielding 1.
+			fmt.Fprintf(&b, "UIDNEXT %d", maxUID+1)
+		case "UIDVALIDITY":
+			// The mailbox's real UIDVALIDITY when the backend supports UIDPLUS,
+			// else the legacy constant 1 — matching SELECT/EXAMINE.
+			fmt.Fprintf(&b, "UIDVALIDITY %d", s.resolveUIDValidity(folder))
+		}
+	}
+
+	s.send(`* STATUS "%s" (%s)`, folder, b.String())
 	s.tagged(tag, "OK", "STATUS completed")
 }
 

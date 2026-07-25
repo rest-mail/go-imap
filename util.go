@@ -88,6 +88,23 @@ func parseIMAPArgs(args string) []string {
 	return result
 }
 
+// parseStatusItems parses the parenthesized status-item list of a STATUS command
+// (RFC 3501 §6.3.10), e.g. "(MESSAGES UIDNEXT UIDVALIDITY)", returning the item
+// names upper-cased (status data items are atoms, so case-insensitive). ok is
+// false when tok is not a parenthesized list — a bare "MESSAGES" or a missing
+// list — which the caller rejects as a BAD syntax error. An empty list "()"
+// yields ok true with no items; the caller likewise rejects that, since the
+// ABNF requires at least one item.
+func parseStatusItems(tok string) (items []string, ok bool) {
+	if len(tok) < 2 || tok[0] != '(' || tok[len(tok)-1] != ')' {
+		return nil, false
+	}
+	for _, f := range strings.Fields(tok[1 : len(tok)-1]) {
+		items = append(items, strings.ToUpper(f))
+	}
+	return items, true
+}
+
 // quotedStringEnd returns the index, within s, of the closing double quote of
 // the IMAP quoted-string that s begins with (s[0] must be '"'). It skips
 // backslash-escaped characters so an escaped \" does not close the string
