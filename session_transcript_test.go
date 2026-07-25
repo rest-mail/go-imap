@@ -132,6 +132,96 @@ func TestIMAP_BodyPeekDoesNotMarkSeen_BodyDoes(t *testing.T) {
 	}
 }
 
+// RFC822.SIZE must report the message's octet size (RFC 3501 §6.4.5) without
+// returning body content and without setting \Seen. Clients fetch it to build
+// mailbox lists, so answering with the body — or marking the message read —
+// downloads and "reads" the whole mailbox on every list view.
+func TestIMAP_RFC822Size_ReturnsSizeNotBody_AndNoSeen(t *testing.T) {
+	m := newMockBackend()
+	seedThree(m) // UID 5 has Size 100; its raw is only 26 octets, so the two differ.
+	h := newIMAPHarness(t, m)
+	h.login("s1")
+	h.selectInbox("s2")
+
+	untagged, status := h.command("s3", "FETCH 1 RFC822.SIZE")
+	if !strings.Contains(status, " OK") {
+		t.Fatalf("FETCH RFC822.SIZE status = %q", status)
+	}
+	resp := strings.Join(untagged, "\n")
+	if !strings.Contains(resp, "RFC822.SIZE 100") {
+		t.Errorf("RFC822.SIZE must report the stored Size 100, got: %q", resp)
+	}
+	if strings.Contains(resp, "BODY[") {
+		t.Errorf("RFC822.SIZE must not return body content, got: %q", resp)
+	}
+	// Synchronize, then confirm the message was left unread.
+	if _, st := h.command("s4", "NOOP"); !strings.Contains(st, " OK") {
+		t.Fatalf("NOOP status = %q", st)
+	}
+	if m.mbox.wasMarkedRead(5) {
+		t.Errorf("FETCH RFC822.SIZE must NOT mark \\Seen, but UID 5 was marked read")
+	}
+}
+
+// RFC822.HEADER is defined as BODY.PEEK[HEADER] (RFC 3501 §6.4.5): it returns
+// only the header octets and must NOT set \Seen.
+func TestIMAP_RFC822Header_IsPeekHeadersOnly(t *testing.T) {
+	m := newMockBackend()
+	seedThree(m)
+	h := newIMAPHarness(t, m)
+	h.login("hh1")
+	h.selectInbox("hh2")
+
+	untagged, status := h.command("hh3", "FETCH 1 RFC822.HEADER")
+	if !strings.Contains(status, " OK") {
+		t.Fatalf("FETCH RFC822.HEADER status = %q", status)
+	}
+	resp := strings.Join(untagged, "\n")
+	if !strings.Contains(resp, "RFC822.HEADER") {
+		t.Errorf("response must use the RFC822.HEADER item, got: %q", resp)
+	}
+	if !strings.Contains(h.lastLiteral, "Subject: Msg 5") {
+		t.Errorf("RFC822.HEADER literal must contain the headers, got: %q", h.lastLiteral)
+	}
+	if strings.Contains(h.lastLiteral, "body 5") {
+		t.Errorf("RFC822.HEADER must not return the body, got: %q", h.lastLiteral)
+	}
+	if _, st := h.command("hh4", "NOOP"); !strings.Contains(st, " OK") {
+		t.Fatalf("NOOP status = %q", st)
+	}
+	if m.mbox.wasMarkedRead(5) {
+		t.Errorf("FETCH RFC822.HEADER must NOT mark \\Seen, but UID 5 was marked read")
+	}
+}
+
+// The UID FETCH twin has the same defect: (FLAGS RFC822.SIZE) is the canonical
+// mailbox-paging fetch and must not download bodies or set \Seen.
+func TestIMAP_UIDFetch_FlagsAndSize_NoBodyNoSeen(t *testing.T) {
+	m := newMockBackend()
+	seedThree(m) // UID 9 has Size 200.
+	h := newIMAPHarness(t, m)
+	h.login("u1")
+	h.selectInbox("u2")
+
+	untagged, status := h.command("u3", "UID FETCH 9 (FLAGS RFC822.SIZE)")
+	if !strings.Contains(status, " OK") {
+		t.Fatalf("UID FETCH (FLAGS RFC822.SIZE) status = %q", status)
+	}
+	resp := strings.Join(untagged, "\n")
+	if !strings.Contains(resp, "RFC822.SIZE 200") {
+		t.Errorf("must report UID 9 Size 200, got: %q", resp)
+	}
+	if strings.Contains(resp, "BODY[") {
+		t.Errorf("(FLAGS RFC822.SIZE) must not return body content, got: %q", resp)
+	}
+	if _, st := h.command("u4", "NOOP"); !strings.Contains(st, " OK") {
+		t.Fatalf("NOOP status = %q", st)
+	}
+	if m.mbox.wasMarkedRead(9) {
+		t.Errorf("(FLAGS RFC822.SIZE) must NOT mark \\Seen, but UID 9 was marked read")
+	}
+}
+
 // IDLE start/stop under -race guards the goroutine lifecycle fix: the poll
 // goroutine must be fully stopped before the tagged response is written.
 func TestIMAP_Idle_StartAndStop(t *testing.T) {

@@ -269,6 +269,108 @@ func filterHeaders(raw string, fields []string) string {
 	return result.String()
 }
 
+// fetchItemTokens splits a FETCH data-item argument into individual item tokens,
+// respecting bracketed sections and nested parenthesized lists so that, e.g.,
+// "(FLAGS RFC822.SIZE BODY.PEEK[HEADER.FIELDS (DATE FROM)])" yields
+// ["FLAGS", "RFC822.SIZE", "BODY.PEEK[HEADER.FIELDS (DATE FROM)]"]. A single
+// unparenthesized item such as "RFC822.SIZE" is returned as one token. Splitting
+// on exact items (rather than substring matching) is what keeps RFC822.SIZE from
+// being mistaken for an RFC822 body fetch.
+func fetchItemTokens(dataItems string) []string {
+	s := strings.TrimSpace(dataItems)
+	// Strip one layer of the outer "( ... )" list wrapper, if present.
+	if strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
+		s = s[1 : len(s)-1]
+	}
+
+	var tokens []string
+	var cur strings.Builder
+	depth := 0 // nesting depth of [] and ()
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; c {
+		case '[', '(':
+			depth++
+			cur.WriteByte(c)
+		case ']', ')':
+			if depth > 0 {
+				depth--
+			}
+			cur.WriteByte(c)
+		case ' ':
+			if depth == 0 {
+				if cur.Len() > 0 {
+					tokens = append(tokens, cur.String())
+					cur.Reset()
+				}
+			} else {
+				cur.WriteByte(c)
+			}
+		default:
+			cur.WriteByte(c)
+		}
+	}
+	if cur.Len() > 0 {
+		tokens = append(tokens, cur.String())
+	}
+	return tokens
+}
+
+// headerSection returns the RFC 2822 header block of raw, including the blank
+// line that terminates it.
+func headerSection(raw string) string {
+	if end := strings.Index(raw, "\r\n\r\n"); end >= 0 {
+		return raw[:end+4]
+	}
+	return raw
+}
+
+// textSection returns the body of raw (everything after the header-terminating
+// blank line), or "" if there is none.
+func textSection(raw string) string {
+	if end := strings.Index(raw, "\r\n\r\n"); end >= 0 && end+4 < len(raw) {
+		return raw[end+4:]
+	}
+	return ""
+}
+
+// bodySection answers a BODY[...] / BODY.PEEK[...] fetch item. It returns the
+// response item name (always the non-PEEK BODY[...] form, per RFC 3501 §7.4.2),
+// the octet payload, and whether the request was a peek (a peek must not set
+// \Seen). ok is false when the body could not be loaded or the item is
+// malformed. loadRaw fetches the raw message lazily, so callers pay for the body
+// only when a section actually needs it.
+func bodySection(item string, loadRaw func() (string, bool)) (name, payload string, peek, ok bool) {
+	up := strings.ToUpper(item)
+	peek = strings.HasPrefix(up, "BODY.PEEK[")
+	lb := strings.IndexByte(item, '[')
+	rb := strings.LastIndexByte(item, ']')
+	if lb < 0 || rb < 0 || rb < lb {
+		return "", "", peek, false
+	}
+	section := strings.ToUpper(item[lb+1 : rb])
+
+	raw, rok := loadRaw()
+	if !rok {
+		return "", "", peek, false
+	}
+
+	switch {
+	case section == "":
+		return "BODY[]", raw, peek, true
+	case section == "HEADER":
+		return "BODY[HEADER]", headerSection(raw), peek, true
+	case section == "TEXT":
+		return "BODY[TEXT]", textSection(raw), peek, true
+	case strings.HasPrefix(section, "HEADER.FIELDS"):
+		fields := extractHeaderFieldNames(item)
+		return "BODY[HEADER.FIELDS (" + strings.Join(fields, " ") + ")]", filterHeaders(raw, fields), peek, true
+	default:
+		// Unsupported section spec (e.g. a MIME part number) — fall back to the
+		// full message rather than nothing, preserving prior lenient behavior.
+		return "BODY[" + section + "]", raw, peek, true
+	}
+}
+
 // matchIMAPPattern matches a folder name against an IMAP LIST pattern.
 // '*' matches any characters including hierarchy separator.
 // '%' matches any characters except hierarchy separator '/'.

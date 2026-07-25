@@ -446,7 +446,7 @@ func (s *Session) handleFetch(tag, args string) {
 	}
 
 	seqStr := parts[0]
-	dataItems := strings.ToUpper(parts[1])
+	tokens := fetchItemTokens(parts[1])
 
 	// Parse sequence numbers
 	seqNums := parseSequenceSet(seqStr, len(s.messages))
@@ -457,80 +457,96 @@ func (s *Session) handleFetch(tag, args string) {
 		}
 		msg := s.messages[seq-1]
 
-		if strings.Contains(dataItems, "BODY[]") || strings.Contains(dataItems, "BODY.PEEK[]") || strings.Contains(dataItems, "RFC822") {
-			// Full message fetch.
-			rawBytes, err := s.mailbox.Fetch(msg.UID)
-			if err != nil {
-				continue
-			}
-			raw := string(rawBytes)
-			flags := buildFlags(msg)
-
-			s.send("* %d FETCH (FLAGS (%s) RFC822.SIZE %d BODY[] {%d}", seq, flags, len(raw), len(raw))
-			s.writeString(raw + ")\r\n")
-
-			// Auto-mark as read — but BODY.PEEK[] must NOT set \Seen (RFC 3501).
-			if !msg.Seen && !strings.Contains(dataItems, "BODY.PEEK") {
-				_ = s.mailbox.Store(msg.UID, FlagUpdate{Seen: boolPtr(true)})
-				s.messages[seq-1].Seen = true
-			}
-		} else if strings.Contains(dataItems, "BODY[HEADER]") {
-			rawBytes, err := s.mailbox.Fetch(msg.UID)
-			if err != nil {
-				continue
-			}
-			raw := string(rawBytes)
-			headerEnd := strings.Index(raw, "\r\n\r\n")
-			headers := raw
-			if headerEnd >= 0 {
-				headers = raw[:headerEnd+4]
-			}
-			flags := buildFlags(msg)
-			s.send("* %d FETCH (FLAGS (%s) BODY[HEADER] {%d}", seq, flags, len(headers))
-			s.writeString(headers + ")\r\n")
-		} else if strings.Contains(dataItems, "BODY[TEXT]") {
-			rawBytes, err := s.mailbox.Fetch(msg.UID)
-			if err != nil {
-				continue
-			}
-			raw := string(rawBytes)
-			headerEnd := strings.Index(raw, "\r\n\r\n")
-			body := ""
-			if headerEnd >= 0 && headerEnd+4 < len(raw) {
-				body = raw[headerEnd+4:]
-			}
-			flags := buildFlags(msg)
-			s.send("* %d FETCH (FLAGS (%s) BODY[TEXT] {%d}", seq, flags, len(body))
-			s.writeString(body + ")\r\n")
-		} else if strings.Contains(dataItems, "BODY[HEADER.FIELDS") || strings.Contains(dataItems, "BODY.PEEK[HEADER.FIELDS") {
-			rawBytes, err := s.mailbox.Fetch(msg.UID)
-			if err != nil {
-				continue
-			}
-			raw := string(rawBytes)
-			// Extract requested header fields
-			requested := extractHeaderFieldNames(dataItems)
-			headers := filterHeaders(raw, requested)
-			flags := buildFlags(msg)
-			fetchItem := "BODY[HEADER.FIELDS (" + strings.Join(requested, " ") + ")]"
-			if strings.Contains(dataItems, "BODY.PEEK") {
-				fetchItem = "BODY.PEEK[HEADER.FIELDS (" + strings.Join(requested, " ") + ")]"
-			}
-			s.send("* %d FETCH (FLAGS (%s) %s {%d}", seq, flags, fetchItem, len(headers))
-			s.writeString(headers + ")\r\n")
-		} else if strings.Contains(dataItems, "FLAGS") || strings.Contains(dataItems, "ENVELOPE") || strings.Contains(dataItems, "INTERNALDATE") {
-			flags := buildFlags(msg)
-			date := msg.Date.Format("02-Jan-2006 15:04:05 -0700")
-			envelope := buildEnvelope(msg)
-			s.send("* %d FETCH (FLAGS (%s) INTERNALDATE \"%s\" RFC822.SIZE %d ENVELOPE %s UID %d)",
-				seq, flags, date, msg.Size, envelope, msg.UID)
-		} else {
-			flags := buildFlags(msg)
-			s.send("* %d FETCH (FLAGS (%s) UID %d)", seq, flags, msg.UID)
+		if s.fetchResponse(seq, msg, tokens) && !msg.Seen {
+			_ = s.mailbox.Store(msg.UID, FlagUpdate{Seen: boolPtr(true)})
+			s.messages[seq-1].Seen = true
 		}
 	}
 
 	s.tagged(tag, "OK", "FETCH completed")
+}
+
+// fetchResponse composes and sends a single untagged FETCH response for msg,
+// answering exactly the requested data items (RFC 3501 §7.4.2), and reports
+// whether a non-peek body-content item was fetched — the only case that requires
+// the caller to set \Seen. RFC822.SIZE, RFC822.HEADER, BODY.PEEK[...] and the
+// metadata items (FLAGS, INTERNALDATE, ENVELOPE) never trigger that: they must
+// not implicitly mark a message read. UID and FLAGS are always included.
+func (s *Session) fetchResponse(seq int, msg Message, tokens []string) (marksSeen bool) {
+	// raw is loaded lazily: a metadata-only fetch (FLAGS, RFC822.SIZE, …) must
+	// never pull the body — that is the entire point of answering RFC822.SIZE
+	// from the stored size rather than the message content.
+	var raw string
+	rawLoaded, rawOK := false, false
+	loadRaw := func() (string, bool) {
+		if !rawLoaded {
+			rawLoaded = true
+			if b, err := s.mailbox.Fetch(msg.UID); err == nil {
+				raw, rawOK = string(b), true
+			}
+		}
+		return raw, rawOK
+	}
+
+	// plain holds non-literal "name value" fragments; lits holds body-content
+	// fragments emitted as IMAP literals after the plain items.
+	plain := []string{
+		fmt.Sprintf("UID %d", msg.UID),
+		fmt.Sprintf("FLAGS (%s)", buildFlags(msg)),
+	}
+	type litFrag struct{ name, payload string }
+	var lits []litFrag
+
+	for _, item := range tokens {
+		switch up := strings.ToUpper(item); {
+		case up == "FLAGS", up == "UID":
+			// Always included above.
+		case up == "RFC822.SIZE":
+			plain = append(plain, fmt.Sprintf("RFC822.SIZE %d", msg.Size))
+		case up == "INTERNALDATE":
+			plain = append(plain, fmt.Sprintf("INTERNALDATE %q", msg.Date.Format("02-Jan-2006 15:04:05 -0700")))
+		case up == "ENVELOPE":
+			plain = append(plain, "ENVELOPE "+buildEnvelope(msg))
+		case up == "RFC822":
+			if r, ok := loadRaw(); ok {
+				lits = append(lits, litFrag{"RFC822", r})
+				marksSeen = true
+			}
+		case up == "RFC822.HEADER": // defined as BODY.PEEK[HEADER]: no \Seen.
+			if r, ok := loadRaw(); ok {
+				lits = append(lits, litFrag{"RFC822.HEADER", headerSection(r)})
+			}
+		case up == "RFC822.TEXT":
+			if r, ok := loadRaw(); ok {
+				lits = append(lits, litFrag{"RFC822.TEXT", textSection(r)})
+				marksSeen = true
+			}
+		case strings.HasPrefix(up, "BODY[") || strings.HasPrefix(up, "BODY.PEEK["):
+			name, payload, peek, ok := bodySection(item, loadRaw)
+			if !ok {
+				continue
+			}
+			lits = append(lits, litFrag{name, payload})
+			if !peek {
+				marksSeen = true
+			}
+		default:
+			// Unknown / unsupported item (e.g. BODYSTRUCTURE) — ignore.
+		}
+	}
+
+	head := fmt.Sprintf("* %d FETCH (%s", seq, strings.Join(plain, " "))
+	if len(lits) == 0 {
+		s.writeString(head + ")\r\n")
+		return marksSeen
+	}
+	s.writeString(head)
+	for _, lf := range lits {
+		s.writeString(fmt.Sprintf(" %s {%d}\r\n", lf.name, len(lf.payload)))
+		s.writeString(lf.payload)
+	}
+	s.writeString(")\r\n")
+	return marksSeen
 }
 
 // ── SEARCH ────────────────────────────────────────────────────────────
@@ -1309,7 +1325,7 @@ func (s *Session) handleUIDFetch(tag, args string) {
 	}
 
 	uidSetStr := parts[0]
-	dataItems := strings.ToUpper(parts[1])
+	tokens := fetchItemTokens(parts[1])
 
 	seqNums := s.parseUIDSet(uidSetStr)
 
@@ -1319,73 +1335,9 @@ func (s *Session) handleUIDFetch(tag, args string) {
 		}
 		msg := s.messages[seq-1]
 
-		if strings.Contains(dataItems, "BODY[]") || strings.Contains(dataItems, "BODY.PEEK[]") || strings.Contains(dataItems, "RFC822") {
-			rawBytes, err := s.mailbox.Fetch(msg.UID)
-			if err != nil {
-				continue
-			}
-			raw := string(rawBytes)
-			flags := buildFlags(msg)
-			s.send("* %d FETCH (UID %d FLAGS (%s) RFC822.SIZE %d BODY[] {%d}", seq, msg.UID, flags, len(raw), len(raw))
-			s.writeString(raw + ")\r\n")
-
-			if !msg.Seen && !strings.Contains(dataItems, "BODY.PEEK") {
-				_ = s.mailbox.Store(msg.UID, FlagUpdate{Seen: boolPtr(true)})
-				s.messages[seq-1].Seen = true
-			}
-		} else if strings.Contains(dataItems, "BODY[HEADER]") {
-			rawBytes, err := s.mailbox.Fetch(msg.UID)
-			if err != nil {
-				continue
-			}
-			raw := string(rawBytes)
-			// Extract headers only (up to first blank line)
-			headerEnd := strings.Index(raw, "\r\n\r\n")
-			headers := raw
-			if headerEnd >= 0 {
-				headers = raw[:headerEnd+4] // include trailing CRLF CRLF
-			}
-			flags := buildFlags(msg)
-			s.send("* %d FETCH (UID %d FLAGS (%s) BODY[HEADER] {%d}", seq, msg.UID, flags, len(headers))
-			s.writeString(headers + ")\r\n")
-		} else if strings.Contains(dataItems, "BODY[TEXT]") {
-			rawBytes, err := s.mailbox.Fetch(msg.UID)
-			if err != nil {
-				continue
-			}
-			raw := string(rawBytes)
-			headerEnd := strings.Index(raw, "\r\n\r\n")
-			body := ""
-			if headerEnd >= 0 && headerEnd+4 < len(raw) {
-				body = raw[headerEnd+4:]
-			}
-			flags := buildFlags(msg)
-			s.send("* %d FETCH (UID %d FLAGS (%s) BODY[TEXT] {%d}", seq, msg.UID, flags, len(body))
-			s.writeString(body + ")\r\n")
-		} else if strings.Contains(dataItems, "BODY[HEADER.FIELDS") || strings.Contains(dataItems, "BODY.PEEK[HEADER.FIELDS") {
-			rawBytes, err := s.mailbox.Fetch(msg.UID)
-			if err != nil {
-				continue
-			}
-			raw := string(rawBytes)
-			requested := extractHeaderFieldNames(dataItems)
-			headers := filterHeaders(raw, requested)
-			flags := buildFlags(msg)
-			fetchItem := "BODY[HEADER.FIELDS (" + strings.Join(requested, " ") + ")]"
-			if strings.Contains(dataItems, "BODY.PEEK") {
-				fetchItem = "BODY.PEEK[HEADER.FIELDS (" + strings.Join(requested, " ") + ")]"
-			}
-			s.send("* %d FETCH (UID %d FLAGS (%s) %s {%d}", seq, msg.UID, flags, fetchItem, len(headers))
-			s.writeString(headers + ")\r\n")
-		} else if strings.Contains(dataItems, "FLAGS") || strings.Contains(dataItems, "ENVELOPE") || strings.Contains(dataItems, "INTERNALDATE") {
-			flags := buildFlags(msg)
-			date := msg.Date.Format("02-Jan-2006 15:04:05 -0700")
-			envelope := buildEnvelope(msg)
-			s.send("* %d FETCH (UID %d FLAGS (%s) INTERNALDATE \"%s\" RFC822.SIZE %d ENVELOPE %s)",
-				seq, msg.UID, flags, date, msg.Size, envelope)
-		} else {
-			flags := buildFlags(msg)
-			s.send("* %d FETCH (UID %d FLAGS (%s))", seq, msg.UID, flags)
+		if s.fetchResponse(seq, msg, tokens) && !msg.Seen {
+			_ = s.mailbox.Store(msg.UID, FlagUpdate{Seen: boolPtr(true)})
+			s.messages[seq-1].Seen = true
 		}
 	}
 
