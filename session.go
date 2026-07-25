@@ -399,11 +399,11 @@ func (s *Session) handleSelect(tag, args string, readOnly bool) {
 	s.send("* %d RECENT", unread)
 	s.send("* OK [UNSEEN %d]", unread)
 	s.send("* OK [UIDVALIDITY %d]", s.resolveUIDValidity(folder))
-	if total > 0 {
-		s.send("* OK [UIDNEXT %d]", s.messages[0].UID+1)
-	} else {
-		s.send("* OK [UIDNEXT 1]")
-	}
+	// UIDNEXT (RFC 3501 §2.3.1.1) is the UID that will be assigned to the next
+	// message: it must be strictly greater than every existing UID, i.e.
+	// highest-UID + 1 — not oldest-UID + 1. maxUID() returns 0 for an empty
+	// mailbox, so this yields 1 there.
+	s.send("* OK [UIDNEXT %d]", s.maxUID()+1)
 	s.send("* FLAGS (\\Seen \\Answered \\Flagged \\Deleted \\Draft)")
 	if readOnly {
 		// A read-only mailbox permits no permanent flag changes (RFC 3501 §6.3.2).

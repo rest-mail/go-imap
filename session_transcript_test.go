@@ -279,3 +279,42 @@ func TestIMAP_Idle_StartAndStop(t *testing.T) {
 		t.Fatalf("IDLE termination = %q, want i3 OK...", got)
 	}
 }
+
+// UIDNEXT (RFC 3501 §2.3.1.1) is the UID that will be assigned to the *next*
+// message, which must be strictly greater than every existing UID — i.e.
+// highest-UID + 1, not oldest-UID + 1. With non-contiguous UIDs {5, 9, 20} the
+// next append gets UID 21, so SELECT must report [UIDNEXT 21]; the old code
+// reported oldest+1 = 6, which would corrupt a disconnected client's resync.
+func TestIMAP_SelectUIDNEXT_IsHighestPlusOne(t *testing.T) {
+	m := newMockBackend()
+	seedThree(m) // INBOX holds UIDs {5, 9, 20}
+	h := newIMAPHarness(t, m)
+	h.login("u1")
+
+	untagged, status := h.command("u2", "SELECT INBOX")
+	if !strings.Contains(status, " OK") {
+		t.Fatalf("SELECT status = %q", status)
+	}
+	joined := strings.Join(untagged, "\n")
+	if strings.Contains(joined, "[UIDNEXT 6]") {
+		t.Errorf("SELECT reported oldest-UID+1: [UIDNEXT 6]; want highest-UID+1 [UIDNEXT 21]\n%s", joined)
+	}
+	if !strings.Contains(joined, "[UIDNEXT 21]") {
+		t.Errorf("SELECT UIDNEXT = missing/wrong; want [UIDNEXT 21] (highest UID 20 + 1)\n%s", joined)
+	}
+}
+
+// An empty mailbox reports [UIDNEXT 1]: with no messages the next UID is 1.
+func TestIMAP_SelectUIDNEXT_EmptyMailboxIsOne(t *testing.T) {
+	m := newMockBackend()
+	h := newIMAPHarness(t, m)
+	h.login("e1")
+
+	untagged, status := h.command("e2", "SELECT INBOX")
+	if !strings.Contains(status, " OK") {
+		t.Fatalf("SELECT status = %q", status)
+	}
+	if joined := strings.Join(untagged, "\n"); !strings.Contains(joined, "[UIDNEXT 1]") {
+		t.Errorf("SELECT UIDNEXT on empty mailbox = missing/wrong; want [UIDNEXT 1]\n%s", joined)
+	}
+}
