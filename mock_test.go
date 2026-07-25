@@ -158,6 +158,17 @@ func (m *mockMailbox) wasDeleted(uid uint32) bool {
 	return false
 }
 
+// lastStore returns the most recent FlagUpdate persisted for uid, if any.
+func (m *mockMailbox) lastStore(uid uint32) (FlagUpdate, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	fs := m.stores[uid]
+	if len(fs) == 0 {
+		return FlagUpdate{}, false
+	}
+	return fs[len(fs)-1], true
+}
+
 // wasMarkedRead reports whether any Store for uid set \Seen true.
 func (m *mockMailbox) wasMarkedRead(uid uint32) bool {
 	m.mu.Lock()

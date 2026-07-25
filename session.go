@@ -508,7 +508,7 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) (marksSee
 	// fragments emitted as IMAP literals after the plain items.
 	plain := []string{
 		fmt.Sprintf("UID %d", msg.UID),
-		fmt.Sprintf("FLAGS (%s)", buildFlags(msg)),
+		fmt.Sprintf("FLAGS (%s)", s.flagString(msg)),
 	}
 	type litFrag struct{ name, payload string }
 	var lits []litFrag
@@ -837,62 +837,171 @@ func (s *Session) handleStore(tag, args string) {
 		return
 	}
 
-	// Parse: STORE <seq> +FLAGS (\Seen) or -FLAGS (\Seen)
+	// Parse: STORE <seq> (FLAGS|+FLAGS|-FLAGS)[.SILENT] (<flags>)
 	parts := strings.SplitN(args, " ", 3)
 	if len(parts) < 3 {
 		s.tagged(tag, "BAD", "STORE requires sequence, action, and flags")
 		return
 	}
 
-	seqStr := parts[0]
-	action := strings.ToUpper(parts[1])
-	flagStr := parts[2]
+	mode, silent, ok := parseStoreAction(parts[1])
+	if !ok {
+		s.tagged(tag, "BAD", "STORE requires FLAGS, +FLAGS or -FLAGS")
+		return
+	}
 
-	seqNums := parseSequenceSet(seqStr, len(s.messages))
-	flags := parseFlags(flagStr)
+	seqNums := parseSequenceSet(parts[0], len(s.messages))
+	flags := parseFlags(parts[2])
 
 	for _, seq := range seqNums {
 		if seq < 1 || seq > len(s.messages) {
 			continue
 		}
-		msg := &s.messages[seq-1]
-
-		var update FlagUpdate
-		changed := false
-
-		for _, flag := range flags {
-			switch flag {
-			case `\Seen`:
-				val := strings.HasPrefix(action, "+")
-				update.Seen = boolPtr(val)
-				msg.Seen = val
-				changed = true
-			case `\Flagged`:
-				val := strings.HasPrefix(action, "+")
-				update.Flagged = boolPtr(val)
-				msg.Flagged = val
-				changed = true
-			case `\Deleted`:
-				if strings.HasPrefix(action, "+") {
-					if s.deleted == nil {
-						s.deleted = make(map[uint32]bool)
-					}
-					s.deleted[msg.UID] = true
-				} else {
-					delete(s.deleted, msg.UID)
-				}
-			}
-		}
-
-		if changed {
-			_ = s.mailbox.Store(msg.UID, update)
-		}
-
-		newFlags := buildFlags(*msg)
-		s.send("* %d FETCH (FLAGS (%s))", seq, newFlags)
+		s.applyStore(seq, mode, flags, silent, false)
 	}
 
 	s.tagged(tag, "OK", "STORE completed")
+}
+
+// storeMode is the STORE operation selected by the data-item name: replace
+// (bare FLAGS), add (+FLAGS) or remove (-FLAGS), per RFC 3501 §6.4.6.
+type storeMode int
+
+const (
+	storeReplace storeMode = iota
+	storeAdd
+	storeRemove
+)
+
+// parseStoreAction parses a STORE flags data-item name such as "FLAGS",
+// "+FLAGS" or "-FLAGS.SILENT" (case-insensitive). It returns the mode, whether
+// the .SILENT suffix was present, and ok=false if the token is not a recognised
+// FLAGS store item.
+func parseStoreAction(action string) (mode storeMode, silent bool, ok bool) {
+	a := strings.ToUpper(strings.TrimSpace(action))
+	if strings.HasSuffix(a, ".SILENT") {
+		silent = true
+		a = strings.TrimSuffix(a, ".SILENT")
+	}
+	switch a {
+	case "FLAGS":
+		return storeReplace, silent, true
+	case "+FLAGS":
+		return storeAdd, silent, true
+	case "-FLAGS":
+		return storeRemove, silent, true
+	default:
+		return 0, false, false
+	}
+}
+
+// applyStore mutates the message at the given sequence number per RFC 3501
+// §6.4.6 and, unless silent, emits the untagged FETCH carrying the resulting
+// flags. When withUID is true the FETCH also reports the UID (UID STORE).
+func (s *Session) applyStore(seq int, mode storeMode, flags []string, silent, withUID bool) {
+	msg := &s.messages[seq-1]
+	update := s.applyStoreFlags(msg, mode, flags)
+
+	if update.Seen != nil || update.Answered != nil || update.Flagged != nil || update.Draft != nil {
+		_ = s.mailbox.Store(msg.UID, update)
+	}
+
+	if silent {
+		return
+	}
+	if withUID {
+		s.send("* %d FETCH (UID %d FLAGS (%s))", seq, msg.UID, s.flagString(*msg))
+	} else {
+		s.send("* %d FETCH (FLAGS (%s))", seq, s.flagString(*msg))
+	}
+}
+
+// applyStoreFlags applies the flag change to msg (and the session's \Deleted
+// set) and returns the FlagUpdate to persist. In replace mode every settable
+// system flag is forced to its membership in flags; in add/remove mode only the
+// listed flags are toggled. Unrecognised flags and keywords are accepted but not
+// stored (the model represents only the system flags).
+func (s *Session) applyStoreFlags(msg *Message, mode storeMode, flags []string) FlagUpdate {
+	listed := func(name string) bool {
+		for _, f := range flags {
+			if strings.EqualFold(f, name) {
+				return true
+			}
+		}
+		return false
+	}
+	apply := func(name string, cur *bool, out **bool) {
+		switch mode {
+		case storeReplace:
+			v := listed(name)
+			*cur = v
+			*out = boolPtr(v)
+		case storeAdd:
+			if listed(name) {
+				*cur = true
+				*out = boolPtr(true)
+			}
+		case storeRemove:
+			if listed(name) {
+				*cur = false
+				*out = boolPtr(false)
+			}
+		}
+	}
+
+	var update FlagUpdate
+	apply(`\Seen`, &msg.Seen, &update.Seen)
+	apply(`\Answered`, &msg.Answered, &update.Answered)
+	apply(`\Flagged`, &msg.Flagged, &update.Flagged)
+	apply(`\Draft`, &msg.Draft, &update.Draft)
+
+	// \Deleted is per-session state (reset on SELECT), not part of the persistent
+	// Message model, so it never rides in the FlagUpdate sent to the backend.
+	s.applyDeleted(msg.UID, mode, listed(`\Deleted`))
+
+	return update
+}
+
+// applyDeleted updates the session's \Deleted set for uid. In replace mode the
+// flag is set to its membership in the STORE list; in add/remove mode it changes
+// only when \Deleted appears in the list.
+func (s *Session) applyDeleted(uid uint32, mode storeMode, listed bool) {
+	var target bool
+	switch mode {
+	case storeReplace:
+		target = listed
+	case storeAdd:
+		if !listed {
+			return
+		}
+		target = true
+	case storeRemove:
+		if !listed {
+			return
+		}
+		target = false
+	}
+	if target {
+		if s.deleted == nil {
+			s.deleted = make(map[uint32]bool)
+		}
+		s.deleted[uid] = true
+	} else {
+		delete(s.deleted, uid)
+	}
+}
+
+// flagString renders msg's flags for a FETCH response, adding the session-local
+// \Deleted state that buildFlags (which sees only the Message) cannot know.
+func (s *Session) flagString(msg Message) string {
+	flags := buildFlags(msg)
+	if s.deleted[msg.UID] {
+		if flags == "" {
+			return `\Deleted`
+		}
+		return flags + ` \Deleted`
+	}
+	return flags
 }
 
 func (s *Session) handleCopy(tag, args string) {
@@ -1401,59 +1510,25 @@ func (s *Session) handleUIDStore(tag, args string) {
 		return
 	}
 
-	uidSetStr := parts[0]
-	flagArgs := parts[1]
+	// Parse the flags data-item once (it is the same for every message in the set).
+	flagParts := strings.SplitN(parts[1], " ", 2)
+	if len(flagParts) < 2 {
+		s.tagged(tag, "BAD", "UID STORE requires an action and flags")
+		return
+	}
+	mode, silent, ok := parseStoreAction(flagParts[0])
+	if !ok {
+		s.tagged(tag, "BAD", "UID STORE requires FLAGS, +FLAGS or -FLAGS")
+		return
+	}
+	flags := parseFlags(flagParts[1])
 
-	seqNums := s.parseUIDSet(uidSetStr)
-
-	// Rewrite args to use sequence numbers and delegate to handleStore
+	seqNums := s.parseUIDSet(parts[0])
 	for _, seq := range seqNums {
 		if seq < 1 || seq > len(s.messages) {
 			continue
 		}
-		msg := s.messages[seq-1]
-
-		// Parse flags action
-		flagParts := strings.SplitN(flagArgs, " ", 2)
-		if len(flagParts) < 2 {
-			continue
-		}
-		action := flagParts[0]
-		flagStr := strings.Trim(flagParts[1], "()")
-		flags := strings.Fields(flagStr)
-
-		var update FlagUpdate
-		changed := false
-		for _, flag := range flags {
-			switch flag {
-			case `\Seen`:
-				val := strings.HasPrefix(action, "+")
-				update.Seen = boolPtr(val)
-				s.messages[seq-1].Seen = val
-				changed = true
-			case `\Flagged`:
-				val := strings.HasPrefix(action, "+")
-				update.Flagged = boolPtr(val)
-				s.messages[seq-1].Flagged = val
-				changed = true
-			case `\Deleted`:
-				if strings.HasPrefix(action, "+") {
-					if s.deleted == nil {
-						s.deleted = make(map[uint32]bool)
-					}
-					s.deleted[msg.UID] = true
-				} else {
-					delete(s.deleted, msg.UID)
-				}
-			}
-		}
-
-		if changed {
-			_ = s.mailbox.Store(msg.UID, update)
-		}
-
-		newFlags := buildFlags(s.messages[seq-1])
-		s.send("* %d FETCH (UID %d FLAGS (%s))", seq, msg.UID, newFlags)
+		s.applyStore(seq, mode, flags, silent, true)
 	}
 
 	s.tagged(tag, "OK", "UID STORE completed")

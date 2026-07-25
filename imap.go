@@ -81,11 +81,12 @@ type Message struct {
 	UID uint32
 	// Size is RFC822.SIZE, the octet count reported in FETCH responses.
 	Size int
-	// Seen, Flagged and Draft are the persistent flags IMAP reports as \Seen,
-	// \Flagged and \Draft.
-	Seen    bool
-	Flagged bool
-	Draft   bool
+	// Seen, Answered, Flagged and Draft are the persistent flags IMAP reports as
+	// \Seen, \Answered, \Flagged and \Draft.
+	Seen     bool
+	Answered bool
+	Flagged  bool
+	Draft    bool
 	// Subject, From and Date populate ENVELOPE and INTERNALDATE, and back the
 	// SUBJECT/FROM/SINCE/BEFORE/ON SEARCH keys.
 	Subject string
@@ -104,9 +105,10 @@ type Folder struct {
 // FlagUpdate is a change to a message's persistent flags. A nil field leaves that
 // flag unchanged; a non-nil field sets it to the pointed-to value.
 type FlagUpdate struct {
-	Seen    *bool
-	Flagged *bool
-	Draft   *bool
+	Seen     *bool
+	Answered *bool
+	Flagged  *bool
+	Draft    *bool
 }
 
 // Backend authenticates IMAP users. A [Server] calls Authenticate once per

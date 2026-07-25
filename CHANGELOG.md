@@ -5,6 +5,32 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html); while the module
 is pre-1.0, patch releases carry correctness fixes and minor releases add or
 change the exported API.
 
+## Unreleased
+
+Correctness fixes for `STORE`/`UID STORE` flag handling (RFC 3501 §6.4.6). Adds
+two exported fields (`Message.Answered`, `FlagUpdate.Answered`); struct literals
+using field names are unaffected, so this is a backward-compatible addition.
+
+### Added
+
+- `Message.Answered` and `FlagUpdate.Answered` so the `\Answered` system flag,
+  already advertised in `FLAGS`/`PERMANENTFLAGS`, can actually be stored and
+  reported.
+
+### Fixed
+
+- `STORE FLAGS (...)` (replace mode) now sets the message's flags to exactly the
+  given set, per RFC 3501 §6.4.6. Previously bare `FLAGS` was mishandled as a
+  removal, so `STORE 1 FLAGS (\Flagged)` cleared `\Flagged` instead of setting
+  it. `+FLAGS`/`-FLAGS` continue to add/remove.
+- The `.SILENT` suffix now suppresses the untagged `FETCH` response; it was
+  previously ignored so the untagged `FETCH` was always emitted.
+- `STORE` now handles `\Answered` and `\Draft` instead of silently dropping them
+  (only `\Seen`, `\Flagged` and `\Deleted` were handled before).
+- A pending `\Deleted` mark now appears in `FETCH`/`STORE` flag lists; `buildFlags`
+  previously omitted the session-local `\Deleted` state.
+- `UID STORE` shares the same corrected flag logic as `STORE`.
+
 ## v0.2.3 - 2026-07-25
 
 Correctness fixes for FETCH, EXAMINE and sequence-set handling. No exported API

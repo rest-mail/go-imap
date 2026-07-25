@@ -104,6 +104,9 @@ func buildFlags(msg Message) string {
 	if msg.Seen {
 		flags = append(flags, `\Seen`)
 	}
+	if msg.Answered {
+		flags = append(flags, `\Answered`)
+	}
 	if msg.Flagged {
 		flags = append(flags, `\Flagged`)
 	}
