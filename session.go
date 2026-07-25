@@ -554,9 +554,10 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) (marksSee
 type searchCriterion struct {
 	kind string // "all", "seen", "unseen", "flagged", "unflagged", "deleted", "undeleted",
 	// "from", "to", "subject", "since", "before", "on", "uid", "not", "or"
-	value string            // for string/date/uid criteria
-	date  time.Time         // parsed date for since/before/on
-	sub   []searchCriterion // for NOT (1 element) or OR (2 elements)
+	value  string            // for string/date/uid criteria
+	date   time.Time         // parsed date for since/before/on
+	sub    []searchCriterion // for NOT (1 element) or OR (2 elements)
+	ranges []seqRange        // for uid: pre-parsed UID ranges, tested by membership (never expanded)
 }
 
 func (s *Session) handleSearch(tag, args string) {
@@ -583,16 +584,32 @@ func (s *Session) handleSearch(tag, args string) {
 }
 
 // parseSearchCriteria tokenizes the IMAP SEARCH arguments and builds criteria.
+// Any UID set is parsed into ranges here — once, not once per message — so the
+// per-message match is a cheap membership test (issue #8).
 func (s *Session) parseSearchCriteria(args string) []searchCriterion {
 	tokens := tokenizeSearch(args)
+	maxUID := s.maxUID()
 	var criteria []searchCriterion
 	idx := 0
 	for idx < len(tokens) {
-		c, newIdx := parseSingleCriterion(tokens, idx)
+		c, newIdx := parseSingleCriterion(tokens, idx, maxUID)
 		criteria = append(criteria, c)
 		idx = newIdx
 	}
 	return criteria
+}
+
+// maxUID returns the largest UID among the currently selected messages, or 0
+// when the mailbox is empty. It resolves "*" in a UID set to the real high-water
+// mark instead of an arbitrary large constant.
+func (s *Session) maxUID() uint32 {
+	var max uint32
+	for _, m := range s.messages {
+		if m.UID > max {
+			max = m.UID
+		}
+	}
+	return max
 }
 
 // tokenizeSearch splits the search arguments into tokens, respecting quoted strings.
@@ -632,7 +649,8 @@ func tokenizeSearch(args string) []string {
 }
 
 // parseSingleCriterion parses one criterion from the token list starting at idx.
-func parseSingleCriterion(tokens []string, idx int) (searchCriterion, int) {
+// maxUID resolves "*" in a UID set to the mailbox's high-water mark.
+func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriterion, int) {
 	if idx >= len(tokens) {
 		return searchCriterion{kind: "all"}, idx + 1
 	}
@@ -689,19 +707,19 @@ func parseSingleCriterion(tokens []string, idx int) (searchCriterion, int) {
 		return searchCriterion{kind: "all"}, idx + 1
 	case "UID":
 		if idx+1 < len(tokens) {
-			return searchCriterion{kind: "uid", value: tokens[idx+1]}, idx + 2
+			return searchCriterion{kind: "uid", value: tokens[idx+1], ranges: parseUIDRanges(tokens[idx+1], maxUID)}, idx + 2
 		}
 		return searchCriterion{kind: "all"}, idx + 1
 	case "NOT":
 		if idx+1 < len(tokens) {
-			sub, newIdx := parseSingleCriterion(tokens, idx+1)
+			sub, newIdx := parseSingleCriterion(tokens, idx+1, maxUID)
 			return searchCriterion{kind: "not", sub: []searchCriterion{sub}}, newIdx
 		}
 		return searchCriterion{kind: "all"}, idx + 1
 	case "OR":
 		if idx+2 < len(tokens) {
-			sub1, newIdx1 := parseSingleCriterion(tokens, idx+1)
-			sub2, newIdx2 := parseSingleCriterion(tokens, newIdx1)
+			sub1, newIdx1 := parseSingleCriterion(tokens, idx+1, maxUID)
+			sub2, newIdx2 := parseSingleCriterion(tokens, newIdx1, maxUID)
 			return searchCriterion{kind: "or", sub: []searchCriterion{sub1, sub2}}, newIdx2
 		}
 		return searchCriterion{kind: "all"}, idx + 1
@@ -763,15 +781,10 @@ func (s *Session) matchOne(msg Message, c searchCriterion) bool {
 		y2, m2, d2 := c.date.Date()
 		return y1 == y2 && m1 == m2 && d1 == d2
 	case "uid":
-		// Parse UID set and check if msg.UID is in it
-		// We need a max UID — use a large number since UIDs are store IDs
-		uidSet := parseSequenceSet(c.value, int(msg.UID)+1000000)
-		for _, uid := range uidSet {
-			if uint32(uid) == msg.UID {
-				return true
-			}
-		}
-		return false
+		// Test membership against the pre-parsed ranges (built once in
+		// parseSearchCriteria). Never expand the set: a crafted "1:4294967295"
+		// must not iterate billions of times per message (issue #8).
+		return uidInRanges(msg.UID, c.ranges)
 	case "not":
 		if len(c.sub) > 0 {
 			return !s.matchOne(msg, c.sub[0])

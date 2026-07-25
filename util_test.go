@@ -495,6 +495,149 @@ func assertIntSlice(t *testing.T, got, want []int) {
 }
 
 // ---------------------------------------------------------------------------
+// Sequence/UID range DoS (issue #8): a set such as "1:4294967295" must NOT be
+// expanded by iterating the literal declared span. These regression tests fail
+// (time out) against unbounded expansion and pass once the work is bounded to
+// the messages that can actually exist.
+// ---------------------------------------------------------------------------
+
+// A pathological range must not drive an O(span) loop. We use a span far larger
+// than the issue's 1:4294967295 example so an unbounded loop blows past the
+// timeout deterministically on any machine, while a clamped implementation
+// returns instantly.
+func TestParseSequenceSet_HugeRangeIsBounded(t *testing.T) {
+	done := make(chan []int, 1)
+	go func() {
+		done <- parseSequenceSet("1:4000000000000000000", 3)
+	}()
+	select {
+	case result := <-done:
+		// Only sequence numbers that can exist may be produced.
+		assertIntSlice(t, result, []int{1, 2, 3})
+	case <-time.After(2 * time.Second):
+		t.Fatal("parseSequenceSet did not return within 2s: unbounded range expansion (CPU DoS)")
+	}
+}
+
+// The reverse form of the same pathological input (huge start clamps to total,
+// so the range collapses to empty) must also be bounded.
+func TestParseSequenceSet_HugeReverseRangeIsBounded(t *testing.T) {
+	done := make(chan []int, 1)
+	go func() {
+		done <- parseSequenceSet("4000000000000000000:1", 3)
+	}()
+	select {
+	case result := <-done:
+		assertIntSlice(t, result, []int{1, 2, 3})
+	case <-time.After(2 * time.Second):
+		t.Fatal("parseSequenceSet did not return within 2s: unbounded range expansion (CPU DoS)")
+	}
+}
+
+// UID SEARCH must not expand a giant UID range per message (the quadratic path
+// in matchOne). It must complete quickly and still match every UID inside the
+// range. 4294967295 is the issue's example and a valid 32-bit UID upper bound.
+func TestUIDSearch_HugeRangeIsBounded(t *testing.T) {
+	s := &Session{
+		messages: []Message{{UID: 1}, {UID: 2}, {UID: 3}},
+		deleted:  map[uint32]bool{},
+	}
+	type result struct{ matched []uint32 }
+	done := make(chan result, 1)
+	go func() {
+		criteria := s.parseSearchCriteria("UID 1:4294967295")
+		var r result
+		for _, msg := range s.messages {
+			if s.matchesCriteria(msg, criteria) {
+				r.matched = append(r.matched, msg.UID)
+			}
+		}
+		done <- r
+	}()
+	select {
+	case r := <-done:
+		if len(r.matched) != 3 {
+			t.Fatalf("UID 1:4294967295 matched %v, want all of [1 2 3]", r.matched)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("UID SEARCH did not return within 2s: per-message range expansion (CPU DoS)")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// parseUIDRanges / uidInRanges (issue #8 membership, no expansion)
+// ---------------------------------------------------------------------------
+
+func TestParseUIDRanges_SingleAndRangeAndStar(t *testing.T) {
+	// "100:*" with maxUID 42 resolves * to 42, then normalizes 100 > 42 to {42,100}.
+	ranges := parseUIDRanges("2,5:7,100:*", 42)
+	want := []seqRange{{2, 2}, {5, 7}, {42, 100}}
+	if len(ranges) != len(want) {
+		t.Fatalf("got %v, want %v", ranges, want)
+	}
+	for i, r := range ranges {
+		if r != want[i] {
+			t.Errorf("range[%d] = %v, want %v", i, r, want[i])
+		}
+	}
+}
+
+func TestParseUIDRanges_StarOnEmptyMailboxDropped(t *testing.T) {
+	if ranges := parseUIDRanges("*", 0); len(ranges) != 0 {
+		t.Errorf("got %v, want empty ('*' unresolvable on empty mailbox)", ranges)
+	}
+	if ranges := parseUIDRanges("1:*", 0); len(ranges) != 0 {
+		t.Errorf("got %v, want empty ('*' unresolvable on empty mailbox)", ranges)
+	}
+}
+
+func TestParseUIDRanges_OutOfUint32Dropped(t *testing.T) {
+	// An endpoint beyond the 32-bit UID space cannot name a real message.
+	if ranges := parseUIDRanges("1:99999999999", 3); len(ranges) != 0 {
+		t.Errorf("got %v, want empty (endpoint exceeds uint32)", ranges)
+	}
+}
+
+func TestParseUIDRanges_InvalidTokenDropped(t *testing.T) {
+	ranges := parseUIDRanges("abc,3:5", 10)
+	if len(ranges) != 1 || ranges[0] != (seqRange{3, 5}) {
+		t.Errorf("got %v, want [{3 5}]", ranges)
+	}
+}
+
+func TestUIDInRanges(t *testing.T) {
+	ranges := []seqRange{{2, 2}, {5, 7}}
+	cases := map[uint32]bool{1: false, 2: true, 3: false, 5: true, 6: true, 7: true, 8: false}
+	for uid, want := range cases {
+		if got := uidInRanges(uid, ranges); got != want {
+			t.Errorf("uidInRanges(%d) = %v, want %v", uid, got, want)
+		}
+	}
+	if uidInRanges(5, nil) {
+		t.Error("uidInRanges against nil ranges should be false")
+	}
+}
+
+// UID "*" must resolve to the mailbox high-water mark, so "UID *" matches only
+// the highest-UID message. (The previous implementation matched nothing.)
+func TestUIDSearch_StarResolvesToHighestUID(t *testing.T) {
+	s := &Session{
+		messages: []Message{{UID: 10}, {UID: 20}, {UID: 30}},
+		deleted:  map[uint32]bool{},
+	}
+	criteria := s.parseSearchCriteria("UID *")
+	var matched []uint32
+	for _, msg := range s.messages {
+		if s.matchesCriteria(msg, criteria) {
+			matched = append(matched, msg.UID)
+		}
+	}
+	if len(matched) != 1 || matched[0] != 30 {
+		t.Errorf("UID * matched %v, want [30]", matched)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // resolveSeqNum
 // ---------------------------------------------------------------------------
 
