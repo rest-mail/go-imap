@@ -47,6 +47,15 @@ to the new `Server.Close` for an immediate stop.
 
 ### Fixed
 
+- `IDLE` now reports external mailbox changes, not only new-message growth
+  (RFC 2177). While a client idles, the poll diffs the mailbox against its cached
+  message set and pushes an untagged `* n EXPUNGE` for each message another
+  session removed — highest sequence number first, per the RFC 3501 §7.4.1
+  renumbering rule — an `* n EXISTS` for new arrivals, and an `* n FETCH (FLAGS …)`
+  when a surviving message's flags change, then updates the cache. Previously the
+  poll only announced a larger count, so an external expunge was never reported
+  and the cached set (which backs sequence-number resolution for every later
+  command) went stale.
 - A synchronizing literal (`{n}`, RFC 3501 §4.3) is now accepted as any
   string/astring argument of any command — `LOGIN`, `SELECT`, `CREATE`, `STATUS`,
   `SEARCH`, and so on — not only as `APPEND`'s message. The command reader detects

@@ -1925,12 +1925,7 @@ func (s *Session) handleIdle(tag string) (terminate bool) {
 				if err != nil {
 					continue
 				}
-				newTotal := int64(len(messages))
-				if newTotal > s.selected.total {
-					s.send("* %d EXISTS", newTotal)
-					s.selected.total = newTotal
-					s.messages = messages
-				}
+				s.reconcileIdle(messages)
 			}
 		}
 	}()
@@ -1974,6 +1969,65 @@ func (s *Session) handleIdle(tag string) (terminate bool) {
 
 	s.tagged(tag, "OK", "IDLE terminated")
 	return false
+}
+
+// reconcileIdle diffs a freshly-read message set against the cached one and
+// pushes the untagged responses RFC 2177 requires the server to volunteer while
+// a client is idling (RFC 3501 §7): "* n EXPUNGE" for messages removed from the
+// mailbox by another session, "* n EXISTS" for new arrivals, and
+// "* n FETCH (FLAGS ...)" when a surviving message's flags changed. The pre-fix
+// poll only ever announced growth, so an external expunge was never reported and
+// the cached message set (which backs sequence-number resolution for every later
+// command) went stale.
+//
+// It runs solely in the IDLE poll goroutine, which owns s.writer, s.messages and
+// s.selected for the duration of IDLE — the main goroutine only reads DONE and
+// does not touch them until the poll goroutine has stopped — so these mutations
+// need no further synchronisation.
+func (s *Session) reconcileIdle(messages []Message) {
+	if s.selected == nil {
+		return
+	}
+
+	// Index the fresh set by UID for membership tests and flag comparison. UIDs
+	// are stable and ascend with arrival order (see Message.UID), so new messages
+	// only ever append after the existing ones.
+	fresh := make(map[uint32]Message, len(messages))
+	for _, m := range messages {
+		fresh[m.UID] = m
+	}
+
+	// 1) EXPUNGE removed messages. Walk the cached set highest-sequence-first so
+	// each "* n EXPUNGE" carries the sequence number the message still holds at the
+	// instant it is removed; lower sequence numbers are unaffected by the splice
+	// (RFC 3501 §7.4.1 renumbering rule).
+	survivors := append([]Message(nil), s.messages...)
+	for i := len(survivors) - 1; i >= 0; i-- {
+		if _, ok := fresh[survivors[i].UID]; !ok {
+			s.send("* %d EXPUNGE", i+1)
+			survivors = append(survivors[:i], survivors[i+1:]...)
+		}
+	}
+
+	// 2) FLAGS changes on messages that survived. Their sequence numbers are the
+	// post-expunge indices; arrivals reported below only append, so they do not
+	// shift these.
+	for i, old := range survivors {
+		if nm := fresh[old.UID]; buildFlags(nm) != buildFlags(old) {
+			s.send("* %d FETCH (FLAGS (%s))", i+1, s.flagString(nm))
+		}
+	}
+
+	// 3) EXISTS for new arrivals — any growth beyond the surviving count. An
+	// expunge on its own never triggers EXISTS: the EXPUNGE responses already
+	// convey the smaller mailbox.
+	if len(messages) > len(survivors) {
+		s.send("* %d EXISTS", len(messages))
+	}
+
+	// Replace the cache with the authoritative fresh set.
+	s.messages = messages
+	s.selected.total = int64(len(messages))
 }
 
 // ── UID command ───────────────────────────────────────────────────────
