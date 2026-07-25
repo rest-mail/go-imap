@@ -59,6 +59,15 @@ additions.
   `\"` no longer terminates the string early. A `LOGIN` password (or mailbox name)
   containing a quote or backslash previously reached the backend mangled, so
   authentication failed silently.
+- `SEARCH`/`UID SEARCH` no longer treat an unrecognised search key as `ALL`
+  (RFC 3501 §6.4.4). An unknown key, a missing key argument, unbalanced
+  parentheses, or a malformed `BEFORE`/`SINCE`/`ON` date (e.g. `SINCE 99-Foo-2020`)
+  are now answered with a tagged `BAD` instead of silently matching every message.
+  An unsupported `CHARSET` is answered `NO [BADCHARSET (US-ASCII UTF-8)]`;
+  `US-ASCII` and `UTF-8` are accepted. Parenthesized key groups such as
+  `(FROM "a" SUBJECT "b")` are parsed as the AND of the enclosed keys rather than
+  mis-tokenised, and a bare message sequence set (e.g. `1,3:5`) is honoured as a
+  valid search key.
 
 ## v0.2.3 - 2026-07-25
 
