@@ -944,12 +944,28 @@ func TestMatchIMAPPattern_ExactMatch(t *testing.T) {
 	}
 }
 
-func TestMatchIMAPPattern_CaseInsensitive(t *testing.T) {
+// TestMatchIMAPPattern_InboxCaseInsensitive pins RFC 3501 §5.1: INBOX is the one
+// mailbox name matched case-insensitively, but every OTHER name is case-sensitive.
+// The old matcher lower-cased both sides, so "sent" wrongly matched "Sent" and a
+// sub-mailbox of INBOX folded too; the negative cases here were RED before the fix.
+func TestMatchIMAPPattern_InboxCaseInsensitive(t *testing.T) {
+	// INBOX, in any spelling, is case-insensitive.
 	if !matchIMAPPattern("inbox", "INBOX") {
-		t.Error("case insensitive match should work")
+		t.Error("inbox should match INBOX (INBOX is case-insensitive)")
 	}
 	if !matchIMAPPattern("INBOX", "inbox") {
-		t.Error("case insensitive match should work")
+		t.Error("INBOX should match inbox (INBOX is case-insensitive)")
+	}
+	// Non-INBOX names are case-sensitive.
+	if matchIMAPPattern("sent", "Sent") {
+		t.Error("sent should NOT match Sent — only INBOX is case-insensitive (RFC 3501 §5.1)")
+	}
+	if matchIMAPPattern("SENT", "Sent") {
+		t.Error("SENT should NOT match Sent — only INBOX is case-insensitive (RFC 3501 §5.1)")
+	}
+	// A sub-mailbox of INBOX is not the special INBOX and stays case-sensitive.
+	if matchIMAPPattern("inbox/sent", "INBOX/Sent") {
+		t.Error("inbox/sent should NOT match INBOX/Sent — only the top-level INBOX is special")
 	}
 }
 
@@ -1065,17 +1081,23 @@ func matchPatternReference(pattern, name string) bool {
 	return len(name) == 0
 }
 
-// referenceMatchIMAPPattern mirrors matchIMAPPattern's wrapper (case folding +
-// trivial special cases) around the reference backtracker, so the differential
-// test compares full, equivalent behaviour.
+// referenceMatchIMAPPattern mirrors matchIMAPPattern's wrapper (INBOX-only case
+// folding + trivial special cases) around the reference backtracker, so the
+// differential test compares full, equivalent behaviour. Like the production
+// wrapper it folds ONLY the special INBOX name — all other names are
+// case-sensitive (RFC 3501 §5.1).
 func referenceMatchIMAPPattern(pattern, name string) bool {
+	name = canonicalizeInbox(name)
+	if strings.EqualFold(pattern, "INBOX") {
+		pattern = "INBOX"
+	}
 	if pattern == "*" {
 		return true
 	}
 	if pattern == "%" {
 		return !strings.Contains(name, "/")
 	}
-	return matchPatternReference(strings.ToLower(pattern), strings.ToLower(name))
+	return matchPatternReference(pattern, name)
 }
 
 // TestMatchIMAPPattern_Semantics is a correctness table proving that '*', '%'
@@ -1117,9 +1139,10 @@ func TestMatchIMAPPattern_Semantics(t *testing.T) {
 		{"*x%y", "a/x_/y", false},
 		{"*/%", "a/b/c", true},
 		{"%/*", "a/b/c", true},
-		// Exact and case-insensitive.
+		// Exact; only INBOX is case-insensitive (RFC 3501 §5.1).
 		{"INBOX", "inbox", true},
-		{"inbox/sent", "INBOX/Sent", true},
+		{"Sent", "sent", false},
+		{"inbox/sent", "INBOX/Sent", false},
 		{"", "", true},
 		{"", "x", false},
 	}

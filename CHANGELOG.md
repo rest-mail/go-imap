@@ -47,6 +47,22 @@ to the new `Server.Close` for an immediate stop.
 
 ### Fixed
 
+- `LIST`/`LSUB` pattern matching is now case-sensitive for every mailbox name
+  except `INBOX` (RFC 3501 §5.1). The matcher previously lower-cased both the
+  pattern and the folder name, so a pattern such as `sent` wrongly matched a
+  folder named `Sent`. `INBOX` — and an `INBOX`-spelled pattern — is still folded
+  to the canonical spelling, so any-case `inbox` continues to list the one real
+  `INBOX`.
+- `SUBSCRIBE` and `UNSUBSCRIBE` (RFC 3501 §6.3.6/§6.3.7), mandatory IMAP4rev1
+  commands, are now accepted instead of drawing a `BAD "Unknown command"`. This
+  engine keeps no separate subscription list — `LSUB` reports every existing
+  folder as subscribed — so the commands validate their mailbox argument and
+  acknowledge with a tagged `OK`.
+- `APPEND` into the mailbox the session currently has selected now emits an
+  untagged `* n EXISTS` (RFC 3501 §6.3.11) and refreshes the cached message set,
+  so the client is told a message arrived and later sequence-number references
+  stay correct. Appends to any other mailbox remain invisible to the current
+  selection.
 - `IDLE` now reports external mailbox changes, not only new-message growth
   (RFC 2177). While a client idles, the poll diffs the mailbox against its cached
   message set and pushes an untagged `* n EXPUNGE` for each message another

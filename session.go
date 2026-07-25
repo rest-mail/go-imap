@@ -357,6 +357,10 @@ func (s *Session) Handle() {
 			s.handleList(tag, args)
 		case "LSUB":
 			s.handleList(tag, args) // treat LSUB same as LIST
+		case "SUBSCRIBE":
+			s.handleSubscribe(tag, args)
+		case "UNSUBSCRIBE":
+			s.handleUnsubscribe(tag, args)
 		case "SELECT":
 			s.handleSelect(tag, args, false)
 		case "EXAMINE":
@@ -464,6 +468,13 @@ func (s *Session) handleSTARTTLS(tag string) bool {
 	}
 
 	s.conn = tlsConn
+	// SECURITY: install a FRESH reader over the TLS conn, discarding anything the
+	// cleartext bufio.Reader had already buffered from the socket. A man-in-the-
+	// middle can pipeline plaintext IMAP commands after STARTTLS in the same
+	// segment; preserving that buffer would run them as though they arrived inside
+	// the TLS session (plaintext injection, CVE-2011-0411 class). A conforming
+	// client sends nothing until it sees this tagged OK, so no legitimate data is
+	// lost by discarding.
 	s.reader = bufio.NewReader(tlsConn)
 	s.writer = bufio.NewWriter(tlsConn)
 	s.usingTLS = true
@@ -632,6 +643,34 @@ func (s *Session) handleList(tag, args string) {
 		s.send(`* LIST (%s) "/" "%s"`, attrs, f.Name)
 	}
 	s.tagged(tag, "OK", "LIST completed")
+}
+
+// handleSubscribe implements SUBSCRIBE (RFC 3501 §6.3.6) and handleUnsubscribe
+// implements UNSUBSCRIBE (§6.3.7) — both mandatory IMAP4rev1 commands. This
+// engine keeps no persistent per-user subscription list: folders are implicit
+// (there is no folder-management backend method) and LSUB already reports every
+// existing folder as subscribed. The commands therefore validate the request and
+// acknowledge it without maintaining separate state, rather than answering the
+// BAD "Unknown command" a client would otherwise get for a mandatory command.
+func (s *Session) handleSubscribe(tag, args string) {
+	s.handleSubscription(tag, args, "SUBSCRIBE")
+}
+
+func (s *Session) handleUnsubscribe(tag, args string) {
+	s.handleSubscription(tag, args, "UNSUBSCRIBE")
+}
+
+func (s *Session) handleSubscription(tag, args, cmd string) {
+	if !s.auth.authenticated {
+		s.tagged(tag, "NO", "Not authenticated")
+		return
+	}
+	mailbox := unquote(strings.TrimSpace(args))
+	if mailbox == "" {
+		s.tagged(tag, "BAD", cmd+" requires a mailbox name")
+		return
+	}
+	s.tagged(tag, "OK", cmd+" completed")
 }
 
 // handleSelect implements SELECT (readOnly=false) and EXAMINE (readOnly=true).
@@ -1826,6 +1865,14 @@ func (s *Session) handleAppend(tag, args string) {
 		return
 	}
 
+	// RFC 3501 §6.3.11: when the message is appended to the mailbox this session
+	// currently has selected, notify the session of the new message count with an
+	// untagged EXISTS (and refresh the cached message set). Appends to any other
+	// mailbox are invisible to the current selection. This runs before the tagged
+	// completion — including the APPENDUID branch below — so the EXISTS precedes
+	// the OK, as untagged responses must (RFC 3501 §7).
+	s.notifyAppendToSelected(folder)
+
 	// APPENDUID (RFC 4315) is emitted only for a UIDPLUS backend that reported a
 	// real UID, whether the store handled the append via AppendUID or the
 	// date-aware AppendWithDate.
@@ -1836,6 +1883,27 @@ func (s *Session) handleAppend(tag, args string) {
 		}
 	}
 	s.tagged(tag, "OK", "APPEND completed")
+}
+
+// notifyAppendToSelected sends an untagged "* n EXISTS" (RFC 3501 §6.3.11) when a
+// just-completed APPEND targeted the mailbox this session has selected, so the
+// client learns a message arrived. It re-reads the mailbox so the cached message
+// slice — which backs sequence-number resolution for later FETCH/STORE/SEARCH —
+// reflects the new message rather than going stale. folder is already canonical
+// (INBOX-folded), as is s.selected.name, so the comparison is exact. A read error
+// leaves the prior cache and count in place; the next SELECT or IDLE poll
+// reconciles.
+func (s *Session) notifyAppendToSelected(folder string) {
+	if s.selected == nil || s.selected.name != folder {
+		return
+	}
+	messages, err := s.mailbox.Messages(folder)
+	if err != nil {
+		return
+	}
+	s.messages = messages
+	s.selected.total = int64(len(messages))
+	s.send("* %d EXISTS", len(messages))
 }
 
 // handleGetQuota returns quota for a named quota root (RFC 2087).

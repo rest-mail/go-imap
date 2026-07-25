@@ -142,7 +142,26 @@ func (m *mockMailbox) Append(dest string, f FlagUpdate, raw []byte) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.appends = append(m.appends, appendOp{dest: dest, flags: f, raw: raw})
+	m.growLocked(dest, f, raw)
 	return nil
+}
+
+// growLocked adds the appended message to the destination folder so a subsequent
+// Messages(dest) reflects the new count — letting a test observe the untagged
+// "* n EXISTS" a selected-mailbox APPEND must emit (RFC 3501 §6.3.11). It assigns
+// the next ascending UID within the folder. Callers hold m.mu.
+func (m *mockMailbox) growLocked(dest string, f FlagUpdate, raw []byte) {
+	var maxUID uint32
+	for _, msg := range m.byFolder[dest] {
+		if msg.UID > maxUID {
+			maxUID = msg.UID
+		}
+	}
+	msg := Message{UID: maxUID + 1, Size: len(raw)}
+	if f.Seen != nil {
+		msg.Seen = *f.Seen
+	}
+	m.byFolder[dest] = append(m.byFolder[dest], msg)
 }
 
 // AppendWithDate makes mockMailbox a [DateAppender] so tests can assert that a
@@ -152,6 +171,7 @@ func (m *mockMailbox) AppendWithDate(dest string, f FlagUpdate, date time.Time, 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.appends = append(m.appends, appendOp{dest: dest, flags: f, date: date, hasDate: true, raw: raw})
+	m.growLocked(dest, f, raw)
 	return 0, nil
 }
 

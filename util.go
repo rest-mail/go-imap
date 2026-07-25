@@ -982,6 +982,16 @@ func canonicalizeInbox(name string) string {
 // '*' matches any characters including hierarchy separator.
 // '%' matches any characters except hierarchy separator '/'.
 func matchIMAPPattern(pattern, name string) bool {
+	// INBOX is the sole mailbox name matched case-insensitively (RFC 3501 §5.1);
+	// every other name is case-sensitive. Fold an INBOX name and an INBOX-spelled
+	// pattern to the canonical spelling so "inbox" still lists INBOX, WITHOUT
+	// lower-casing everything (which made unrelated names — "sent" vs "Sent" —
+	// match case-insensitively too).
+	name = canonicalizeInbox(name)
+	if strings.EqualFold(pattern, "INBOX") {
+		pattern = "INBOX"
+	}
+
 	// Simple cases
 	if pattern == "*" {
 		return true
@@ -990,11 +1000,7 @@ func matchIMAPPattern(pattern, name string) bool {
 		return !strings.Contains(name, "/")
 	}
 
-	// Case-insensitive match for INBOX
-	pLower := strings.ToLower(pattern)
-	nLower := strings.ToLower(name)
-
-	return matchPatternGreedy(pLower, nLower)
+	return matchPatternGreedy(pattern, name)
 }
 
 // matchPatternGreedy matches name against an IMAP LIST pattern in linear time
