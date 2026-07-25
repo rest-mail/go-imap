@@ -252,6 +252,40 @@ func quoteString(s string) string {
 	return `"` + s + `"`
 }
 
+// encodeMailboxName encodes a mailbox name for output in a response as an IMAP
+// astring (RFC 3501 §4.3, §9 — a mailbox name is an astring, and §7.2.2/§7.2.3
+// render it that way in LIST and STATUS). A name a quoted-string can carry is
+// emitted quoted, with the quoted-specials '"' and '\' backslash-escaped so an
+// embedded quote or backslash cannot terminate the string early or corrupt the
+// line. A name containing CR, LF, NUL, or an 8-bit octet — none of which a
+// quoted-string may hold (its content is 7-bit TEXT-CHAR excluding CR/LF) — is
+// emitted as a synchronizing literal, so those octets travel verbatim and,
+// critically, a CR/LF in a backend-supplied folder name cannot inject additional
+// response lines. An empty name encodes as "" (never NIL): a mailbox name is
+// never absent. This is the encoder EVERY mailbox name emitted in a response must
+// pass through; interpolating a raw name would break client parsing and, on
+// CR/LF, allow response injection.
+func encodeMailboxName(name string) string {
+	if mailboxNeedsLiteral(name) {
+		return fmt.Sprintf("{%d}\r\n%s", len(name), name)
+	}
+	name = strings.ReplaceAll(name, `\`, `\\`)
+	name = strings.ReplaceAll(name, `"`, `\"`)
+	return `"` + name + `"`
+}
+
+// mailboxNeedsLiteral reports whether name contains an octet a quoted-string
+// cannot represent — CR, LF, NUL, or any 8-bit octet — and so must be sent as a
+// literal instead (RFC 3501 §4.3).
+func mailboxNeedsLiteral(name string) bool {
+	for i := 0; i < len(name); i++ {
+		if c := name[i]; c == '\r' || c == '\n' || c == 0x00 || c >= 0x80 {
+			return true
+		}
+	}
+	return false
+}
+
 // parseSequenceSet parses an IMAP sequence set like "1", "1:5", "1,3,5", "1:*".
 func parseSequenceSet(seqStr string, total int) []int {
 	if total == 0 {
