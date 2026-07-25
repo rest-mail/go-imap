@@ -387,3 +387,88 @@ func TestIMAP_UIDFetch_BodyPeekSections(t *testing.T) {
 		}
 	}
 }
+
+// A non-peek FETCH BODY[] of a previously-unseen message sets \Seen as a side
+// effect (RFC 3501 §6.4.5), and the FLAGS echoed in THAT SAME response must
+// reflect the new state — otherwise the client still believes the message is
+// unseen (rest-mail/go-imap#28). Seq 1 is UID 5, seeded unseen; the buggy code
+// formatted FLAGS from the pre-store message, emitting "FLAGS ()".
+func TestIMAP_FetchBody_AutoSeen_ResponseFlagsIncludeSeen(t *testing.T) {
+	m := newMockBackend()
+	seedThree(m)
+	h := newIMAPHarness(t, m)
+	h.login("as1")
+	h.selectInbox("as2")
+
+	untagged, status := h.command("as3", "FETCH 1 BODY[]")
+	if !strings.Contains(status, " OK") {
+		t.Fatalf("FETCH 1 BODY[] status = %q", status)
+	}
+	resp := strings.Join(untagged, "\n")
+	if !strings.Contains(resp, `FLAGS (\Seen)`) {
+		t.Errorf("auto-\\Seen FETCH response FLAGS must include \\Seen (reflect the new state); got: %q", resp)
+	}
+	// The side-effect store must actually have happened.
+	if _, st := h.command("as4", "NOOP"); !strings.Contains(st, " OK") {
+		t.Fatalf("NOOP status = %q", st)
+	}
+	if !m.mbox.wasMarkedRead(5) {
+		t.Errorf("FETCH BODY[] must mark UID 5 \\Seen")
+	}
+}
+
+// The peek form BODY.PEEK[] must not set \Seen, and so must NOT add \Seen to the
+// echoed FLAGS: an unseen message stays "FLAGS ()". Pins that the #28 fix keys
+// off the same non-peek/peek distinction as the \Seen store itself.
+func TestIMAP_FetchBodyPeek_ResponseFlagsOmitSeen(t *testing.T) {
+	m := newMockBackend()
+	seedThree(m)
+	h := newIMAPHarness(t, m)
+	h.login("pk1")
+	h.selectInbox("pk2")
+
+	untagged, status := h.command("pk3", "FETCH 1 BODY.PEEK[]")
+	if !strings.Contains(status, " OK") {
+		t.Fatalf("FETCH 1 BODY.PEEK[] status = %q", status)
+	}
+	resp := strings.Join(untagged, "\n")
+	if strings.Contains(resp, `\Seen`) {
+		t.Errorf("BODY.PEEK[] must not add \\Seen to the FETCH FLAGS; got: %q", resp)
+	}
+	if !strings.Contains(resp, "FLAGS ()") {
+		t.Errorf("unseen BODY.PEEK[] should echo empty FLAGS; got: %q", resp)
+	}
+	if _, st := h.command("pk4", "NOOP"); !strings.Contains(st, " OK") {
+		t.Fatalf("NOOP status = %q", st)
+	}
+	if m.mbox.wasMarkedRead(5) {
+		t.Errorf("BODY.PEEK[] must NOT mark UID 5 \\Seen")
+	}
+}
+
+// An already-\Seen message's non-peek FETCH BODY[] is unchanged: the FLAGS still
+// report \Seen (from real state, not a side effect), and the flag did not change
+// so no redundant \Seen Store is issued.
+func TestIMAP_FetchBody_AlreadySeen_Unchanged(t *testing.T) {
+	m := newMockBackend()
+	seedThree(m)
+	m.mbox.byFolder["INBOX"][0].Seen = true // UID 5 already seen (set before the session reads it)
+	h := newIMAPHarness(t, m)
+	h.login("se1")
+	h.selectInbox("se2")
+
+	untagged, status := h.command("se3", "FETCH 1 BODY[]")
+	if !strings.Contains(status, " OK") {
+		t.Fatalf("FETCH 1 BODY[] status = %q", status)
+	}
+	resp := strings.Join(untagged, "\n")
+	if !strings.Contains(resp, `FLAGS (\Seen)`) {
+		t.Errorf("already-seen message must still echo \\Seen; got: %q", resp)
+	}
+	if _, st := h.command("se4", "NOOP"); !strings.Contains(st, " OK") {
+		t.Fatalf("NOOP status = %q", st)
+	}
+	if m.mbox.wasMarkedRead(5) {
+		t.Errorf("already-\\Seen message must not trigger a redundant \\Seen Store")
+	}
+}

@@ -626,10 +626,14 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) (marksSee
 	}
 
 	// plain holds non-literal "name value" fragments; lits holds body-content
-	// fragments emitted as IMAP literals after the plain items.
+	// fragments emitted as IMAP literals after the plain items. The FLAGS slot is
+	// a placeholder filled in after the item loop: a non-peek body fetch of a
+	// previously-unseen message sets \Seen as a side effect, and the FLAGS echoed
+	// in THIS response must reflect that new state (RFC 3501 §6.4.5) — otherwise
+	// the client is never told the message became \Seen. FLAGS is always index 1.
 	plain := []string{
 		fmt.Sprintf("UID %d", msg.UID),
-		fmt.Sprintf("FLAGS (%s)", s.flagString(msg)),
+		"", // FLAGS — set after the loop, once marksSeen is known
 	}
 	type litFrag struct{ name, payload string }
 	var lits []litFrag
@@ -683,6 +687,18 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) (marksSee
 			// Unknown / unsupported data item — ignore.
 		}
 	}
+
+	// A fetch marks the message \Seen only when it pulled non-peek body content
+	// (marksSeen) and the message was not already seen. When it does, echo the
+	// post-change flags — including \Seen — so this same FETCH response tells the
+	// client the message is now seen (RFC 3501 §6.4.5). A peek fetch or an
+	// already-seen message leaves the flags unchanged. msg is a local copy, so
+	// this does not mutate session state.
+	echoed := msg
+	if marksSeen && !msg.Seen {
+		echoed.Seen = true
+	}
+	plain[1] = fmt.Sprintf("FLAGS (%s)", s.flagString(echoed))
 
 	head := fmt.Sprintf("* %d FETCH (%s", seq, strings.Join(plain, " "))
 	if len(lits) == 0 {
