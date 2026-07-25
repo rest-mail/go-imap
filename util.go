@@ -781,6 +781,19 @@ func countLines(body []byte) int {
 	return n
 }
 
+// canonicalizeInbox folds any-case spelling of the reserved mailbox name INBOX
+// to its canonical form "INBOX", and returns every other name unchanged. Per
+// RFC 3501 §5.1 only the special name "INBOX" is case-insensitive — "inbox",
+// "InBoX" and "INBOX" all denote the one real INBOX — so folder guards and
+// backend lookups must treat those spellings identically. All other mailbox
+// names remain case-sensitive ("Work" and "work" are distinct mailboxes).
+func canonicalizeInbox(name string) string {
+	if strings.EqualFold(name, "INBOX") {
+		return "INBOX"
+	}
+	return name
+}
+
 // matchIMAPPattern matches a folder name against an IMAP LIST pattern.
 // '*' matches any characters including hierarchy separator.
 // '%' matches any characters except hierarchy separator '/'.

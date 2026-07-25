@@ -474,6 +474,10 @@ func (s *Session) handleSelect(tag, args string, readOnly bool) {
 	if folder == "" {
 		folder = "INBOX"
 	}
+	// "INBOX" is case-insensitive (RFC 3501 §5.1): fold any-case spelling to the
+	// canonical name so the backend lookup, UIDVALIDITY and selection state all
+	// resolve to the one real INBOX.
+	folder = canonicalizeInbox(folder)
 
 	// Fetch messages for this folder
 	messages, err := s.mailbox.Messages(folder)
@@ -534,7 +538,9 @@ func (s *Session) handleStatus(tag, args string) {
 		s.tagged(tag, "BAD", "STATUS requires mailbox name")
 		return
 	}
-	folder := unquote(parts[0])
+	// "INBOX" is case-insensitive (RFC 3501 §5.1); fold to canonical so any-case
+	// spelling reports the real INBOX's status.
+	folder := canonicalizeInbox(unquote(parts[0]))
 
 	messages, err := s.mailbox.Messages(folder)
 	if err != nil {
@@ -1213,6 +1219,12 @@ func (s *Session) handleCreate(tag, args string) {
 		s.tagged(tag, "NO", "Missing folder name")
 		return
 	}
+	// INBOX always exists and is case-insensitive (RFC 3501 §5.1, §6.3.3), so
+	// CREATE of any-case "INBOX" must fail rather than silently succeed.
+	if strings.EqualFold(folder, "INBOX") {
+		s.tagged(tag, "NO", "INBOX already exists")
+		return
+	}
 	// Reject folder names that are too long or contain path separators
 	if len(folder) > 200 {
 		s.tagged(tag, "NO", "Folder name too long")
@@ -1239,6 +1251,10 @@ func (s *Session) handleDelete(tag, args string) {
 		s.tagged(tag, "NO", "Missing folder name")
 		return
 	}
+	// "INBOX" is case-insensitive (RFC 3501 §5.1): fold to canonical so any-case
+	// spelling ("inbox", "InBoX") hits the standard-folder guard below rather
+	// than bypassing it. Other standard names stay case-sensitive.
+	folder = canonicalizeInbox(folder)
 
 	// Prevent deleting standard folders
 	standard := map[string]bool{"INBOX": true, "Sent": true, "Drafts": true, "Trash": true}
@@ -1276,6 +1292,9 @@ func (s *Session) handleRename(tag, args string) {
 		s.tagged(tag, "BAD", "RENAME requires old and new name")
 		return
 	}
+	// "INBOX" is case-insensitive (RFC 3501 §5.1): fold the source name so any-case
+	// spelling matches the standard-folder guard below rather than bypassing it.
+	oldName = canonicalizeInbox(oldName)
 
 	standard := map[string]bool{"INBOX": true, "Sent": true, "Drafts": true, "Trash": true}
 	if standard[oldName] {
@@ -1308,6 +1327,9 @@ func (s *Session) handleAppend(tag, args string) {
 		s.tagged(tag, "BAD", "Missing mailbox name")
 		return
 	}
+	// "INBOX" is case-insensitive (RFC 3501 §5.1): fold to canonical so an any-case
+	// destination delivers to the one real INBOX, not a phantom "inbox" mailbox.
+	folder = canonicalizeInbox(folder)
 
 	// Optional flag-list: (\Seen \Draft ...) immediately after the mailbox. Taking
 	// it positionally — rather than scanning for the first '(' — avoids matching a

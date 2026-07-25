@@ -45,6 +45,9 @@ func (s *Session) uidValidity(folder string) (uint32, bool) {
 // the mailbox implements [UIDPlusMailbox], or "" otherwise. It is shared by COPY
 // and UID COPY.
 func (s *Session) copyMessages(seqNums []int, dest string) string {
+	// "INBOX" is case-insensitive (RFC 3501 §5.1): fold an any-case destination to
+	// the one real INBOX. Shared by COPY and UID COPY.
+	dest = canonicalizeInbox(dest)
 	up, uidPlus := s.mailbox.(UIDPlusMailbox)
 	var srcUIDs, dstUIDs []uint32
 
@@ -89,6 +92,9 @@ func (s *Session) moveMessages(tag, cmdName string, seqNums []int, dest string) 
 	if s.refuseReadOnly(tag) {
 		return
 	}
+	// "INBOX" is case-insensitive (RFC 3501 §5.1): fold an any-case destination to
+	// the one real INBOX. Shared by MOVE and UID MOVE.
+	dest = canonicalizeInbox(dest)
 	mover, hasMover := s.mailbox.(Mover)
 
 	var srcUIDs, dstUIDs []uint32
