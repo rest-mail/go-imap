@@ -169,6 +169,17 @@ accepted and, having no enable-able extension yet, is a no-op.
 Full API reference:
 [pkg.go.dev/github.com/rest-mail/go-imap](https://pkg.go.dev/github.com/rest-mail/go-imap).
 
+## Changelog
+
+Recent releases — see [CHANGELOG.md](CHANGELOG.md) for the complete history.
+
+- **v0.3.0** (2026-07-25) — breaking: `Shutdown(ctx) error` + `Close()`; general synchronizing literals, IDLE expunge reporting, SEARCH/STATUS/FETCH correctness, response-injection escaping, panic recovery.
+- **v0.2.3** (2026-07-25) — FETCH/EXAMINE/sequence-set correctness: `RFC822.SIZE` no longer sets `\Seen`, bounded UID-range expansion, read-only `EXAMINE` enforcement, `BODY`/`BODYSTRUCTURE` fetches.
+- **v0.2.2** (2026-07-24) — refuse `AUTHENTICATE` before `STARTTLS` when a TLS config is present; README and godoc polish.
+- **v0.2.1** (2026-07-23) — renamed the module to `github.com/rest-mail/go-imap`.
+- **v0.2.0** (2026-07-23) — `UIDPLUS`, atomic server-side `MOVE`, `UNSELECT` and `ENABLE`, gated on optional `Mailbox` interfaces.
+- **v0.1.0** (2026-07-23) — initial IMAP4rev1 server engine on a neutral `Backend` seam, standard library only.
+
 ## License
 
 [MIT](LICENSE) © 2026 rest-mail

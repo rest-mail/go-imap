@@ -1,13 +1,12 @@
 # Changelog
 
-All notable changes to this project are documented here. This project adheres
-to [Semantic Versioning](https://semver.org/spec/v2.0.0.html); while the module
-is pre-1.0, patch releases carry correctness fixes and minor releases add or
-change the exported API.
+All notable changes to this project are documented in this file.
 
-## Unreleased
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Note: pre-1.0, breaking changes may ship in a minor release.
 
-## v0.3.0 - 2026-07-25
+## [Unreleased]
+
+## [0.3.0] - 2026-07-25
 
 A minor release that collects the IMAP4rev1 correctness pass across the server's
 command set — `STORE`/`UID STORE` flag semantics (RFC 3501 §6.4.6), `APPEND`
@@ -22,9 +21,9 @@ linear-time wildcard matcher, and per-connection panic recovery). It adds two
 exported fields (`Message.Answered`, `FlagUpdate.Answered`), one optional interface
 (`DateAppender`), and two tunable package variables (`MaxLiteralSize`,
 `MaxCommandLineLength`); these are backward-compatible additions. It makes one
-breaking change to `Server.Shutdown` (see Breaking changes).
+breaking change to `Server.Shutdown` (see Breaking).
 
-### Breaking changes
+### Breaking
 
 - **`Server.Shutdown` now takes a `context.Context` and returns an `error`, and
   actually drains in-flight sessions.** It previously waited only on the
@@ -203,7 +202,7 @@ breaking change to `Server.Shutdown` (see Breaking changes).
 - A panic while serving one connection is now recovered and confined to that
   connection, so a single malformed client can no longer crash the whole server.
 
-## v0.2.3 - 2026-07-25
+## [0.2.3] - 2026-07-25
 
 Correctness fixes for FETCH, EXAMINE and sequence-set handling. No exported API
 changes — this is a drop-in patch release.
@@ -228,7 +227,7 @@ changes — this is a drop-in patch release.
   address in `ENVELOPE`. `BODYSTRUCTURE`/`BODY` structure fetches do not set
   `\Seen`.
 
-## v0.2.2 - 2026-07-24
+## [0.2.2] - 2026-07-24
 
 ### Fixed
 
@@ -239,13 +238,13 @@ changes — this is a drop-in patch release.
 
 - Polished README and godoc for the public release.
 
-## v0.2.1 - 2026-07-23
+## [0.2.1] - 2026-07-23
 
 ### Changed
 
 - Renamed the module to `github.com/rest-mail/go-imap`.
 
-## v0.2.0 - 2026-07-23
+## [0.2.0] - 2026-07-23
 
 ### Added
 
@@ -254,7 +253,7 @@ changes — this is a drop-in patch release.
   interfaces (`UIDPlusMailbox`, `Mover`) so capabilities are advertised only when
   the backend implements them.
 
-## v0.1.0 - 2026-07-23
+## [0.1.0] - 2026-07-23
 
 ### Added
 
