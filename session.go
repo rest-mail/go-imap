@@ -523,6 +523,18 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) (marksSee
 			plain = append(plain, fmt.Sprintf("INTERNALDATE %q", msg.Date.Format("02-Jan-2006 15:04:05 -0700")))
 		case up == "ENVELOPE":
 			plain = append(plain, "ENVELOPE "+buildEnvelope(msg))
+		case up == "BODYSTRUCTURE":
+			// Body structure is metadata (RFC 3501 §7.4.2): it must never set
+			// \Seen. It needs the raw message to describe the MIME layout.
+			if r, ok := loadRaw(); ok {
+				plain = append(plain, "BODYSTRUCTURE "+buildBodyStructure(r, true))
+			}
+		case up == "BODY":
+			// The bare BODY item is the non-extensible form of BODYSTRUCTURE
+			// (no extension fields); likewise metadata, so no \Seen.
+			if r, ok := loadRaw(); ok {
+				plain = append(plain, "BODY "+buildBodyStructure(r, false))
+			}
 		case up == "RFC822":
 			if r, ok := loadRaw(); ok {
 				lits = append(lits, litFrag{"RFC822", r})
@@ -547,7 +559,7 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) (marksSee
 				marksSeen = true
 			}
 		default:
-			// Unknown / unsupported item (e.g. BODYSTRUCTURE) — ignore.
+			// Unknown / unsupported data item — ignore.
 		}
 	}
 

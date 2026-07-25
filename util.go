@@ -1,8 +1,15 @@
 package imap
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/mail"
+	"net/textproto"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -106,31 +113,67 @@ func buildFlags(msg Message) string {
 	return strings.Join(flags, " ")
 }
 
-// buildEnvelope constructs an IMAP ENVELOPE response from a message.
+// buildEnvelope constructs an IMAP ENVELOPE response from a message, per
+// RFC 3501 §7.4.2. The ten fields, in order, are: date, subject, from, sender,
+// reply-to, to, cc, bcc, in-reply-to and message-id. Per the RFC, the sender and
+// reply-to fields default to the from address when no distinct value is
+// available. The Message model carries only From and To, so cc, bcc, in-reply-to
+// and message-id are reported NIL (their headers are treated as absent).
 func buildEnvelope(msg Message) string {
 	date := msg.Date.Format("Mon, 02 Jan 2006 15:04:05 -0700")
 	subject := quoteString(msg.Subject)
 
-	// Simplified envelope: (date subject from sender reply-to to cc bcc in-reply-to message-id)
-	// Each address is ((name NIL user host))
 	fromAddr := buildAddress(msg.From.Name, msg.From.Email)
+	toAddr := buildAddressList(msg.To)
 
-	return fmt.Sprintf("(%s %s %s %s %s NIL NIL NIL NIL NIL)",
-		quoteString(date), subject, fromAddr, fromAddr, fromAddr)
+	// date subject from sender reply-to to cc bcc in-reply-to message-id
+	return fmt.Sprintf("(%s %s %s %s %s %s NIL NIL NIL NIL)",
+		quoteString(date), subject, fromAddr, fromAddr, fromAddr, toAddr)
 }
 
-// buildAddress constructs an IMAP address structure.
-func buildAddress(name, email string) string {
-	if email == "" {
-		return "NIL"
-	}
+// addressPart constructs a single IMAP address structure "(name NIL mailbox
+// host)" — personal name, source-route (always NIL), mailbox name and host name
+// (RFC 3501 §7.4.2). It is the inner element of the parenthesized address lists
+// that make up the from/sender/reply-to/to/cc/bcc envelope fields.
+func addressPart(name, email string) string {
 	parts := strings.SplitN(email, "@", 2)
 	user := parts[0]
 	host := ""
 	if len(parts) > 1 {
 		host = parts[1]
 	}
-	return fmt.Sprintf("((%s NIL %s %s))", quoteString(name), quoteString(user), quoteString(host))
+	return fmt.Sprintf("(%s NIL %s %s)", quoteString(name), quoteString(user), quoteString(host))
+}
+
+// buildAddress wraps a single address in the parenthesized address-list form an
+// envelope field takes, e.g. ((name NIL mailbox host)). An empty address is NIL.
+func buildAddress(name, email string) string {
+	if email == "" {
+		return "NIL"
+	}
+	return "(" + addressPart(name, email) + ")"
+}
+
+// buildAddressList parses an RFC 5322 address-list header value (e.g.
+// "Bob <bob@example.org>, carol@example.com") into the parenthesized list of
+// address structures an envelope field requires. An empty or unparseable value
+// yields NIL, matching the RFC's treatment of an absent header.
+func buildAddressList(list string) string {
+	list = strings.TrimSpace(list)
+	if list == "" {
+		return "NIL"
+	}
+	addrs, err := mail.ParseAddressList(list)
+	if err != nil || len(addrs) == 0 {
+		return "NIL"
+	}
+	var b strings.Builder
+	b.WriteByte('(')
+	for _, a := range addrs {
+		b.WriteString(addressPart(a.Name, a.Address))
+	}
+	b.WriteByte(')')
+	return b.String()
 }
 
 // quoteString wraps a string in IMAP quotes, or returns NIL for empty.
@@ -393,7 +436,32 @@ func fetchItemTokens(dataItems string) []string {
 	if cur.Len() > 0 {
 		tokens = append(tokens, cur.String())
 	}
-	return tokens
+	return expandFetchMacros(tokens)
+}
+
+// expandFetchMacros replaces an RFC 3501 §6.4.5 FETCH macro with its component
+// data items. A macro (ALL, FAST, FULL) is only meaningful as the sole data item
+// — the grammar makes it an alternative to a data item or a parenthesized list,
+// not a member of one — so expansion applies only when tokens is exactly one
+// macro word; any other token list is returned unchanged.
+//
+//	ALL  = FLAGS INTERNALDATE RFC822.SIZE ENVELOPE
+//	FAST = FLAGS INTERNALDATE RFC822.SIZE
+//	FULL = FLAGS INTERNALDATE RFC822.SIZE ENVELOPE BODY
+func expandFetchMacros(tokens []string) []string {
+	if len(tokens) != 1 {
+		return tokens
+	}
+	switch strings.ToUpper(tokens[0]) {
+	case "ALL":
+		return []string{"FLAGS", "INTERNALDATE", "RFC822.SIZE", "ENVELOPE"}
+	case "FAST":
+		return []string{"FLAGS", "INTERNALDATE", "RFC822.SIZE"}
+	case "FULL":
+		return []string{"FLAGS", "INTERNALDATE", "RFC822.SIZE", "ENVELOPE", "BODY"}
+	default:
+		return tokens
+	}
 }
 
 // headerSection returns the RFC 2822 header block of raw, including the blank
@@ -450,6 +518,194 @@ func bodySection(item string, loadRaw func() (string, bool)) (name, payload stri
 		// full message rather than nothing, preserving prior lenient behavior.
 		return "BODY[" + section + "]", raw, peek, true
 	}
+}
+
+// buildBodyStructure parses a raw RFC 5322 message and returns its IMAP body
+// structure as a correctly-formed parenthesized structure (RFC 3501 §7.4.2).
+// With extension=false it produces the BODY (non-extensible) form; with
+// extension=true it produces BODYSTRUCTURE, appending the extension fields
+// (MD5/disposition/language/location for single parts; parameters/disposition/
+// language/location for multiparts) as NIL where the Message model has no source.
+// The whole message body is always described — never a NIL or empty structure —
+// so the response is well-formed even for unusual or unparseable input.
+func buildBodyStructure(raw string, extension bool) string {
+	msg, err := mail.ReadMessage(strings.NewReader(raw))
+	if err != nil {
+		// Unparseable header block: describe the entire input as one text/plain
+		// part so the structure is still well-formed.
+		return singlePartStructure("text", "plain", nil, textproto.MIMEHeader{}, []byte(raw), extension)
+	}
+	body, _ := io.ReadAll(msg.Body)
+	return partStructure(textproto.MIMEHeader(msg.Header), body, extension)
+}
+
+// partStructure builds the body structure for one MIME entity given its header
+// and (transfer-encoded) body octets, recursing into multipart entities.
+func partStructure(header textproto.MIMEHeader, body []byte, extension bool) string {
+	mediatype, params, err := mime.ParseMediaType(header.Get("Content-Type"))
+	if err != nil || mediatype == "" {
+		// Absent or malformed Content-Type defaults to text/plain (RFC 2045 §5.2).
+		mediatype, params = "text/plain", map[string]string{}
+	}
+	maintype, subtype := mediatype, ""
+	if slash := strings.IndexByte(mediatype, '/'); slash >= 0 {
+		maintype, subtype = mediatype[:slash], mediatype[slash+1:]
+	}
+
+	if maintype == "multipart" && params["boundary"] != "" {
+		return multipartStructure(subtype, params, body, extension)
+	}
+	return singlePartStructure(maintype, subtype, params, header, body, extension)
+}
+
+// multipartStructure builds the parenthesized structure for a multipart entity:
+// the nested part structures concatenated with no separator, then the subtype,
+// then (for BODYSTRUCTURE) the extension fields (RFC 3501 §7.4.2).
+func multipartStructure(subtype string, params map[string]string, body []byte, extension bool) string {
+	mr := multipart.NewReader(bytes.NewReader(body), params["boundary"])
+	var parts strings.Builder
+	for {
+		p, err := mr.NextPart()
+		if err != nil {
+			break
+		}
+		pb, _ := io.ReadAll(p)
+		parts.WriteString(partStructure(p.Header, pb, extension))
+	}
+	// A multipart with no decodable parts is still described as containing one
+	// empty text/plain part, keeping the structure well-formed.
+	if parts.Len() == 0 {
+		parts.WriteString(singlePartStructure("text", "plain", nil, textproto.MIMEHeader{}, nil, extension))
+	}
+
+	var b strings.Builder
+	b.WriteByte('(')
+	b.WriteString(parts.String())
+	b.WriteByte(' ')
+	b.WriteString(quoteUpper(subtype, "MIXED"))
+	if extension {
+		// body-ext-mpart: parameters, disposition, language, location.
+		b.WriteByte(' ')
+		b.WriteString(paramList(params))
+		b.WriteString(" NIL NIL NIL")
+	}
+	b.WriteByte(')')
+	return b.String()
+}
+
+// singlePartStructure builds the parenthesized structure for a non-multipart
+// entity (RFC 3501 §7.4.2): type, subtype, parameters, id, description,
+// encoding, size — plus a line count for text types, plus (for BODYSTRUCTURE)
+// the single-part extension fields MD5/disposition/language/location.
+func singlePartStructure(maintype, subtype string, params map[string]string, header textproto.MIMEHeader, body []byte, extension bool) string {
+	if maintype == "" {
+		maintype = "text"
+	}
+	if subtype == "" {
+		subtype = "plain"
+	}
+	// A text part with no explicit charset defaults to US-ASCII (RFC 2045 §5.2).
+	if strings.EqualFold(maintype, "text") {
+		hasCharset := false
+		for k := range params {
+			if strings.EqualFold(k, "charset") {
+				hasCharset = true
+				break
+			}
+		}
+		if !hasCharset {
+			merged := map[string]string{"charset": "US-ASCII"}
+			for k, v := range params {
+				merged[k] = v
+			}
+			params = merged
+		}
+	}
+
+	encoding := header.Get("Content-Transfer-Encoding")
+	if encoding == "" {
+		encoding = "7BIT"
+	}
+
+	var b strings.Builder
+	b.WriteByte('(')
+	b.WriteString(quoteUpper(maintype, "TEXT"))
+	b.WriteByte(' ')
+	b.WriteString(quoteUpper(subtype, "PLAIN"))
+	b.WriteByte(' ')
+	b.WriteString(paramList(params))
+	fmt.Fprintf(&b, " %s %s %s %d",
+		nilOrQuote(header.Get("Content-Id")),
+		nilOrQuote(header.Get("Content-Description")),
+		quoteString(strings.ToUpper(encoding)),
+		len(body))
+	if strings.EqualFold(maintype, "text") {
+		// body-type-text adds a line count after the octet size.
+		fmt.Fprintf(&b, " %d", countLines(body))
+	}
+	if extension {
+		// body-ext-1part: MD5, disposition, language, location.
+		b.WriteString(" NIL NIL NIL NIL")
+	}
+	b.WriteByte(')')
+	return b.String()
+}
+
+// paramList renders a MIME parameter map as an IMAP parenthesized attribute/value
+// list, e.g. ("CHARSET" "US-ASCII"), with attribute names uppercased and keys in
+// sorted order for a deterministic result. An empty map yields NIL.
+func paramList(params map[string]string) string {
+	if len(params) == 0 {
+		return "NIL"
+	}
+	keys := make([]string, 0, len(params))
+	for k := range params {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	b.WriteByte('(')
+	for i, k := range keys {
+		if i > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(quoteString(strings.ToUpper(k)))
+		b.WriteByte(' ')
+		b.WriteString(quoteString(params[k]))
+	}
+	b.WriteByte(')')
+	return b.String()
+}
+
+// quoteUpper returns s uppercased and IMAP-quoted, or fallback (already a bare
+// word) quoted when s is empty.
+func quoteUpper(s, fallback string) string {
+	if s == "" {
+		s = fallback
+	}
+	return quoteString(strings.ToUpper(s))
+}
+
+// nilOrQuote quotes s, or returns NIL when s is empty (an absent header field).
+func nilOrQuote(s string) string {
+	if s == "" {
+		return "NIL"
+	}
+	return quoteString(s)
+}
+
+// countLines returns the number of text lines in body — the count RFC 3501's
+// body-type-text requires. It counts line terminators, adding one for a final
+// unterminated line.
+func countLines(body []byte) int {
+	if len(body) == 0 {
+		return 0
+	}
+	n := bytes.Count(body, []byte("\n"))
+	if body[len(body)-1] != '\n' {
+		n++
+	}
+	return n
 }
 
 // matchIMAPPattern matches a folder name against an IMAP LIST pattern.
