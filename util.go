@@ -46,14 +46,18 @@ func parseIMAPArgs(args string) []string {
 
 		switch args[i] {
 		case '"':
-			// Quoted string — find closing quote
-			end := strings.Index(args[i+1:], `"`)
+			// Quoted string — find the closing quote, skipping any
+			// backslash-escaped character so an escaped \" does not terminate
+			// the string early (RFC 3501 §4.3). The token is kept with its
+			// surrounding quotes and escapes intact; unquote decodes it.
+			end := quotedStringEnd(args[i:])
 			if end == -1 {
+				// Unterminated quoted string — take the remainder.
 				result = append(result, args[i:])
 				i = len(args)
 			} else {
-				result = append(result, args[i:i+end+2])
-				i = i + end + 2
+				result = append(result, args[i:i+end+1])
+				i = i + end + 1
 			}
 		case '(':
 			// Parenthesized list — find closing paren
@@ -84,11 +88,52 @@ func parseIMAPArgs(args string) []string {
 	return result
 }
 
-// unquote removes surrounding double quotes from a string.
+// quotedStringEnd returns the index, within s, of the closing double quote of
+// the IMAP quoted-string that s begins with (s[0] must be '"'). It skips
+// backslash-escaped characters so an escaped \" does not close the string
+// (RFC 3501 §4.3). It returns -1 when the string is unterminated.
+func quotedStringEnd(s string) int {
+	for i := 1; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			// Skip the escaped character; a trailing backslash escapes nothing.
+			if i+1 < len(s) {
+				i++
+			}
+		case '"':
+			return i
+		}
+	}
+	return -1
+}
+
+// unescapeQuoted decodes the backslash escapes of an IMAP quoted-string body
+// (the text between the surrounding quotes). Per RFC 3501 §4.3 the only two
+// escapes are \" -> " and \\ -> \; a backslash before any other character, or a
+// trailing backslash, is preserved as a literal backslash.
+func unescapeQuoted(s string) string {
+	if !strings.Contains(s, `\`) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) && (s[i+1] == '"' || s[i+1] == '\\') {
+			i++ // drop the backslash, emit the escaped character below
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+// unquote removes the surrounding double quotes from an IMAP quoted-string and
+// decodes its backslash escapes (\" -> ", \\ -> \; RFC 3501 §4.3). A value that
+// is not a quoted-string (an atom) is returned unchanged — atoms carry no
+// escapes. This is the counterpart to quoteString, which escapes on output.
 func unquote(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
-		return s[1 : len(s)-1]
+		return unescapeQuoted(s[1 : len(s)-1])
 	}
 	return s
 }

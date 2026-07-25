@@ -54,6 +54,11 @@ additions.
   the backend to normalise. Any-case `INBOX` now resolves to the one real INBOX
   across `SELECT`/`EXAMINE`/`STATUS`/`CREATE`/`DELETE`/`RENAME`/`APPEND`/`COPY`/
   `MOVE`. All other mailbox names remain case-sensitive.
+- Quoted-string arguments now have their backslash escapes decoded on input, per
+  RFC 3501 §4.3: `\"` becomes a literal `"` and `\\` a literal `\`, and an escaped
+  `\"` no longer terminates the string early. A `LOGIN` password (or mailbox name)
+  containing a quote or backslash previously reached the backend mangled, so
+  authentication failed silently.
 
 ## v0.2.3 - 2026-07-25
 
