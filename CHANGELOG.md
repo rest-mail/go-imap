@@ -7,15 +7,21 @@ change the exported API.
 
 ## Unreleased
 
-Correctness fixes for `STORE`/`UID STORE` flag handling (RFC 3501 §6.4.6). Adds
-two exported fields (`Message.Answered`, `FlagUpdate.Answered`); struct literals
-using field names are unaffected, so this is a backward-compatible addition.
+Correctness fixes for `STORE`/`UID STORE` flag handling (RFC 3501 §6.4.6) and
+`APPEND` argument parsing (§6.3.11). Adds two exported fields (`Message.Answered`,
+`FlagUpdate.Answered`) and one optional interface (`DateAppender`); struct
+literals using field names are unaffected, so these are backward-compatible
+additions.
 
 ### Added
 
 - `Message.Answered` and `FlagUpdate.Answered` so the `\Answered` system flag,
   already advertised in `FLAGS`/`PERMANENTFLAGS`, can actually be stored and
   reported.
+- `DateAppender`, an optional `Mailbox` interface. When the concrete mailbox
+  implements it, a client-supplied `APPEND` date-time is passed through so the
+  store can set the message's `INTERNALDATE`; backends that do not implement it
+  are unchanged (the date is parsed and validated but not stored).
 
 ### Fixed
 
@@ -30,6 +36,17 @@ using field names are unaffected, so this is a backward-compatible addition.
 - A pending `\Deleted` mark now appears in `FETCH`/`STORE` flag lists; `buildFlags`
   previously omitted the session-local `\Deleted` state.
 - `UID STORE` shares the same corrected flag logic as `STORE`.
+- `APPEND` now accepts an unquoted (atom) mailbox name, per the `astring` grammar
+  of RFC 3501 §6.3.11. Previously only a quoted name was recognised, so `APPEND
+  Archive {n}` was ignored and the message misdelivered to `INBOX`. Quoted and
+  literal names continue to work.
+- `APPEND`'s optional flag-list and date-time are now parsed positionally after
+  the mailbox rather than by scanning for the first `(`/`"`, so a parenthesis or
+  quote inside a mailbox name is no longer mistaken for them. `\Answered` is now
+  applied (it was silently dropped), and a flag the store cannot honour is
+  rejected with a tagged `NO` instead of being discarded.
+- `APPEND`'s optional date-time is now parsed and validated; with a `DateAppender`
+  backend it sets the stored message's `INTERNALDATE`. It was previously ignored.
 
 ## v0.2.3 - 2026-07-25
 

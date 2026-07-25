@@ -30,10 +30,11 @@
 // Mailbox that also implements [UIDPlusMailbox] turns on UIDPLUS ([RFC 4315]) —
 // APPENDUID/COPYUID response codes, the real UIDVALIDITY in SELECT/EXAMINE, and
 // UID EXPUNGE — and one that implements [Mover] turns the baseline MOVE
-// ([RFC 6851]) into a single atomic backend operation. The advertised CAPABILITY
-// list reflects only the optional interfaces the concrete Mailbox satisfies, so a
-// backend implementing just [Mailbox] is unaffected and the list never
-// over-promises.
+// ([RFC 6851]) into a single atomic backend operation. A Mailbox that implements
+// [DateAppender] additionally receives the client-supplied INTERNALDATE on
+// APPEND. The advertised CAPABILITY list reflects only the optional interfaces
+// the concrete Mailbox satisfies, so a backend implementing just [Mailbox] is
+// unaffected and the list never over-promises.
 //
 // # TLS and authentication
 //
@@ -187,6 +188,26 @@ type Mover interface {
 	// operation and returns the UID assigned to it in dest, for COPYUID. A
 	// backend that cannot report the new UID may return 0.
 	MoveUID(srcUID uint32, dest string) (uid uint32, err error)
+}
+
+// DateAppender is the optional interface a [Mailbox] may also implement to
+// receive the client-supplied INTERNALDATE on APPEND ([RFC 3501] §6.3.11). When
+// the concrete Mailbox satisfies it and the APPEND command carries a date-time
+// argument, the [Server] calls AppendWithDate instead of [Mailbox.Append] (or
+// [UIDPlusMailbox.AppendUID]), passing the parsed time so the store can set the
+// stored message's internal date. It returns the UID assigned to the message —
+// exactly as [UIDPlusMailbox.AppendUID] does — so that when the Mailbox also
+// implements [UIDPlusMailbox] an APPENDUID response code can still be emitted; a
+// backend that does not track UIDs may return 0. A Mailbox that does not
+// implement this interface keeps exact prior behaviour: a client-supplied
+// date-time is parsed and validated but not stored.
+//
+// [RFC 3501]: https://www.rfc-editor.org/rfc/rfc3501
+type DateAppender interface {
+	// AppendWithDate delivers raw into dest exactly like [Mailbox.Append] but
+	// also sets the message's internal date to internalDate, and returns the UID
+	// assigned to the stored message (0 if the backend does not track UIDs).
+	AppendWithDate(dest string, f FlagUpdate, internalDate time.Time, raw []byte) (uid uint32, err error)
 }
 
 // Limiter is the per-IP connection and authentication guard the [Server]

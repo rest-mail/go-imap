@@ -38,8 +38,11 @@ type copyOp struct {
 	dest string
 }
 type appendOp struct {
-	dest string
-	raw  []byte
+	dest    string
+	flags   FlagUpdate
+	date    time.Time // zero unless the client supplied a date-time (DateAppender)
+	hasDate bool
+	raw     []byte
 }
 
 // mockBackend authenticates one user and hands out a shared mockMailbox.
@@ -135,11 +138,31 @@ func (m *mockMailbox) Copy(uid uint32, dest string) error {
 	return nil
 }
 
-func (m *mockMailbox) Append(dest string, _ FlagUpdate, raw []byte) error {
+func (m *mockMailbox) Append(dest string, f FlagUpdate, raw []byte) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.appends = append(m.appends, appendOp{dest, raw})
+	m.appends = append(m.appends, appendOp{dest: dest, flags: f, raw: raw})
 	return nil
+}
+
+// AppendWithDate makes mockMailbox a [DateAppender] so tests can assert that a
+// client-supplied APPEND date-time reaches the store. It tracks no UIDs, so it
+// returns 0 (no APPENDUID resp-code is expected from this backend).
+func (m *mockMailbox) AppendWithDate(dest string, f FlagUpdate, date time.Time, raw []byte) (uint32, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.appends = append(m.appends, appendOp{dest: dest, flags: f, date: date, hasDate: true, raw: raw})
+	return 0, nil
+}
+
+// lastAppend returns the most recent APPEND recorded, if any.
+func (m *mockMailbox) lastAppend() (appendOp, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.appends) == 0 {
+		return appendOp{}, false
+	}
+	return m.appends[len(m.appends)-1], true
 }
 
 func (m *mockMailbox) Quota() (used, limit int64, err error) {
