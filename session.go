@@ -370,6 +370,10 @@ func (s *Session) handleSelect(tag, args string) {
 	}
 
 	s.messages = messages
+	// SELECT/EXAMINE begins a new selection (RFC 3501 §6.3.1). \Deleted marks are
+	// keyed by UID and UIDs are folder-scoped, so state from the prior mailbox must
+	// not carry over — otherwise EXPUNGE could delete a same-numbered UID here.
+	s.deleted = make(map[uint32]bool)
 	total := int64(len(s.messages))
 	var unread int64
 	for _, m := range s.messages {

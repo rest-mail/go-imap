@@ -146,6 +146,18 @@ func (m *mockMailbox) Quota() (used, limit int64, err error) {
 	return 0, 0, nil
 }
 
+// wasDeleted reports whether Delete was ever called for uid.
+func (m *mockMailbox) wasDeleted(uid uint32) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, d := range m.deletes {
+		if d == uid {
+			return true
+		}
+	}
+	return false
+}
+
 // wasMarkedRead reports whether any Store for uid set \Seen true.
 func (m *mockMailbox) wasMarkedRead(uid uint32) bool {
 	m.mu.Lock()
