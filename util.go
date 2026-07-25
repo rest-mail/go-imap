@@ -327,6 +327,45 @@ func uidInRanges(uid uint32, ranges []seqRange) bool {
 	return false
 }
 
+// parseAstring consumes a leading IMAP astring — a quoted-string or an atom
+// (RFC 3501 §4.3 / §9) — from s, returning the decoded value and the remainder
+// of s after the token. ok is false when s does not begin with a well-formed
+// astring (e.g. an unterminated quoted-string). Leading spaces are skipped.
+//
+// Literal astrings ({n}...) are intentionally not handled here: APPEND's target
+// mailbox is taken from the command line, where clients send it either quoted or
+// as a bare atom. An atom runs up to the first space, '(' or '{' — the grammar's
+// separators between the mailbox and an optional flag-list or the message
+// literal — so it is decoded even without surrounding quotes.
+func parseAstring(s string) (val, rest string, ok bool) {
+	s = strings.TrimLeft(s, " ")
+	if s == "" {
+		return "", "", false
+	}
+	if s[0] == '"' {
+		var b strings.Builder
+		for i := 1; i < len(s); i++ {
+			switch c := s[i]; c {
+			case '\\': // quoted-specials are backslash-escaped inside a quoted-string
+				if i+1 >= len(s) {
+					return "", "", false
+				}
+				i++
+				b.WriteByte(s[i])
+			case '"':
+				return b.String(), s[i+1:], true
+			default:
+				b.WriteByte(c)
+			}
+		}
+		return "", "", false // unterminated quoted-string
+	}
+	if end := strings.IndexAny(s, " ({"); end >= 0 {
+		return s[:end], s[end:], true
+	}
+	return s, "", true
+}
+
 // parseFlags extracts IMAP flags from a parenthesized list like "(\Seen \Flagged)".
 func parseFlags(s string) []string {
 	s = strings.TrimSpace(s)

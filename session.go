@@ -864,6 +864,18 @@ func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriter
 	}
 }
 
+// parseIMAPDateTime parses an IMAP date-time (RFC 3501 §9) as sent in the
+// optional APPEND argument, e.g. "25-Jul-2026 13:04:05 +0000". A single-digit
+// day may be space-padded per the grammar or bare; both are accepted. ok is
+// false when s is not a valid date-time.
+func parseIMAPDateTime(s string) (time.Time, bool) {
+	s = strings.TrimSpace(s)
+	if t, err := time.Parse("2-Jan-2006 15:04:05 -0700", s); err == nil {
+		return t, true
+	}
+	return time.Time{}, false
+}
+
 // parseSearchDate parses IMAP date formats: "1-Jan-2006" or "01-Jan-2006".
 func parseSearchDate(s string) time.Time {
 	s = strings.TrimSpace(s)
@@ -1287,33 +1299,86 @@ func (s *Session) handleAppend(tag, args string) {
 		return
 	}
 
-	// Parse: APPEND "folder" (\flags) {size}
-	// Minimal parse — extract folder and literal size
-	folder := "INBOX"
-	if idx := strings.Index(args, "\""); idx >= 0 {
-		end := strings.Index(args[idx+1:], "\"")
-		if end >= 0 {
-			folder = args[idx+1 : idx+1+end]
-		}
+	// APPEND mailbox [flag-list] [date-time] literal  (RFC 3501 §6.3.11). The
+	// mailbox is an astring: an atom (unquoted), a quoted-string, or a literal.
+	// Parse it as an astring so an unquoted name is honoured rather than ignored,
+	// which previously left folder at "INBOX" and misdelivered the message.
+	folder, rest, ok := parseAstring(args)
+	if !ok || folder == "" {
+		s.tagged(tag, "BAD", "Missing mailbox name")
+		return
 	}
 
-	// Parse optional flags: (\Seen \Draft) between folder and {size}
+	// Optional flag-list: (\Seen \Draft ...) immediately after the mailbox. Taking
+	// it positionally — rather than scanning for the first '(' — avoids matching a
+	// parenthesis inside a quoted mailbox name.
 	var appendFlags []string
-	if flagStart := strings.Index(args, "("); flagStart >= 0 {
-		if flagEnd := strings.Index(args[flagStart:], ")"); flagEnd >= 0 {
-			flagStr := args[flagStart+1 : flagStart+flagEnd]
-			appendFlags = append(appendFlags, strings.Fields(flagStr)...)
+	rest = strings.TrimLeft(rest, " ")
+	if strings.HasPrefix(rest, "(") {
+		end := strings.IndexByte(rest, ')')
+		if end < 0 {
+			s.tagged(tag, "BAD", "Malformed flag list")
+			return
+		}
+		appendFlags = parseFlags(rest[:end+1])
+		rest = rest[end+1:]
+	}
+
+	// Translate the flags into a neutral FlagUpdate, rejecting any flag the store
+	// cannot honour so the client is not misled into thinking it took effect. This
+	// runs before the continuation: a rejected APPEND must not read the literal.
+	var flags FlagUpdate
+	for _, flag := range appendFlags {
+		switch flag {
+		case `\Seen`:
+			flags.Seen = boolPtr(true)
+		case `\Answered`:
+			flags.Answered = boolPtr(true)
+		case `\Flagged`:
+			flags.Flagged = boolPtr(true)
+		case `\Draft`:
+			flags.Draft = boolPtr(true)
+		case `\Deleted`:
+			// \Deleted is a valid system flag (it is advertised in PERMANENTFLAGS),
+			// but this engine models it as per-session state, not a persistent flag
+			// the backend stores (see applyDeleted). The appended message is not part
+			// of any selection, so accept the flag without error but do not persist
+			// it — matching how \Deleted is handled everywhere else.
+		default:
+			s.tagged(tag, "NO", "Unsupported flag: "+flag)
+			return
 		}
 	}
 
-	// Find literal size {N}
-	braceStart := strings.LastIndex(args, "{")
-	braceEnd := strings.LastIndex(args, "}")
+	// Optional date-time: a quoted "dd-Mon-yyyy HH:MM:SS +ZZZZ" that sets the
+	// message's INTERNALDATE. Parsed and validated here; it is stored only if the
+	// backend implements DateAppender (otherwise it is dropped, best-effort).
+	var internalDate time.Time
+	rest = strings.TrimLeft(rest, " ")
+	if strings.HasPrefix(rest, `"`) {
+		dateStr, after, dok := parseAstring(rest)
+		if !dok {
+			s.tagged(tag, "BAD", "Malformed date-time")
+			return
+		}
+		t, tok := parseIMAPDateTime(dateStr)
+		if !tok {
+			s.tagged(tag, "BAD", "Invalid date-time")
+			return
+		}
+		internalDate = t
+		rest = after
+	}
+
+	// The message follows as a synchronizing literal {N}; tolerate the {N+}
+	// non-synchronizing form's trailing '+'.
+	braceStart := strings.LastIndex(rest, "{")
+	braceEnd := strings.LastIndex(rest, "}")
 	if braceStart < 0 || braceEnd <= braceStart {
 		s.tagged(tag, "BAD", "Missing literal size")
 		return
 	}
-	sizeStr := args[braceStart+1 : braceEnd]
+	sizeStr := strings.TrimSuffix(rest[braceStart+1:braceEnd], "+")
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil || size < 0 {
 		s.tagged(tag, "BAD", "Invalid literal size")
@@ -1324,13 +1389,12 @@ func (s *Session) handleAppend(tag, args string) {
 		return
 	}
 
-	// Send continuation
+	// Send continuation.
 	s.send("+ Ready for literal data")
 
-	// Read exactly size bytes
+	// Read exactly size bytes.
 	data := make([]byte, size)
-	_, err = io.ReadFull(s.reader, data)
-	if err != nil {
+	if _, err = io.ReadFull(s.reader, data); err != nil {
 		s.tagged(tag, "NO", "Failed to read message data")
 		return
 	}
@@ -1338,41 +1402,36 @@ func (s *Session) handleAppend(tag, args string) {
 	// Read (and bound) the CRLF trailing the literal payload.
 	_, _, _ = s.readLine()
 
-	// Translate the parsed flags into a neutral FlagUpdate.
-	var flags FlagUpdate
-	for _, flag := range appendFlags {
-		switch flag {
-		case `\Seen`:
-			flags.Seen = boolPtr(true)
-		case `\Flagged`:
-			flags.Flagged = boolPtr(true)
-		case `\Draft`:
-			flags.Draft = boolPtr(true)
-		}
+	// Deliver. Precedence: a client date-time with a DateAppender backend honours
+	// INTERNALDATE; otherwise a UIDPlusMailbox reports the assigned UID; otherwise
+	// the base Append. AppendWithDate and AppendUID both return the UID for the
+	// APPENDUID (RFC 4315) response code.
+	up, isUIDPlus := s.mailbox.(UIDPlusMailbox)
+	da, isDater := s.mailbox.(DateAppender)
+	var uid uint32
+	switch {
+	case !internalDate.IsZero() && isDater:
+		uid, err = da.AppendWithDate(folder, flags, internalDate, data)
+	case isUIDPlus:
+		uid, err = up.AppendUID(folder, flags, data)
+	default:
+		err = s.mailbox.Append(folder, flags, data)
 	}
-
-	// With UIDPLUS, report the assigned UID in an APPENDUID resp-code (RFC 4315).
-	if up, ok := s.mailbox.(UIDPlusMailbox); ok {
-		uid, err := up.AppendUID(folder, flags, data)
-		if err != nil {
-			slog.Warn("imap: append failed", "error", err)
-			s.tagged(tag, "NO", "APPEND failed")
-			return
-		}
-		if v, ok := s.uidValidity(folder); ok {
-			s.tagged(tag, "OK", fmt.Sprintf("[APPENDUID %d %d] APPEND completed", v, uid))
-			return
-		}
-		s.tagged(tag, "OK", "APPEND completed")
-		return
-	}
-
-	if err := s.mailbox.Append(folder, flags, data); err != nil {
+	if err != nil {
 		slog.Warn("imap: append failed", "error", err)
 		s.tagged(tag, "NO", "APPEND failed")
 		return
 	}
 
+	// APPENDUID (RFC 4315) is emitted only for a UIDPLUS backend that reported a
+	// real UID, whether the store handled the append via AppendUID or the
+	// date-aware AppendWithDate.
+	if isUIDPlus && uid != 0 {
+		if v, ok := s.uidValidity(folder); ok {
+			s.tagged(tag, "OK", fmt.Sprintf("[APPENDUID %d %d] APPEND completed", v, uid))
+			return
+		}
+	}
 	s.tagged(tag, "OK", "APPEND completed")
 }
 
