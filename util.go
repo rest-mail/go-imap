@@ -181,19 +181,89 @@ func buildFlags(msg Message) string {
 // buildEnvelope constructs an IMAP ENVELOPE response from a message, per
 // RFC 3501 §7.4.2. The ten fields, in order, are: date, subject, from, sender,
 // reply-to, to, cc, bcc, in-reply-to and message-id. Per the RFC, the sender and
-// reply-to fields default to the from address when no distinct value is
-// available. The Message model carries only From and To, so cc, bcc, in-reply-to
-// and message-id are reported NIL (their headers are treated as absent).
-func buildEnvelope(msg Message) string {
-	date := msg.Date.Format("Mon, 02 Jan 2006 15:04:05 -0700")
+// reply-to fields default to the from address when no distinct value is available.
+//
+// When the raw message is available (rawOK), the recipient and reference fields
+// (to, cc, bcc, in-reply-to, message-id) and the envelope date are read from the
+// message's own headers — the date from the Date: header specifically, which is
+// distinct from INTERNALDATE (the arrival time, Message.Date). Without the raw
+// bytes the envelope degrades to the neutral Message model: from/sender/reply-to
+// from Message.From, to from Message.To, the date from Message.Date, and cc, bcc,
+// in-reply-to and message-id NIL.
+func buildEnvelope(msg Message, raw string, rawOK bool) string {
+	// Parse the header block once when the raw message is available. A parse
+	// failure leaves hdr nil, so every field falls back to the Message model.
+	var hdr mail.Header
+	if rawOK {
+		if m, err := mail.ReadMessage(strings.NewReader(raw)); err == nil {
+			hdr = m.Header
+		}
+	}
+
+	// date: the message's Date: header when present and parseable; otherwise the
+	// arrival time (Message.Date). INTERNALDATE is a separate concept and is not
+	// derived here — the two must not be conflated (RFC 3501 §7.4.2 vs §2.3.3).
+	date := msg.Date
+	if hdr != nil {
+		if d, err := hdr.Date(); err == nil {
+			date = d
+		}
+	}
+	dateField := quoteString(date.Format("Mon, 02 Jan 2006 15:04:05 -0700"))
 	subject := quoteString(msg.Subject)
 
-	fromAddr := buildAddress(msg.From.Name, msg.From.Email)
-	toAddr := buildAddressList(msg.To)
+	// from/sender/reply-to are single-address fields; sender and reply-to default
+	// to from when their own header is absent, and from itself falls back to the
+	// Message model's From.
+	from := headerAddressList(hdr, "From", buildAddress(msg.From.Name, msg.From.Email))
+	sender := headerAddressList(hdr, "Sender", from)
+	replyTo := headerAddressList(hdr, "Reply-To", from)
+
+	// to/cc/bcc are recipient lists. to falls back to the Message model's To
+	// string; cc and bcc have no model source, so an absent header is NIL. Bcc is
+	// usually absent in stored messages (correctly reported NIL) but is populated
+	// when the header is present.
+	to := headerAddressList(hdr, "To", buildAddressList(msg.To))
+	cc := headerAddressList(hdr, "Cc", "NIL")
+	bcc := headerAddressList(hdr, "Bcc", "NIL")
+
+	// in-reply-to and message-id are message-id references, reported as the raw
+	// header value (angle brackets preserved); an absent header is NIL.
+	inReplyTo := nilOrQuote(headerValue(hdr, "In-Reply-To"))
+	messageID := nilOrQuote(headerValue(hdr, "Message-Id"))
 
 	// date subject from sender reply-to to cc bcc in-reply-to message-id
-	return fmt.Sprintf("(%s %s %s %s %s %s NIL NIL NIL NIL)",
-		quoteString(date), subject, fromAddr, fromAddr, fromAddr, toAddr)
+	return fmt.Sprintf("(%s %s %s %s %s %s %s %s %s %s)",
+		dateField, subject, from, sender, replyTo, to, cc, bcc, inReplyTo, messageID)
+}
+
+// headerAddressList renders the named address-list header as an IMAP envelope
+// address field, parsing it with the same buildAddressList that backs the To
+// field. It returns fallback when the header is absent (or hdr is nil because the
+// raw message was unavailable), and also when the header is present but parses to
+// no address — so a From carrying an unparseable value degrades to the Message
+// model rather than to NIL.
+func headerAddressList(hdr mail.Header, name, fallback string) string {
+	if hdr == nil {
+		return fallback
+	}
+	v := strings.TrimSpace(hdr.Get(name))
+	if v == "" {
+		return fallback
+	}
+	if list := buildAddressList(v); list != "NIL" {
+		return list
+	}
+	return fallback
+}
+
+// headerValue returns the trimmed value of the named header, or "" when it is
+// absent or the raw message was unavailable (hdr is nil).
+func headerValue(hdr mail.Header, name string) string {
+	if hdr == nil {
+		return ""
+	}
+	return strings.TrimSpace(hdr.Get(name))
 }
 
 // addressPart constructs a single IMAP address structure "(name NIL mailbox

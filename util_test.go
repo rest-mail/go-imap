@@ -435,7 +435,7 @@ func TestBuildEnvelope_Basic(t *testing.T) {
 		From:    Address{Name: "Alice", Email: "alice@example.com"},
 		Date:    fixedTime,
 	}
-	result := buildEnvelope(msg)
+	result := buildEnvelope(msg, "", false)
 
 	if !strings.HasPrefix(result, "(") || !strings.HasSuffix(result, ")") {
 		t.Errorf("envelope should be wrapped in parens: %s", result)
@@ -464,7 +464,7 @@ func TestBuildEnvelope_EmptySubject(t *testing.T) {
 		From:    Address{Name: "Bob", Email: "bob@test.com"},
 		Date:    fixedTime,
 	}
-	result := buildEnvelope(msg)
+	result := buildEnvelope(msg, "", false)
 	if !strings.Contains(result, " NIL ") {
 		t.Errorf("envelope should have NIL for empty subject: %s", result)
 	}
@@ -620,7 +620,7 @@ func TestUIDSearch_HugeRangeIsBounded(t *testing.T) {
 		criteria, _ := s.parseSearchCriteria("UID 1:4294967295")
 		var r result
 		for _, msg := range s.messages {
-			if s.matchesCriteria(msg, criteria) {
+			if s.matchesCriteria(msg, criteria, func() (string, bool) { return "", false }) {
 				r.matched = append(r.matched, msg.UID)
 			}
 		}
@@ -700,7 +700,7 @@ func TestUIDSearch_StarResolvesToHighestUID(t *testing.T) {
 	criteria, _ := s.parseSearchCriteria("UID *")
 	var matched []uint32
 	for _, msg := range s.messages {
-		if s.matchesCriteria(msg, criteria) {
+		if s.matchesCriteria(msg, criteria, func() (string, bool) { return "", false }) {
 			matched = append(matched, msg.UID)
 		}
 	}
