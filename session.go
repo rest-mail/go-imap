@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"os"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -160,6 +161,39 @@ func (s *Session) recoverPanic() {
 	}
 }
 
+// autologoutTimeout is the inactivity window after which the server autologs the
+// client out (RFC 3501 §5.4). The RFC requires this timer to be at least 30
+// minutes, so production must never shorten it; it is a var, not a const, only so
+// tests can drive the autologout path quickly — the same seam idlePollInterval
+// uses. When it fires, [Session.Handle] and [Session.handleIdle] announce the
+// close with an untagged "* BYE" (§7.1.5) before dropping the connection.
+var autologoutTimeout = 30 * time.Minute
+
+// isAutologout reports whether err is the inactivity read-deadline expiry
+// (autologout) rather than a peer disconnect or other read error — the only case
+// that warrants sending a "* BYE" before closing, since a disconnected peer can
+// receive nothing. A net.Conn (and net.Pipe) read past its deadline returns
+// os.ErrDeadlineExceeded, which readLine surfaces unwrapped.
+func isAutologout(err error) bool {
+	return errors.Is(err, os.ErrDeadlineExceeded)
+}
+
+// autologoutByeGrace bounds how long the autologout BYE write may block. The
+// inactivity deadline that just fired also governs writes (net.Conn.SetDeadline
+// sets both directions), so a fresh write deadline is required or the BYE would
+// itself time out and never leave the buffer; the grace is short so a wedged
+// client cannot pin the serve goroutine.
+var autologoutByeGrace = 10 * time.Second
+
+// sendAutologoutBye announces the inactivity autologout with an untagged BYE
+// (RFC 3501 §5.4/§7.1.5) after refreshing the write deadline the expired
+// inactivity deadline left in the past, then leaves the caller to close the
+// connection.
+func (s *Session) sendAutologoutBye() {
+	_ = s.conn.SetWriteDeadline(time.Now().Add(autologoutByeGrace))
+	s.send("* BYE Autologout; idle for too long")
+}
+
 // Handle runs the IMAP state machine until the client disconnects or LOGOUTs.
 func (s *Session) Handle() {
 	defer func() { _ = s.conn.Close() }()
@@ -174,10 +208,18 @@ func (s *Session) Handle() {
 	s.send("* OK [CAPABILITY %s] %s IMAP4rev1 ready", s.capabilities(), s.hostname)
 
 	for {
-		_ = s.conn.SetDeadline(time.Now().Add(30 * time.Minute))
+		_ = s.conn.SetDeadline(time.Now().Add(autologoutTimeout))
 
 		line, tooLong, err := s.readLine()
 		if err != nil {
+			if isAutologout(err) {
+				// Inactivity autologout (RFC 3501 §5.4): announce the close with an
+				// untagged BYE (§7.1.5) before the deferred Close drops the socket,
+				// rather than disconnecting silently.
+				slog.Info("imap: autologout on inactivity", "remote", s.conn.RemoteAddr())
+				s.sendAutologoutBye()
+				return
+			}
 			slog.Debug("imap: connection closed", "remote", s.conn.RemoteAddr(), "error", err)
 			return
 		}
@@ -282,7 +324,9 @@ func (s *Session) Handle() {
 		case "GETQUOTAROOT":
 			s.handleGetQuotaRoot(tag, args)
 		case "IDLE":
-			s.handleIdle(tag)
+			if s.handleIdle(tag) {
+				return
+			}
 		case "UID":
 			s.handleUID(tag, args)
 		case "LOGOUT":
@@ -1740,14 +1784,21 @@ func (s *Session) handleGetQuotaRoot(tag, args string) {
 // shorten it; production always uses the default.
 var idlePollInterval = 15 * time.Second
 
-func (s *Session) handleIdle(tag string) {
+// handleIdle runs an IDLE command (RFC 2177) until the client sends DONE, the
+// peer disconnects, or the inactivity autologout timer fires. It reports whether
+// the caller must terminate the session: true when the read ended in error (an
+// autologout or a peer disconnect) rather than a clean DONE. On an autologout it
+// emits the untagged "* BYE" (RFC 3501 §5.4/§7.1.5) before returning so the
+// caller's deferred Close is preceded by the announcement — the same contract the
+// main command loop honours.
+func (s *Session) handleIdle(tag string) (terminate bool) {
 	if !s.auth.authenticated {
 		s.tagged(tag, "NO", "Not authenticated")
-		return
+		return false
 	}
 	if s.selected == nil {
 		s.tagged(tag, "NO", "No mailbox selected")
-		return
+		return false
 	}
 
 	s.send("+ idling")
@@ -1783,14 +1834,15 @@ func (s *Session) handleIdle(tag string) {
 		}
 	}()
 
-	// Wait for DONE from client.
-	_ = s.conn.SetDeadline(time.Now().Add(29 * time.Minute))
+	// Wait for DONE from client, bounded by the same inactivity autologout timer
+	// the main loop uses (RFC 3501 §5.4).
+	_ = s.conn.SetDeadline(time.Now().Add(autologoutTimeout))
+	var readErr error
 	for {
 		line, tooLong, err := s.readLine()
 		if err != nil {
-			close(done)
-			<-stopped // let any in-flight poll finish before we return
-			return
+			readErr = err
+			break
 		}
 		if tooLong {
 			continue // ignore over-long junk; keep waiting for DONE
@@ -1800,9 +1852,27 @@ func (s *Session) handleIdle(tag string) {
 		}
 	}
 
+	// The poll goroutine owns s.writer during IDLE; stop it fully before this
+	// goroutine writes anything (the tagged OK or the autologout BYE).
 	close(done)
-	<-stopped // ensure the poll goroutine stopped before we write again
+	<-stopped
+
+	if readErr != nil {
+		// The read ended in error rather than a DONE. On an inactivity autologout
+		// announce the close with an untagged BYE (RFC 3501 §5.4/§7.1.5) before the
+		// caller closes the connection; a peer disconnect can receive nothing. Tell
+		// the caller to terminate the session either way.
+		if isAutologout(readErr) {
+			slog.Info("imap: autologout on inactivity during IDLE", "remote", s.conn.RemoteAddr())
+			s.sendAutologoutBye()
+		} else {
+			slog.Debug("imap: connection closed during IDLE", "remote", s.conn.RemoteAddr(), "error", readErr)
+		}
+		return true
+	}
+
 	s.tagged(tag, "OK", "IDLE terminated")
+	return false
 }
 
 // ── UID command ───────────────────────────────────────────────────────
