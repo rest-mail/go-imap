@@ -68,6 +68,13 @@ additions.
   `(FROM "a" SUBJECT "b")` are parsed as the AND of the enclosed keys rather than
   mis-tokenised, and a bare message sequence set (e.g. `1,3:5`) is honoured as a
   valid search key.
+- `STATUS` now honours the requested status-item list and returns exactly those
+  items (RFC 3501 §6.3.10). Previously the list was ignored and a fixed
+  `MESSAGES RECENT UNSEEN` set was always returned; `UIDNEXT` and `UIDVALIDITY`
+  were unsupported. All five items — `MESSAGES`, `RECENT`, `UNSEEN`, `UIDNEXT`
+  (highest UID + 1), `UIDVALIDITY` (the mailbox's real value on a UIDPLUS backend,
+  else 1, matching `SELECT`/`EXAMINE`) — are now reported, an unknown item is
+  rejected with `BAD`, and `STATUS` neither selects the mailbox nor sets `\Seen`.
 
 ## v0.2.3 - 2026-07-25
 
