@@ -113,7 +113,7 @@ func capabilityCode(t *testing.T, greeting string) string {
 	if open < 0 {
 		t.Fatalf("greeting has no [CAPABILITY ...] code: %q", greeting)
 	}
-	rest := greeting[open+len("[CAPABILITY ") :]
+	rest := greeting[open+len("[CAPABILITY "):]
 	end := strings.Index(rest, "]")
 	if end < 0 {
 		t.Fatalf("greeting [CAPABILITY has no closing ]: %q", greeting)
