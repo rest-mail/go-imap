@@ -403,31 +403,56 @@ func extractHeaderFieldNames(dataItems string) []string {
 	return fields
 }
 
-// filterHeaders extracts only the requested headers from a raw RFC 2822 message.
+// filterHeaders extracts only the requested headers from a raw RFC 2822 message
+// (the BODY[HEADER.FIELDS (...)] section), terminated by a blank line.
 func filterHeaders(raw string, fields []string) string {
+	return selectHeaders(raw, fields, false)
+}
+
+// selectHeaders returns header lines from raw's RFC 5322 header block, terminated
+// by the blank line that ends a header section. Field-name matching is
+// case-insensitive. With exclude=false only headers whose name appears in fields
+// are kept (HEADER.FIELDS); with exclude=true every header EXCEPT those in fields
+// is kept (HEADER.FIELDS.NOT, RFC 3501 §6.4.5). A folded header — one whose value
+// continues on following lines beginning with SP or HT (RFC 5322 §2.2.3) — is kept
+// or dropped as a whole together with its parent header, so folded values are
+// returned in full rather than truncated to their first line.
+func selectHeaders(raw string, fields []string, exclude bool) string {
 	headerEnd := strings.Index(raw, "\r\n\r\n")
 	headerSection := raw
 	if headerEnd >= 0 {
 		headerSection = raw[:headerEnd]
 	}
 
-	// Build a set of requested field names (case-insensitive)
-	wanted := make(map[string]bool)
+	// Build a set of field names to match (case-insensitive).
+	set := make(map[string]bool, len(fields))
 	for _, f := range fields {
-		wanted[strings.ToLower(f)] = true
+		set[strings.ToLower(strings.TrimSpace(f))] = true
 	}
 
 	var result strings.Builder
+	keep := false // whether the header currently being read is selected
 	for _, line := range strings.Split(headerSection, "\r\n") {
 		if line == "" {
 			continue
 		}
+		if line[0] == ' ' || line[0] == '\t' {
+			// Continuation of the previous (folded) header value: keep or drop
+			// it with the header it belongs to.
+			if keep {
+				result.WriteString(line + "\r\n")
+			}
+			continue
+		}
 		colonIdx := strings.Index(line, ":")
 		if colonIdx < 0 {
+			keep = false
 			continue
 		}
 		name := strings.ToLower(strings.TrimSpace(line[:colonIdx]))
-		if wanted[name] {
+		// exclude=false: keep when listed; exclude=true: keep when NOT listed.
+		keep = set[name] != exclude
+		if keep {
 			result.WriteString(line + "\r\n")
 		}
 	}
@@ -552,6 +577,12 @@ func bodySection(item string, loadRaw func() (string, bool)) (name, payload stri
 		return "BODY[HEADER]", headerSection(raw), peek, true
 	case section == "TEXT":
 		return "BODY[TEXT]", textSection(raw), peek, true
+	case strings.HasPrefix(section, "HEADER.FIELDS.NOT"):
+		// HEADER.FIELDS.NOT (f...) returns every header EXCEPT the listed ones
+		// (RFC 3501 §6.4.5). Checked before the HEADER.FIELDS prefix below, which
+		// it would otherwise match.
+		fields := extractHeaderFieldNames(item)
+		return "BODY[HEADER.FIELDS.NOT (" + strings.Join(fields, " ") + ")]", selectHeaders(raw, fields, true), peek, true
 	case strings.HasPrefix(section, "HEADER.FIELDS"):
 		fields := extractHeaderFieldNames(item)
 		return "BODY[HEADER.FIELDS (" + strings.Join(fields, " ") + ")]", filterHeaders(raw, fields), peek, true
