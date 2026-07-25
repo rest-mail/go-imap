@@ -343,7 +343,10 @@ func (s *Session) handleAuthenticate(tag, args string) {
 		s.tagged(tag, "NO", "Unsupported mechanism")
 		return
 	}
-	s.send("+")
+	// Continuation request: "+" SP [base64-challenge] (RFC 3501 §7.5 / §6.2.2,
+	// RFC 4959). PLAIN carries no server challenge, so the base64 part is empty
+	// and the line is "+ " (note the required trailing space after the "+").
+	s.send("+ ")
 
 	line, tooLong, err := s.readLine()
 	if err != nil {
@@ -351,6 +354,13 @@ func (s *Session) handleAuthenticate(tag, args string) {
 	}
 	if tooLong {
 		s.tagged(tag, "BAD", "Authentication response line too long")
+		return
+	}
+	// A lone "*" is the SASL abort signal (RFC 4959): the client cancels the
+	// exchange, and the server MUST reject the AUTHENTICATE command with a tagged
+	// BAD — not decode it as base64 and report a NO.
+	if line == "*" {
+		s.tagged(tag, "BAD", "authentication aborted")
 		return
 	}
 	decoded, err := decodeBase64(line)
