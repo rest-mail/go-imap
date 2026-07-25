@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`SEARCH BODY`, `TEXT` and `RECENT` now match a real subset** (RFC 3501
+  §6.4.4). `BODY <string>` matches a case-insensitive substring in the message
+  body; `TEXT <string>` matches the header or the body; `RECENT` matches the
+  `\Recent` messages, which this engine models as the unseen set (the same set it
+  reports as RECENT in `SELECT`/`EXAMINE` and `STATUS`). The message body is
+  loaded lazily, so a metadata-only search never fetches one.
+
+### Fixed
+
+- **The `ENVELOPE` recipient and reference fields are populated from the message
+  headers** (RFC 3501 §7.4.2). `To`, `Cc`, `Bcc`, `In-Reply-To` and `Message-ID`
+  were previously always `NIL`; they are now parsed from the stored message (an
+  absent header stays `NIL`, so a message with no `Bcc` reports `NIL` as before).
+- **The `ENVELOPE` date now comes from the message's `Date:` header** rather than
+  its arrival time (RFC 3501 §7.4.2). `INTERNALDATE` still reports the arrival
+  time — the two are distinct — and a missing or unparseable `Date:` header falls
+  back to the arrival time.
+
 ## [0.3.0] - 2026-07-25
 
 A minor release that collects the IMAP4rev1 correctness pass across the server's

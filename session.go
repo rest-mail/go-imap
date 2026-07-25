@@ -910,7 +910,12 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) (marksSee
 		case up == "INTERNALDATE":
 			plain = append(plain, fmt.Sprintf("INTERNALDATE %q", msg.Date.Format("02-Jan-2006 15:04:05 -0700")))
 		case up == "ENVELOPE":
-			plain = append(plain, "ENVELOPE "+buildEnvelope(msg))
+			// ENVELOPE's recipient/reference fields and its date come from the
+			// message's own headers (RFC 3501 §7.4.2), so load the raw message.
+			// This is still metadata: loadRaw never sets \Seen. When the body
+			// cannot be loaded, buildEnvelope degrades to the Message model.
+			r, ok := loadRaw()
+			plain = append(plain, "ENVELOPE "+buildEnvelope(msg, r, ok))
 		case up == "BODYSTRUCTURE":
 			// Body structure is metadata (RFC 3501 §7.4.2): it must never set
 			// \Seen. It needs the raw message to describe the MIME layout.
@@ -980,8 +985,8 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) (marksSee
 // ── SEARCH ────────────────────────────────────────────────────────────
 
 type searchCriterion struct {
-	kind string // "all", "seen", "unseen", "flagged", "unflagged", "deleted", "undeleted",
-	// "from", "to", "subject", "since", "before", "on", "uid", "seqset", "not", "or", "and"
+	kind string // "all", "seen", "unseen", "recent", "flagged", "unflagged", "deleted", "undeleted",
+	// "from", "to", "subject", "body", "text", "since", "before", "on", "uid", "seqset", "not", "or", "and"
 	value  string            // for string/date/uid/seqset criteria
 	date   time.Time         // parsed date for since/before/on
 	sub    []searchCriterion // for NOT (1 element), OR (2 elements) or AND (a "(...)" group)
@@ -1003,6 +1008,25 @@ func badSearch(text string) *searchError {
 	return &searchError{status: "BAD", text: text}
 }
 
+// rawLoader returns a lazy, memoized loader of msg's raw RFC 5322 bytes for the
+// SEARCH body/text keys. The backend Fetch runs at most once, and only when a
+// body/text criterion actually calls it — so a metadata-only SEARCH never pulls a
+// message body. A Fetch error yields ("", false), which those keys treat as no
+// match.
+func (s *Session) rawLoader(msg Message) func() (string, bool) {
+	var raw string
+	loaded, ok := false, false
+	return func() (string, bool) {
+		if !loaded {
+			loaded = true
+			if b, err := s.mailbox.Fetch(msg.UID); err == nil {
+				raw, ok = string(b), true
+			}
+		}
+		return raw, ok
+	}
+}
+
 func (s *Session) handleSearch(tag, args string) {
 	if s.selected == nil {
 		s.tagged(tag, "NO", "No mailbox selected")
@@ -1017,7 +1041,7 @@ func (s *Session) handleSearch(tag, args string) {
 
 	var seqNums []string
 	for i, msg := range s.messages {
-		if s.matchesCriteria(msg, criteria) {
+		if s.matchesCriteria(msg, criteria, s.rawLoader(msg)) {
 			seqNums = append(seqNums, strconv.Itoa(i+1))
 		}
 	}
@@ -1190,7 +1214,12 @@ func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriter
 		return searchCriterion{kind: "deleted"}, idx + 1, nil
 	case "UNDELETED":
 		return searchCriterion{kind: "undeleted"}, idx + 1, nil
-	case "FROM", "TO", "SUBJECT":
+	case "RECENT":
+		// \Recent has no distinct model in this engine, which reports the unseen
+		// set as RECENT in SELECT/EXAMINE and STATUS; SEARCH RECENT matches that
+		// same set (RFC 3501 §6.4.4).
+		return searchCriterion{kind: "recent"}, idx + 1, nil
+	case "FROM", "TO", "SUBJECT", "BODY", "TEXT":
 		if idx+1 >= len(tokens) {
 			return searchCriterion{}, idx, badSearch(keyword + " requires a string argument")
 		}
@@ -1305,22 +1334,30 @@ func parseSearchDate(s string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-func (s *Session) matchesCriteria(msg Message, criteria []searchCriterion) bool {
+// matchesCriteria reports whether msg satisfies every criterion (the criteria are
+// ANDed). loadRaw lazily supplies msg's raw RFC 5322 bytes for the body/text keys;
+// it is called at most once per message and only when such a key is present, so a
+// metadata-only search never pulls a body.
+func (s *Session) matchesCriteria(msg Message, criteria []searchCriterion, loadRaw func() (string, bool)) bool {
 	for _, c := range criteria {
-		if !s.matchOne(msg, c) {
+		if !s.matchOne(msg, c, loadRaw) {
 			return false
 		}
 	}
 	return true
 }
 
-func (s *Session) matchOne(msg Message, c searchCriterion) bool {
+func (s *Session) matchOne(msg Message, c searchCriterion, loadRaw func() (string, bool)) bool {
 	switch c.kind {
 	case "all":
 		return true
 	case "seen":
 		return msg.Seen
 	case "unseen":
+		return !msg.Seen
+	case "recent":
+		// The engine models \Recent as the unseen set (see parseSingleCriterion),
+		// matching the RECENT count reported by SELECT/EXAMINE and STATUS.
 		return !msg.Seen
 	case "flagged":
 		return msg.Flagged
@@ -1336,6 +1373,22 @@ func (s *Session) matchOne(msg Message, c searchCriterion) bool {
 		return strings.Contains(strings.ToLower(msg.To), strings.ToLower(c.value))
 	case "subject":
 		return strings.Contains(strings.ToLower(msg.Subject), strings.ToLower(c.value))
+	case "body":
+		// BODY <string>: case-insensitive substring in the message body (the text
+		// after the header block), RFC 3501 §6.4.4. Missing body ⇒ no match.
+		raw, ok := loadRaw()
+		if !ok {
+			return false
+		}
+		return strings.Contains(strings.ToLower(textSection(raw)), strings.ToLower(c.value))
+	case "text":
+		// TEXT <string>: case-insensitive substring in the header OR the body —
+		// i.e. anywhere in the raw message (RFC 3501 §6.4.4). Missing raw ⇒ no match.
+		raw, ok := loadRaw()
+		if !ok {
+			return false
+		}
+		return strings.Contains(strings.ToLower(raw), strings.ToLower(c.value))
 	case "since":
 		return !msg.Date.Before(c.date)
 	case "before":
@@ -1352,18 +1405,18 @@ func (s *Session) matchOne(msg Message, c searchCriterion) bool {
 		return uidInRanges(msg.UID, c.ranges)
 	case "not":
 		if len(c.sub) > 0 {
-			return !s.matchOne(msg, c.sub[0])
+			return !s.matchOne(msg, c.sub[0], loadRaw)
 		}
 		return true
 	case "or":
 		if len(c.sub) >= 2 {
-			return s.matchOne(msg, c.sub[0]) || s.matchOne(msg, c.sub[1])
+			return s.matchOne(msg, c.sub[0], loadRaw) || s.matchOne(msg, c.sub[1], loadRaw)
 		}
 		return true
 	case "and":
 		// A parenthesized group matches when every enclosed key matches.
 		for _, sub := range c.sub {
-			if !s.matchOne(msg, sub) {
+			if !s.matchOne(msg, sub, loadRaw) {
 				return false
 			}
 		}
@@ -2302,7 +2355,7 @@ func (s *Session) handleUIDSearch(tag, args string) {
 
 	var uids []string
 	for _, msg := range s.messages {
-		if s.matchesCriteria(msg, criteria) {
+		if s.matchesCriteria(msg, criteria, s.rawLoader(msg)) {
 			uids = append(uids, strconv.FormatUint(uint64(msg.UID), 10))
 		}
 	}

@@ -166,7 +166,7 @@ func TestBuildEnvelope_ToAddress(t *testing.T) {
 		To:      "Bob <bob@example.org>",
 		Date:    time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
 	}
-	result := buildEnvelope(msg)
+	result := buildEnvelope(msg, "", false)
 
 	if !parensBalanced(result) {
 		t.Fatalf("envelope has unbalanced parens: %s", result)
