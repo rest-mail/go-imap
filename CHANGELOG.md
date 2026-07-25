@@ -83,6 +83,13 @@ additions.
   the decode failed, and the abort was mis-reported as `NO "Invalid base64"`,
   conflating a deliberate cancel with a bad-credential decode error. A genuine
   wrong-credential response is still a tagged `NO [AUTHENTICATIONFAILED]`.
+- `CHECK` (RFC 3501 §6.4.1) and `CLOSE` (§6.4.2) are now rejected with a tagged
+  `BAD` when no mailbox is selected, rather than answering `OK`. Both are
+  Selected-State commands: `CHECK` in the non-authenticated or authenticated
+  (no mailbox selected) state, and `CLOSE` with nothing selected, previously
+  completed `OK`. When a mailbox is selected `CHECK` still completes `OK` and
+  `CLOSE` still expunges `\Deleted` messages (unless read-only) and returns to
+  the authenticated state.
 
 ## v0.2.3 - 2026-07-25
 
