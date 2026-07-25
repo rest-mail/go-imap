@@ -173,6 +173,7 @@ Full API reference:
 
 Recent releases — see [CHANGELOG.md](CHANGELOG.md) for the complete history.
 
+- **v0.4.0** (2026-07-26) — `ENVELOPE` populates To/Cc/Bcc/In-Reply-To/Message-ID and uses the message `Date:` header; `SEARCH BODY`/`TEXT`/`RECENT` match for real; `BODYSTRUCTURE` emits Content-Disposition and MESSAGE/RFC822 encapsulation.
 - **v0.3.0** (2026-07-25) — breaking: `Shutdown(ctx) error` + `Close()`; general synchronizing literals, IDLE expunge reporting, SEARCH/STATUS/FETCH correctness, response-injection escaping, panic recovery.
 - **v0.2.3** (2026-07-25) — FETCH/EXAMINE/sequence-set correctness: `RFC822.SIZE` no longer sets `\Seen`, bounded UID-range expansion, read-only `EXAMINE` enforcement, `BODY`/`BODYSTRUCTURE` fetches.
 - **v0.2.2** (2026-07-24) — refuse `AUTHENTICATE` before `STARTTLS` when a TLS config is present; README and godoc polish.

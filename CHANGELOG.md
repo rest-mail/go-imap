@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-26
+
 ### Added
 
 - **`SEARCH BODY`, `TEXT` and `RECENT` now match a real subset** (RFC 3501
@@ -14,6 +16,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `\Recent` messages, which this engine models as the unseen set (the same set it
   reports as RECENT in `SELECT`/`EXAMINE` and `STATUS`). The message body is
   loaded lazily, so a metadata-only search never fetches one.
+- **`FETCH BODYSTRUCTURE` now emits Content-Disposition and MESSAGE/RFC822
+  encapsulation** (RFC 3501 §7.4.2). The basic structure — type, subtype,
+  content-type parameters, id, description, encoding, size, the TEXT line count,
+  and the multipart recursion — already existed; this completes it. The
+  disposition field (`body-fld-dsp`) now reflects the part's
+  `Content-Disposition` header as `(disp-type (params))` — e.g.
+  `("ATTACHMENT" ("FILENAME" "doc.pdf"))` — on both single parts and multiparts,
+  instead of a blanket `NIL` (a disposition with no parameters renders
+  `(disp-type NIL)`; an absent or unparseable header stays `NIL`). A
+  `MESSAGE/RFC822` part now appends the envelope, body structure and line count
+  of the encapsulated message, parsed from the part body and described
+  recursively. The non-extensible `BODY` form is unchanged in shape but now also
+  carries the `MESSAGE/RFC822` envelope/body/lines, which are part of the basic
+  grammar rather than extension data.
 
 ### Fixed
 
