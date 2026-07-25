@@ -617,7 +617,7 @@ func TestUIDSearch_HugeRangeIsBounded(t *testing.T) {
 	type result struct{ matched []uint32 }
 	done := make(chan result, 1)
 	go func() {
-		criteria := s.parseSearchCriteria("UID 1:4294967295")
+		criteria, _ := s.parseSearchCriteria("UID 1:4294967295")
 		var r result
 		for _, msg := range s.messages {
 			if s.matchesCriteria(msg, criteria) {
@@ -697,7 +697,7 @@ func TestUIDSearch_StarResolvesToHighestUID(t *testing.T) {
 		messages: []Message{{UID: 10}, {UID: 20}, {UID: 30}},
 		deleted:  map[uint32]bool{},
 	}
-	criteria := s.parseSearchCriteria("UID *")
+	criteria, _ := s.parseSearchCriteria("UID *")
 	var matched []uint32
 	for _, msg := range s.messages {
 		if s.matchesCriteria(msg, criteria) {

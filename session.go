@@ -702,11 +702,26 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) (marksSee
 
 type searchCriterion struct {
 	kind string // "all", "seen", "unseen", "flagged", "unflagged", "deleted", "undeleted",
-	// "from", "to", "subject", "since", "before", "on", "uid", "not", "or"
-	value  string            // for string/date/uid criteria
+	// "from", "to", "subject", "since", "before", "on", "uid", "seqset", "not", "or", "and"
+	value  string            // for string/date/uid/seqset criteria
 	date   time.Time         // parsed date for since/before/on
-	sub    []searchCriterion // for NOT (1 element) or OR (2 elements)
-	ranges []seqRange        // for uid: pre-parsed UID ranges, tested by membership (never expanded)
+	sub    []searchCriterion // for NOT (1 element), OR (2 elements) or AND (a "(...)" group)
+	ranges []seqRange        // uid/seqset: pre-parsed ranges, tested by membership (never expanded)
+}
+
+// searchError carries the tagged response that an unparseable SEARCH must
+// produce instead of silently matching every message (RFC 3501 §6.4.4): status
+// is "BAD" (malformed criteria) or "NO" (an unsupported CHARSET), and text is
+// the response text — for BADCHARSET it begins with the "[BADCHARSET (...)]"
+// response code.
+type searchError struct {
+	status string
+	text   string
+}
+
+// badSearch builds a tagged-BAD searchError for a malformed search key.
+func badSearch(text string) *searchError {
+	return &searchError{status: "BAD", text: text}
 }
 
 func (s *Session) handleSearch(tag, args string) {
@@ -715,7 +730,11 @@ func (s *Session) handleSearch(tag, args string) {
 		return
 	}
 
-	criteria := s.parseSearchCriteria(strings.TrimSpace(args))
+	criteria, serr := s.parseSearchCriteria(strings.TrimSpace(args))
+	if serr != nil {
+		s.tagged(tag, serr.status, serr.text)
+		return
+	}
 
 	var seqNums []string
 	for i, msg := range s.messages {
@@ -732,20 +751,77 @@ func (s *Session) handleSearch(tag, args string) {
 	s.tagged(tag, "OK", "SEARCH completed")
 }
 
+// searchCharsets are the character sets SEARCH accepts (RFC 3501 §6.4.4). Any
+// other CHARSET is answered with a tagged NO [BADCHARSET (...)].
+var searchCharsets = map[string]bool{"US-ASCII": true, "UTF-8": true}
+
 // parseSearchCriteria tokenizes the IMAP SEARCH arguments and builds criteria.
+// It returns a *searchError when the arguments are unparseable — an unknown key,
+// a malformed date, unbalanced parentheses (BAD) or an unsupported CHARSET
+// (NO [BADCHARSET ...]) — so the caller answers with a tagged failure instead of
+// silently matching every message (RFC 3501 §6.4.4).
+//
 // Any UID set is parsed into ranges here — once, not once per message — so the
 // per-message match is a cheap membership test (issue #8).
-func (s *Session) parseSearchCriteria(args string) []searchCriterion {
+func (s *Session) parseSearchCriteria(args string) ([]searchCriterion, *searchError) {
 	tokens := tokenizeSearch(args)
+
+	// An optional leading "CHARSET <name>" selects the charset the string keys
+	// are encoded in. Only US-ASCII and UTF-8 are supported; any other name is a
+	// tagged NO [BADCHARSET (...)] rather than being ignored.
+	if len(tokens) > 0 && strings.ToUpper(tokens[0]) == "CHARSET" {
+		if len(tokens) < 2 {
+			return nil, badSearch("CHARSET requires an argument")
+		}
+		name := unquote(tokens[1])
+		if !searchCharsets[strings.ToUpper(name)] {
+			return nil, &searchError{status: "NO", text: "[BADCHARSET (US-ASCII UTF-8)] unsupported charset " + name}
+		}
+		tokens = tokens[2:]
+	}
+
 	maxUID := s.maxUID()
 	var criteria []searchCriterion
 	idx := 0
 	for idx < len(tokens) {
-		c, newIdx := parseSingleCriterion(tokens, idx, maxUID)
+		c, newIdx, err := parseSingleCriterion(tokens, idx, maxUID)
+		if err != nil {
+			return nil, err
+		}
 		criteria = append(criteria, c)
 		idx = newIdx
 	}
-	return criteria
+
+	// Resolve any bare sequence-set keys against the current message list once,
+	// mapping matched sequence numbers to their UIDs so the per-message test is
+	// the same O(1) membership check UID sets use (never expanded — issue #8).
+	s.resolveSeqSets(criteria)
+	return criteria, nil
+}
+
+// resolveSeqSets walks the criteria tree and turns every "seqset" node's raw set
+// string into UID ranges, one entry per matched message. Sequence numbers are
+// resolved against the live message list (bounded by the mailbox size), so a
+// pathological set such as "1:4294967295" costs O(messages), not O(span).
+func (s *Session) resolveSeqSets(criteria []searchCriterion) {
+	for i := range criteria {
+		s.resolveSeqSetNode(&criteria[i])
+	}
+}
+
+func (s *Session) resolveSeqSetNode(c *searchCriterion) {
+	if c.kind == "seqset" {
+		total := len(s.messages)
+		for _, seq := range parseSequenceSet(c.value, total) {
+			if seq >= 1 && seq <= total {
+				uid := s.messages[seq-1].UID
+				c.ranges = append(c.ranges, seqRange{start: uid, end: uid})
+			}
+		}
+	}
+	for i := range c.sub {
+		s.resolveSeqSetNode(&c.sub[i])
+	}
 }
 
 // maxUID returns the largest UID among the currently selected messages, or 0
@@ -761,7 +837,10 @@ func (s *Session) maxUID() uint32 {
 	return max
 }
 
-// tokenizeSearch splits the search arguments into tokens, respecting quoted strings.
+// tokenizeSearch splits the search arguments into tokens, respecting quoted
+// strings and emitting "(" and ")" as their own tokens so parenthesized key
+// groups (RFC 3501 §6.4.4) parse correctly — "(FROM x)" yields ["(","FROM","x",")"]
+// rather than the mis-split ["(FROM","x)"] that the parens-blind tokenizer produced.
 func tokenizeSearch(args string) []string {
 	var tokens []string
 	i := 0
@@ -773,7 +852,8 @@ func tokenizeSearch(args string) []string {
 		if i >= len(args) {
 			break
 		}
-		if args[i] == '"' {
+		switch args[i] {
+		case '"':
 			// Quoted string — find closing quote
 			j := i + 1
 			for j < len(args) && args[j] != '"' {
@@ -784,10 +864,13 @@ func tokenizeSearch(args string) []string {
 			}
 			tokens = append(tokens, args[i:j])
 			i = j
-		} else {
-			// Unquoted token
+		case '(', ')':
+			tokens = append(tokens, string(args[i]))
+			i++
+		default:
+			// Unquoted token — runs to the next space or parenthesis.
 			j := i
-			for j < len(args) && args[j] != ' ' {
+			for j < len(args) && args[j] != ' ' && args[j] != '(' && args[j] != ')' {
 				j++
 			}
 			tokens = append(tokens, args[i:j])
@@ -798,84 +881,123 @@ func tokenizeSearch(args string) []string {
 }
 
 // parseSingleCriterion parses one criterion from the token list starting at idx.
-// maxUID resolves "*" in a UID set to the mailbox's high-water mark.
-func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriterion, int) {
+// maxUID resolves "*" in a UID set to the mailbox's high-water mark. It returns a
+// *searchError for a malformed key (unknown keyword, missing argument, bad date
+// or unbalanced parenthesis) rather than degrading to a match-ALL criterion.
+func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriterion, int, *searchError) {
 	if idx >= len(tokens) {
-		return searchCriterion{kind: "all"}, idx + 1
+		return searchCriterion{}, idx, badSearch("missing search key")
 	}
 
-	keyword := strings.ToUpper(tokens[idx])
+	tok := tokens[idx]
+	keyword := strings.ToUpper(tok)
 
 	switch keyword {
+	case "(":
+		return parseSearchGroup(tokens, idx, maxUID)
+	case ")":
+		return searchCriterion{}, idx, badSearch("unbalanced parentheses in SEARCH")
 	case "ALL":
-		return searchCriterion{kind: "all"}, idx + 1
+		return searchCriterion{kind: "all"}, idx + 1, nil
 	case "SEEN":
-		return searchCriterion{kind: "seen"}, idx + 1
+		return searchCriterion{kind: "seen"}, idx + 1, nil
 	case "UNSEEN":
-		return searchCriterion{kind: "unseen"}, idx + 1
+		return searchCriterion{kind: "unseen"}, idx + 1, nil
 	case "FLAGGED":
-		return searchCriterion{kind: "flagged"}, idx + 1
+		return searchCriterion{kind: "flagged"}, idx + 1, nil
 	case "UNFLAGGED":
-		return searchCriterion{kind: "unflagged"}, idx + 1
+		return searchCriterion{kind: "unflagged"}, idx + 1, nil
 	case "DELETED":
-		return searchCriterion{kind: "deleted"}, idx + 1
+		return searchCriterion{kind: "deleted"}, idx + 1, nil
 	case "UNDELETED":
-		return searchCriterion{kind: "undeleted"}, idx + 1
-	case "FROM":
-		if idx+1 < len(tokens) {
-			return searchCriterion{kind: "from", value: unquote(tokens[idx+1])}, idx + 2
+		return searchCriterion{kind: "undeleted"}, idx + 1, nil
+	case "FROM", "TO", "SUBJECT":
+		if idx+1 >= len(tokens) {
+			return searchCriterion{}, idx, badSearch(keyword + " requires a string argument")
 		}
-		return searchCriterion{kind: "all"}, idx + 1
-	case "TO":
-		if idx+1 < len(tokens) {
-			return searchCriterion{kind: "to", value: unquote(tokens[idx+1])}, idx + 2
+		return searchCriterion{kind: strings.ToLower(keyword), value: unquote(tokens[idx+1])}, idx + 2, nil
+	case "SINCE", "BEFORE", "ON":
+		if idx+1 >= len(tokens) {
+			return searchCriterion{}, idx, badSearch(keyword + " requires a date")
 		}
-		return searchCriterion{kind: "all"}, idx + 1
-	case "SUBJECT":
-		if idx+1 < len(tokens) {
-			return searchCriterion{kind: "subject", value: unquote(tokens[idx+1])}, idx + 2
+		d, ok := parseSearchDate(unquote(tokens[idx+1]))
+		if !ok {
+			return searchCriterion{}, idx, badSearch("invalid " + keyword + " date: " + unquote(tokens[idx+1]))
 		}
-		return searchCriterion{kind: "all"}, idx + 1
-	case "SINCE":
-		if idx+1 < len(tokens) {
-			d := parseSearchDate(unquote(tokens[idx+1]))
-			return searchCriterion{kind: "since", value: tokens[idx+1], date: d}, idx + 2
-		}
-		return searchCriterion{kind: "all"}, idx + 1
-	case "BEFORE":
-		if idx+1 < len(tokens) {
-			d := parseSearchDate(unquote(tokens[idx+1]))
-			return searchCriterion{kind: "before", value: tokens[idx+1], date: d}, idx + 2
-		}
-		return searchCriterion{kind: "all"}, idx + 1
-	case "ON":
-		if idx+1 < len(tokens) {
-			d := parseSearchDate(unquote(tokens[idx+1]))
-			return searchCriterion{kind: "on", value: tokens[idx+1], date: d}, idx + 2
-		}
-		return searchCriterion{kind: "all"}, idx + 1
+		return searchCriterion{kind: strings.ToLower(keyword), value: tokens[idx+1], date: d}, idx + 2, nil
 	case "UID":
-		if idx+1 < len(tokens) {
-			return searchCriterion{kind: "uid", value: tokens[idx+1], ranges: parseUIDRanges(tokens[idx+1], maxUID)}, idx + 2
+		if idx+1 >= len(tokens) {
+			return searchCriterion{}, idx, badSearch("UID requires a set")
 		}
-		return searchCriterion{kind: "all"}, idx + 1
+		return searchCriterion{kind: "uid", value: tokens[idx+1], ranges: parseUIDRanges(tokens[idx+1], maxUID)}, idx + 2, nil
 	case "NOT":
-		if idx+1 < len(tokens) {
-			sub, newIdx := parseSingleCriterion(tokens, idx+1, maxUID)
-			return searchCriterion{kind: "not", sub: []searchCriterion{sub}}, newIdx
+		if idx+1 >= len(tokens) {
+			return searchCriterion{}, idx, badSearch("NOT requires a search key")
 		}
-		return searchCriterion{kind: "all"}, idx + 1
+		sub, newIdx, err := parseSingleCriterion(tokens, idx+1, maxUID)
+		if err != nil {
+			return searchCriterion{}, idx, err
+		}
+		return searchCriterion{kind: "not", sub: []searchCriterion{sub}}, newIdx, nil
 	case "OR":
-		if idx+2 < len(tokens) {
-			sub1, newIdx1 := parseSingleCriterion(tokens, idx+1, maxUID)
-			sub2, newIdx2 := parseSingleCriterion(tokens, newIdx1, maxUID)
-			return searchCriterion{kind: "or", sub: []searchCriterion{sub1, sub2}}, newIdx2
+		sub1, newIdx1, err := parseSingleCriterion(tokens, idx+1, maxUID)
+		if err != nil {
+			return searchCriterion{}, idx, err
 		}
-		return searchCriterion{kind: "all"}, idx + 1
+		sub2, newIdx2, err := parseSingleCriterion(tokens, newIdx1, maxUID)
+		if err != nil {
+			return searchCriterion{}, idx, err
+		}
+		return searchCriterion{kind: "or", sub: []searchCriterion{sub1, sub2}}, newIdx2, nil
 	default:
-		// Unknown token — treat as ALL (ignore)
-		return searchCriterion{kind: "all"}, idx + 1
+		// A bare message sequence set is a valid search key (RFC 3501 §6.4.4);
+		// resolve it later against the message list. Anything else is unparseable
+		// and must be a tagged BAD, not a silent match-ALL.
+		if looksLikeSeqSet(tok) {
+			return searchCriterion{kind: "seqset", value: tok}, idx + 1, nil
+		}
+		return searchCriterion{}, idx, badSearch("unknown search criterion: " + tok)
 	}
+}
+
+// parseSearchGroup parses a parenthesized key group "( key key ... )", which is
+// the AND of the enclosed keys (RFC 3501 §6.4.4). tokens[idx] is the "(". A
+// missing closing ")" is a tagged BAD.
+func parseSearchGroup(tokens []string, idx int, maxUID uint32) (searchCriterion, int, *searchError) {
+	var group []searchCriterion
+	j := idx + 1
+	for j < len(tokens) && tokens[j] != ")" {
+		sub, newIdx, err := parseSingleCriterion(tokens, j, maxUID)
+		if err != nil {
+			return searchCriterion{}, idx, err
+		}
+		group = append(group, sub)
+		j = newIdx
+	}
+	if j >= len(tokens) {
+		return searchCriterion{}, idx, badSearch("unbalanced parentheses in SEARCH")
+	}
+	return searchCriterion{kind: "and", sub: group}, j + 1, nil
+}
+
+// looksLikeSeqSet reports whether tok is a bare message sequence set — digits,
+// ',' and ':' separators, and the '*' wildcard, with at least one number or a
+// wildcard so pure punctuation is not mistaken for a set.
+func looksLikeSeqSet(tok string) bool {
+	if tok == "" {
+		return false
+	}
+	hasDigit := false
+	for _, r := range tok {
+		switch {
+		case r >= '0' && r <= '9':
+			hasDigit = true
+		case r == ',' || r == ':' || r == '*':
+		default:
+			return false
+		}
+	}
+	return hasDigit || strings.ContainsRune(tok, '*')
 }
 
 // parseIMAPDateTime parses an IMAP date-time (RFC 3501 §9) as sent in the
@@ -890,16 +1012,18 @@ func parseIMAPDateTime(s string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// parseSearchDate parses IMAP date formats: "1-Jan-2006" or "01-Jan-2006".
-func parseSearchDate(s string) time.Time {
+// parseSearchDate parses an IMAP SEARCH date ("1-Jan-2006" or "01-Jan-2006",
+// RFC 3501 §9). ok is false when s is not a valid date (bad month, day out of
+// range, non-numeric) — the caller answers BAD rather than comparing against the
+// zero time, which would silently match every message.
+func parseSearchDate(s string) (time.Time, bool) {
 	s = strings.TrimSpace(s)
-	// Try both single-digit and double-digit day formats
 	for _, layout := range []string{"2-Jan-2006", "02-Jan-2006"} {
 		if t, err := time.Parse(layout, s); err == nil {
-			return t
+			return t, true
 		}
 	}
-	return time.Time{}
+	return time.Time{}, false
 }
 
 func (s *Session) matchesCriteria(msg Message, criteria []searchCriterion) bool {
@@ -941,10 +1065,11 @@ func (s *Session) matchOne(msg Message, c searchCriterion) bool {
 		y1, m1, d1 := msg.Date.Date()
 		y2, m2, d2 := c.date.Date()
 		return y1 == y2 && m1 == m2 && d1 == d2
-	case "uid":
+	case "uid", "seqset":
 		// Test membership against the pre-parsed ranges (built once in
-		// parseSearchCriteria). Never expand the set: a crafted "1:4294967295"
-		// must not iterate billions of times per message (issue #8).
+		// parseSearchCriteria; a seqset is resolved to its messages' UIDs). Never
+		// expand the set: a crafted "1:4294967295" must not iterate billions of
+		// times per message (issue #8).
 		return uidInRanges(msg.UID, c.ranges)
 	case "not":
 		if len(c.sub) > 0 {
@@ -954,6 +1079,14 @@ func (s *Session) matchOne(msg Message, c searchCriterion) bool {
 	case "or":
 		if len(c.sub) >= 2 {
 			return s.matchOne(msg, c.sub[0]) || s.matchOne(msg, c.sub[1])
+		}
+		return true
+	case "and":
+		// A parenthesized group matches when every enclosed key matches.
+		for _, sub := range c.sub {
+			if !s.matchOne(msg, sub) {
+				return false
+			}
 		}
 		return true
 	default:
@@ -1773,7 +1906,11 @@ func (s *Session) handleUIDMove(tag, args string) {
 func (s *Session) handleUIDSearch(tag, args string) {
 	// UID SEARCH returns UIDs instead of sequence numbers
 	// Parse the criteria the same way as SEARCH
-	criteria := s.parseSearchCriteria(args)
+	criteria, serr := s.parseSearchCriteria(args)
+	if serr != nil {
+		s.tagged(tag, serr.status, serr.text)
+		return
+	}
 
 	var uids []string
 	for _, msg := range s.messages {
