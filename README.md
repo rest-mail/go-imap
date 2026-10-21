@@ -228,8 +228,9 @@ The EXPUNGE/CLOSE slice checks removal, sequence renumbering, retry after backen
 refusal, arguments and selection state, including the RFC 3501 examples. A
 partial RFC 4315 UID EXPUNGE slice checks UID filtering, preserved non-target
 marks, backend refusal, read-only operation and RFC 3501 §9 UID-set syntax
-(malformed sets receive BAD before deletion). CLOSE deletion failures and
-persistent Deleted flags remain explicit gaps.
+(malformed sets receive BAD before deletion). A CLOSE whose deletion is
+refused answers NO and stays selected. Persistent Deleted flags remain an
+explicit gap.
 The APPEND slice checks the §6.3.11 example, exact message octets, supported
 flags/dates, selected-mailbox notifications, backend refusal and terminal literal
 framing, including the accepted non-synchronizing form. Early refusal of a

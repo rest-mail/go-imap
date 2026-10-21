@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- CLOSE no longer answers OK when the backend refuses to delete a marked
+  message (RFC 3501 §6.4.2). It answers NO and keeps the mailbox selected.
+  Removals that succeeded are reported as EXPUNGE so sequence numbers stay
+  valid, and failed messages keep their Deleted mark so CLOSE can be retried.
+  A CLOSE whose deletions all succeed still sends no EXPUNGE.
 - FETCH BODY[section] and BODY.PEEK[section] resolve numeric MIME part
   paths (RFC 3501 §6.4.5) instead of returning the whole message: multipart
   parts, part 1 of a non-multipart message, MESSAGE/RFC822 encapsulation

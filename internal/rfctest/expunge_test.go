@@ -285,6 +285,55 @@ func TestCloseExample(t *testing.T) {
 	requireUIDs(t, m, 110)
 }
 
+// TestCloseBackendFailure refuses one or all deletions during CLOSE. CLOSE must
+// not report success until every marked message is gone, so it answers NO and
+// keeps the mailbox selected. Removals that did succeed are reported as
+// EXPUNGE so later sequence numbers stay valid; failed messages keep their
+// marks, and a retried CLOSE removes them silently and deselects.
+//
+// checklist: IMAP-CLOSE-06
+func TestCloseBackendFailure(t *testing.T) {
+	for _, allFail := range []bool{false, true} {
+		t.Run(fmt.Sprintf("allFail=%v", allFail), func(t *testing.T) {
+			m := newExpungeMailbox(4)
+			m.fail[110] = true
+			if allFail {
+				m.fail[100] = true
+				m.fail[120] = true
+			}
+			c := expungeClient(t, m)
+			markDeleted(t, c, "1:3")
+			lines, tagged := c.command("C1", "CLOSE")
+			if !strings.HasPrefix(tagged, "C1 NO ") {
+				t.Fatalf("refused deletion: %q %q, want NO", lines, tagged)
+			}
+			if allFail {
+				requireExactly(t, lines)
+				requireUIDs(t, m, 100, 110, 120, 130)
+			} else {
+				requireExactly(t, lines, "* 3 EXPUNGE", "* 1 EXPUNGE")
+				requireUIDs(t, m, 110, 130)
+			}
+			lines, tagged = c.command("F1", "FETCH 1:* (FLAGS)")
+			requireOK(t, tagged, "F1")
+			if allFail {
+				requireExactly(t, lines, `* 1 FETCH (UID 100 FLAGS (\Deleted))`, `* 2 FETCH (UID 110 FLAGS (\Deleted))`, `* 3 FETCH (UID 120 FLAGS (\Deleted))`, `* 4 FETCH (UID 130 FLAGS ())`)
+			} else {
+				requireExactly(t, lines, `* 1 FETCH (UID 110 FLAGS (\Deleted))`, `* 2 FETCH (UID 130 FLAGS ())`)
+			}
+			clear(m.fail)
+			lines, tagged = c.command("C2", "CLOSE")
+			requireOK(t, tagged, "C2")
+			requireExactly(t, lines)
+			requireUIDs(t, m, 130)
+			_, tagged = c.command("F2", "FETCH 1 (UID)")
+			if strings.HasPrefix(tagged, "F2 OK ") {
+				t.Fatalf("CLOSE kept selection: %q", tagged)
+			}
+		})
+	}
+}
+
 // TestReadOnlyCloseAndExpunge checks EXAMINE: explicit EXPUNGE is refused,
 // but CLOSE succeeds silently and leaves all backend messages intact.
 //
