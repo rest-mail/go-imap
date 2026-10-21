@@ -1874,16 +1874,16 @@ func (s *Session) handleAppend(tag, args string) {
 	// runs before the continuation: a rejected APPEND must not read the literal.
 	var flags FlagUpdate
 	for _, flag := range appendFlags {
-		switch flag {
-		case `\Seen`:
+		switch strings.ToLower(flag) {
+		case `\seen`:
 			flags.Seen = boolPtr(true)
-		case `\Answered`:
+		case `\answered`:
 			flags.Answered = boolPtr(true)
-		case `\Flagged`:
+		case `\flagged`:
 			flags.Flagged = boolPtr(true)
-		case `\Draft`:
+		case `\draft`:
 			flags.Draft = boolPtr(true)
-		case `\Deleted`:
+		case `\deleted`:
 			// \Deleted is a valid system flag (it is advertised in PERMANENTFLAGS),
 			// but this engine models it as per-session state, not a persistent flag
 			// the backend stores (see applyDeleted). The appended message is not part
@@ -1915,18 +1915,13 @@ func (s *Session) handleAppend(tag, args string) {
 		rest = after
 	}
 
-	// The message follows as a synchronizing literal {N}; tolerate the {N+}
-	// non-synchronizing form's trailing '+'.
-	braceStart := strings.LastIndex(rest, "{")
-	braceEnd := strings.LastIndex(rest, "}")
-	if braceStart < 0 || braceEnd <= braceStart {
-		s.tagged(tag, "BAD", "Missing literal size")
-		return
-	}
-	sizeStr := strings.TrimSuffix(rest[braceStart+1:braceEnd], "+")
-	size, err := strconv.Atoi(sizeStr)
-	if err != nil || size < 0 {
-		s.tagged(tag, "BAD", "Invalid literal size")
+	// The terminal argument must be exactly one literal marker, with no
+	// ignored arguments before it or suffix after it. Reuse the unsigned
+	// literal grammar used by ordinary command arguments.
+	rest = strings.TrimLeft(rest, " ")
+	prefix, size, sync, isLiteral := splitTrailingLiteral(rest)
+	if !isLiteral || prefix != "" {
+		s.tagged(tag, "BAD", "Invalid message literal")
 		return
 	}
 	if size > 10*1024*1024 {
@@ -1934,19 +1929,35 @@ func (s *Session) handleAppend(tag, args string) {
 		return
 	}
 
-	// Send continuation.
-	s.send("+ Ready for literal data")
+	// A non-synchronizing {N+} already has its octets in flight and must not
+	// receive a continuation (RFC 7888 §3). Synchronizing literals wait here.
+	if sync {
+		s.send("+ Ready for literal data")
+	}
 
-	// Read exactly size bytes.
 	data := make([]byte, size)
-	if _, err = io.ReadFull(s.reader, data); err != nil {
-		s.tagged(tag, "NO", "Failed to read message data")
+	if _, err := io.ReadFull(s.reader, data); err != nil {
+		// Incomplete commands must never reach the backend. The stream cannot
+		// be reused after a partial literal or timeout.
+		_ = s.conn.Close()
 		return
 	}
 
-	// Read (and bound) the CRLF trailing the literal payload.
-	_, _, _ = s.readLine()
+	// The command's CRLF is separate from the literal's counted octets. Do
+	// not discard arbitrary trailing text or ignore EOF: neither completes a
+	// valid APPEND, and a buffered next command must remain untouched.
+	var terminator [2]byte
+	if _, err := io.ReadFull(s.reader, terminator[:]); err != nil {
+		_ = s.conn.Close()
+		return
+	}
+	if string(terminator[:]) != "\r\n" {
+		s.tagged(tag, "BAD", "Expected CRLF after message literal")
+		_ = s.conn.Close()
+		return
+	}
 
+	var err error
 	// Deliver. Precedence: a client date-time with a DateAppender backend honours
 	// INTERNALDATE; otherwise a UIDPlusMailbox reports the assigned UID; otherwise
 	// the base Append. AppendWithDate and AppendUID both return the UID for the
