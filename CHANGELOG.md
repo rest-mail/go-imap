@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- SEARCH and UID SEARCH compare BEFORE/SINCE against the message's internal
+  calendar date, ignoring its time and timezone as RFC 3501 requires, instead
+  of comparing UTC instants. ON uses the same date-only comparison.
+- SEARCH and UID SEARCH reject missing keys and empty parenthesized groups
+  with BAD, including empty groups nested under NOT/OR, instead of treating
+  them as valid criteria.
+
 - `STORE` and `UID STORE` now answer `NO` when the backend refuses a flag
   write, and restore the message's session flags, instead of reporting `OK`
   with flags the mailbox never stored.
@@ -18,6 +25,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   by `EXAMINE`, preserving both backend and session flags in read-only mode.
 
 ### Added
+
+- A partial SEARCH/UID SEARCH checklist and public-session wire proofs for
+  RFC 3501 examples, Boolean criteria, sparse UID/sequence sets, calendar-date
+  boundaries, charsets, malformed criteria and selection state. MIME decoding,
+  unsupported standard keys and independent Recent search are explicit gaps.
 
 - Checked STORE/UID STORE rows and public-session wire tests, including the
   RFC 3501 §6.4.6 example, .SILENT, UID reporting and backend refusal. Keyword
