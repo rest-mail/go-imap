@@ -218,15 +218,16 @@ no TLS config and SASL EXTERNAL remain explicit gaps.
 The BODY/BODYSTRUCTURE slice reproduces both RFC 3501 §7.4.2 example
 structures and checks transfer-encoded sizes/line counts through nested MIME
 parts. Quoted-printable parts retain their encoding, octets and soft-break lines.
-BODY omits extensions; BODYSTRUCTURE reports supplied Content-MD5, disposition
-and Content-Location in the defined order, including nested entities. Missing
-MD5/location remain NIL; digests are not generated or verified and relative
+BODY omits extensions; BODYSTRUCTURE reports supplied Content-MD5, disposition,
+Content-Language and Content-Location in the defined order, including nested
+entities. Languages are one string or a list of tags with comments dropped.
+Missing MD5/language/location remain NIL; digests are not generated or verified and relative
 locations are not resolved.
 Both are metadata and leave Seen unchanged. MIME parameter values preserve empty
 strings, escape quoted-specials and use counted literals for decoded 8-bit/CRLF
 values; IDs, descriptions and encoding strings also use literal framing when
 needed, including in nested parts and disposition parameters. Remaining MIME
-defaults, NUL/binary policy and Content-Language remain explicit gaps.
+defaults and NUL/binary policy remain explicit gaps.
 The top-level ENVELOPE slice checks the RFC 3501 §8 example, ten-field order,
 header values over cached summaries, missing/empty headers, Sender/Reply-To
 defaults, read-only metadata, and quoted/literal scalar framing. Groups, source

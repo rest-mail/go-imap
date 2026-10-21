@@ -8,12 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- BODYSTRUCTURE now reports Content-Language in the language extension slot
+  instead of always returning NIL: one tag as a string, several as a list,
+  comments dropped. Adds checked RFC 3501/RFC 3282 wire tests, including
+  per-entity values in multiparts and encapsulated messages.
+
 - BODYSTRUCTURE now reports supplied Content-MD5 and Content-Location in their
   extension slots instead of always returning NIL, including multipart locations
   and encapsulated bodies. BODY still omits extensions. Adds checked RFC 3501
   wire tests for field order, per-entity values, quoted/literal framing and
-  metadata side effects. Digests are not generated or verified; language remains
-  unsupported.
+  metadata side effects. Digests are not generated or verified.
 
 - ENVELOPE address personal names, mailboxes and hosts now use counted
   literals for 8-bit octets and CR/LF decoded from RFC 2047 encoded words,
