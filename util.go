@@ -882,16 +882,17 @@ func buildBodyStructure(raw string, extension bool) string {
 		return singlePartStructure("text", "plain", nil, textproto.MIMEHeader{}, []byte(raw), extension)
 	}
 	body, _ := io.ReadAll(msg.Body)
-	return partStructure(textproto.MIMEHeader(msg.Header), body, extension)
+	return partStructure(textproto.MIMEHeader(msg.Header), body, extension, "text/plain")
 }
 
 // partStructure builds the body structure for one MIME entity given its header
 // and (transfer-encoded) body octets, recursing into multipart entities.
-func partStructure(header textproto.MIMEHeader, body []byte, extension bool) string {
+// defaultType applies when Content-Type is absent or malformed: text/plain
+// (RFC 2045 §5.2), or message/rfc822 inside multipart/digest (RFC 2046 §5.1.5).
+func partStructure(header textproto.MIMEHeader, body []byte, extension bool, defaultType string) string {
 	mediatype, params, err := mime.ParseMediaType(header.Get("Content-Type"))
 	if err != nil || mediatype == "" {
-		// Absent or malformed Content-Type defaults to text/plain (RFC 2045 §5.2).
-		mediatype, params = "text/plain", map[string]string{}
+		mediatype, params = defaultType, map[string]string{}
 	}
 	maintype, subtype := mediatype, ""
 	if slash := strings.IndexByte(mediatype, '/'); slash >= 0 {
@@ -910,6 +911,10 @@ func partStructure(header textproto.MIMEHeader, body []byte, extension bool) str
 // multipart's own header, the source of its body-ext-mpart disposition field.
 func multipartStructure(subtype string, params map[string]string, header textproto.MIMEHeader, body []byte, extension bool) string {
 	mr := multipart.NewReader(bytes.NewReader(body), params["boundary"])
+	childType := "text/plain"
+	if strings.EqualFold(subtype, "digest") {
+		childType = "message/rfc822"
+	}
 	var parts strings.Builder
 	for {
 		// BODY/BODYSTRUCTURE describe the transfer-encoded octets and lines
@@ -920,7 +925,7 @@ func multipartStructure(subtype string, params map[string]string, header textpro
 			break
 		}
 		pb, _ := io.ReadAll(p)
-		parts.WriteString(partStructure(p.Header, pb, extension))
+		parts.WriteString(partStructure(p.Header, pb, extension, childType))
 	}
 	// A multipart with no decodable parts is still described as containing one
 	// empty text/plain part, keeping the structure well-formed.

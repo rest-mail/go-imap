@@ -363,7 +363,8 @@ CRLF and nested binary attachments guard against accidental decoding.
 | IMAP-BS-08 | RFC 3501 §7.4.2 | MAY | Return MD5, language and location extension data derived from the message. | n/a: not supported yet; these extension slots are always NIL even when source headers exist. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-BS-09 | RFC 3501 §§7.4.2, 9 | Normative | MESSAGE/RFC822 carries its encapsulated envelope, body structure and line count. | TestMessageStructureRFCEnvelope, TestMessageStructureHeaderDefaults, TestMessageStructureScalarStrings, TestMessageStructureRecursiveBody, TestMessageStructureNestedMessage |
 | IMAP-BS-10 | RFC 3501 §§4.3, 7.4.2, 9 | Normative | Encode every body string using valid IMAP string framing for the source octets. | n/a: not supported yet for arbitrary MIME/header values; existing quoted-string paths do not provide literal framing for every field. Tracked in rest-mail/rest-mail-server#374. |
-| IMAP-BS-11 | RFC 3501 §7.4.2 | Normative | Default omitted MIME fields according to MIME rules, including defaults that depend on the enclosing multipart subtype. | n/a: not fully audited; multipart/digest child defaults and fabricated text/plain fallback structures need independent verification. This slice checks valid multipart framing and opaque transfer-encoded bodies only. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-BS-11 | RFC 3501 §7.4.2 | Normative | Default omitted MIME fields according to MIME rules, including defaults that depend on the enclosing multipart subtype. | n/a: not fully audited; fabricated text/plain fallback structures for unparseable headers and empty multiparts need independent verification. Multipart/digest child defaults are IMAP-BS-12. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-BS-12 | RFC 3501 §7.4.2; RFC 2046 §5.1.5 | Normative | A multipart/digest child without Content-Type is MESSAGE/RFC822 with its envelope, body structure and line count; explicit types still win, and the default does not leak into other multiparts or multiparts nested in the digest. | TestBodyStructureDigestDefault, TestBodyStructureDigestScope |
 
 This slice preserves quoted-printable source data via raw MIME part traversal.
 It does not validate or decode transfer encodings, expose numbered MIME FETCH
@@ -418,5 +419,5 @@ MESSAGE/RFC822 vector. Line counts are explicitly specified per fixture.
 | IMAP-MSG-09 | RFC 3501 §§4.3.1, 7.4.2; RFC 2046 §5.2.1 | Normative | Handle invalid encodings, binary octets and excessive encapsulation consistently. | n/a: not supported yet; MESSAGE/RFC822 accepts prohibited base64/quoted-printable encodings without decoding, NUL policy is undefined, and recursive MIME traversal has no depth limit. This slice checks ordinary 7BIT encapsulation only. Tracked in rest-mail/rest-mail-server#374. |
 
 The nested address parser retains the group/source-route/address-string gaps
-listed under IMAP-ENV-10/11. Multipart/digest defaults, malformed MIME framing,
+listed under IMAP-ENV-10/11. Malformed MIME framing,
 optional extension values and numbered MIME FETCH sections remain separate gaps.
