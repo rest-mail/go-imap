@@ -48,3 +48,29 @@ func TestCommandLineWithinLimitAccepted(t *testing.T) {
 		t.Fatalf("under-limit CAPABILITY: untagged = %v, want a * CAPABILITY line", untagged)
 	}
 }
+
+// TestLineTailAcrossChunks checks the "+}" detection on an over-long line's
+// tail however the marker and its terminator are split across reads.
+func TestLineTailAcrossChunks(t *testing.T) {
+	for _, tc := range []struct {
+		line string
+		want bool
+	}{
+		{"a {5+}\r\n", true},
+		{"a {5+}\n", true},
+		{"a {5}\r\n", false},
+		{"a +\r\n", false},
+		{"a x\r\n", false},
+	} {
+		for split := 0; split <= len(tc.line); split++ {
+			var tail []byte
+			tail = lineTail(tail, []byte(tc.line[:split]))
+			for i := split; i < len(tc.line); i++ {
+				tail = lineTail(tail, []byte{tc.line[i]})
+			}
+			if got := endsNonSyncLiteral(tail); got != tc.want {
+				t.Errorf("%q split at %d: got %t, want %t", tc.line, split, got, tc.want)
+			}
+		}
+	}
+}

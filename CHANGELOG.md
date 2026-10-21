@@ -8,13 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- An overlong initial command line ending in a LITERAL+ `{n+}` marker now
+  sends BAD then BYE and ends the session, instead of reading the in-flight
+  literal octets as new commands. Only the line's last octets are kept, so
+  the check stays constant-memory. Other overlong lines, including ones with a
+  synchronizing marker, keep the connection usable. Adds checklist rows
+  IMAP-LITERAL-08/09 and public-Session wire tests across read-buffer splits.
+
 - Refused non-synchronizing command-argument literals now send BYE and end
   the session instead of dispatching unread payload as commands. This covers
   individual/aggregate literal bounds and expanded-command bounds. Overlong
   literal-continuation lines also close because their discarded suffix may
   hide another literal. Literal read errors end the session. Safe refusals
   before a synchronizing continuation or after a complete command keep the
-  connection usable. Initial overlong command lines remain a separate gap.
+  connection usable.
   Adds partial checklist rows and public-Session wire tests.
 
 - Early APPEND refusal with a valid `{n+}` literal marker now sends BYE and
@@ -125,6 +132,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- An overlong initial command line ending in a LITERAL+ `{n+}` marker now
+  sends BAD then BYE and ends the session, instead of reading the in-flight
+  literal octets as new commands. Only the line's last octets are kept, so
+  the check stays constant-memory. Other overlong lines, including ones with a
+  synchronizing marker, keep the connection usable. Adds checklist rows
+  IMAP-LITERAL-08/09 and public-Session wire tests across read-buffer splits.
+
 - **The `ENVELOPE` recipient and reference fields are populated from the message
   headers** (RFC 3501 §7.4.2). `To`, `Cc`, `Bcc`, `In-Reply-To` and `Message-ID`
   were previously always `NIL`; they are now parsed from the stored message (an
@@ -185,6 +199,13 @@ breaking change to `Server.Shutdown` (see Breaking).
   memory with one unbounded line.
 
 ### Fixed
+
+- An overlong initial command line ending in a LITERAL+ `{n+}` marker now
+  sends BAD then BYE and ends the session, instead of reading the in-flight
+  literal octets as new commands. Only the line's last octets are kept, so
+  the check stays constant-memory. Other overlong lines, including ones with a
+  synchronizing marker, keep the connection usable. Adds checklist rows
+  IMAP-LITERAL-08/09 and public-Session wire tests across read-buffer splits.
 
 - `LIST`/`LSUB` pattern matching is now case-sensitive for every mailbox name
   except `INBOX` (RFC 3501 §5.1). The matcher previously lower-cased both the
@@ -337,6 +358,13 @@ changes — this is a drop-in patch release.
 
 ### Fixed
 
+- An overlong initial command line ending in a LITERAL+ `{n+}` marker now
+  sends BAD then BYE and ends the session, instead of reading the in-flight
+  literal octets as new commands. Only the line's last octets are kept, so
+  the check stays constant-memory. Other overlong lines, including ones with a
+  synchronizing marker, keep the connection usable. Adds checklist rows
+  IMAP-LITERAL-08/09 and public-Session wire tests across read-buffer splits.
+
 - `FETCH RFC822.SIZE` now returns only the message size and never sets `\Seen`.
   Previously it could fetch the body and mark the message read as a side effect.
 - Bounded sequence-set and UID range expansion so an authenticated client can no
@@ -358,6 +386,13 @@ changes — this is a drop-in patch release.
 ## [0.2.2] - 2026-07-24
 
 ### Fixed
+
+- An overlong initial command line ending in a LITERAL+ `{n+}` marker now
+  sends BAD then BYE and ends the session, instead of reading the in-flight
+  literal octets as new commands. Only the line's last octets are kept, so
+  the check stays constant-memory. Other overlong lines, including ones with a
+  synchronizing marker, keep the connection usable. Adds checklist rows
+  IMAP-LITERAL-08/09 and public-Session wire tests across read-buffer splits.
 
 - Refuse `AUTHENTICATE` before `STARTTLS` when a TLS configuration is present, so
   credentials are never accepted over an unprotected connection.
