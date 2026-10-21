@@ -537,3 +537,127 @@ func TestAppendNonSynchronizingBackendFailure(t *testing.T) {
 		t.Fatalf("failed append stored: %+v", box.records)
 	}
 }
+
+// A mailbox name may be sent as a literal astring before the message literal
+// (RFC 3501 §§4.3, 6.3.11, 9), synchronizing or LITERAL+.
+//
+// checklist: IMAP-APPEND-21
+func TestAppendLiteralMailbox(t *testing.T) {
+	for _, tc := range []struct{ name, folder string }{
+		{"Drafts", "Drafts"},
+		{"inbox", "INBOX"},
+		{"with space", "with space"},
+		{`a"b\c`, `a"b\c`},
+		{"{3}", "{3}"},
+	} {
+		for _, nameSync := range []bool{true, false} {
+			for _, flags := range []string{"", `(\Seen) `, `(\Seen) "17-Jul-1996 02:44:25 -0700" `} {
+				t.Run(fmt.Sprintf("%q/sync=%t/%q", tc.name, nameSync, flags), func(t *testing.T) {
+					box := &datedAppendMailbox{&appendMailbox{}}
+					c := selectionClient(t, box)
+					marker := fmt.Sprintf("{%d}", len(tc.name))
+					if !nameSync {
+						marker = fmt.Sprintf("{%d+}", len(tc.name))
+					}
+					if _, err := fmt.Fprintf(c.conn, "A1 APPEND %s\r\n", marker); err != nil {
+						t.Fatal(err)
+					}
+					if nameSync {
+						if line := c.line(); !strings.HasPrefix(line, "+ ") {
+							t.Fatalf("mailbox continuation: %q", line)
+						}
+					}
+					if _, err := fmt.Fprintf(c.conn, "%s %s{3}\r\n", tc.name, flags); err != nil {
+						t.Fatal(err)
+					}
+					if line := c.line(); !strings.HasPrefix(line, "+ ") {
+						t.Fatalf("message continuation: %q", line)
+					}
+					if _, err := io.WriteString(c.conn, "abc\r\n"); err != nil {
+						t.Fatal(err)
+					}
+					_, tagged := appendCompletion(t, c)
+					requireOK(t, tagged, "A1")
+					if len(box.records) != 1 || box.records[0].folder != tc.folder || box.records[0].raw != "abc" {
+						t.Fatalf("append: %+v, want folder %q", box.records, tc.folder)
+					}
+					if seen := box.records[0].flags.Seen; (flags != "") != (seen != nil && *seen) {
+						t.Fatalf("flags %q not applied: %+v", flags, box.records[0].flags)
+					}
+					if strings.Contains(flags, "1996") != !box.records[0].date.IsZero() {
+						t.Fatalf("date %q not applied: %v", flags, box.records[0].date)
+					}
+					_, tagged = c.command("N1", "NOOP")
+					requireOK(t, tagged, "N1")
+				})
+			}
+		}
+	}
+	for _, tc := range []struct{ desc, wire string }{
+		{"empty name", "A1 APPEND {0}\r\n"},
+		{"oversized name", fmt.Sprintf("A1 APPEND {%d}\r\n", imap.MaxCommandLineLength+1)},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			box := &appendMailbox{}
+			c := selectionClient(t, box)
+			if _, err := io.WriteString(c.conn, tc.wire); err != nil {
+				t.Fatal(err)
+			}
+			if line := c.line(); !strings.HasPrefix(line, "A1 BAD ") {
+				t.Fatalf("refused before continuation: %q", line)
+			}
+			_, tagged := c.command("N1", "NOOP")
+			requireOK(t, tagged, "N1")
+		})
+	}
+	for _, tc := range []struct{ desc, cont, response string }{
+		{"NUL in name", "a\x00b {3}", "A1 BAD "},
+		{"missing separator", "abc{3}", "A1 BAD "},
+		{"doubled separator", "abc  {3}", "A1 BAD "},
+		{"no message literal", "abc", "A1 BAD "},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			box := &appendMailbox{}
+			c := selectionClient(t, box)
+			name, rest, _ := strings.Cut(tc.cont, " ")
+			if tc.desc == "missing separator" || tc.desc == "no message literal" {
+				name, rest = "abc", strings.TrimPrefix(tc.cont, "abc")
+			} else {
+				rest = " " + rest
+			}
+			if _, err := fmt.Fprintf(c.conn, "A1 APPEND {%d}\r\n", len(name)); err != nil {
+				t.Fatal(err)
+			}
+			if line := c.line(); !strings.HasPrefix(line, "+ ") {
+				t.Fatalf("mailbox continuation: %q", line)
+			}
+			if _, err := fmt.Fprintf(c.conn, "%s%s\r\n", name, rest); err != nil {
+				t.Fatal(err)
+			}
+			if line := c.line(); !strings.HasPrefix(line, tc.response) {
+				t.Fatalf("got %q, want %q", line, tc.response)
+			}
+			if len(box.records) != 0 {
+				t.Fatalf("invalid APPEND stored: %+v", box.records)
+			}
+			_, tagged := c.command("N1", "NOOP")
+			requireOK(t, tagged, "N1")
+		})
+	}
+	t.Run("non-synchronizing message after refusal closes", func(t *testing.T) {
+		box := &appendMailbox{}
+		c := selectionClient(t, box)
+		if _, err := io.WriteString(c.conn, "A1 APPEND {3+}\r\nabc  {3+}\r\nxyz\r\n"); err != nil {
+			t.Fatal(err)
+		}
+		if line := c.line(); !strings.HasPrefix(line, "A1 BAD ") {
+			t.Fatalf("doubled separator: %q", line)
+		}
+		if line := c.line(); !strings.HasPrefix(line, "* BYE ") {
+			t.Fatalf("unread literal refusal: %q", line)
+		}
+		if len(box.records) != 0 {
+			t.Fatalf("invalid APPEND stored: %+v", box.records)
+		}
+	})
+}

@@ -227,8 +227,9 @@ malformed flag-list, argument separator or date-time receives BAD before the
 continuation. Date-times use fixed-width fields and space-padded or two-digit
 days, without quoted escapes or fractional seconds; explicit dates, including
 Go's zero time, reach a DateAppender without losing their UTC offset. Backend
-atomicity, nonexistent destinations/TRYCREATE, Recent/Deleted/keywords, default dates,
-literal mailbox names and strict atom grammar remain explicit gaps.
+atomicity, nonexistent destinations/TRYCREATE, Recent/Deleted/keywords, default dates
+and strict atom grammar remain explicit gaps. A mailbox name sent as a
+synchronizing or LITERAL+ literal is accepted before the message literal.
 The command-argument literal slice checks individual/aggregate size refusal,
 assembled-command limits, overlong continuation lines and accepted LOGIN framing.
 Ambiguous refusals send BYE and end the session; synchronizing refusals and
