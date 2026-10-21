@@ -749,25 +749,58 @@ func validFlagList(s string) bool {
 	return len(s) >= 2 && s[0] == '(' && s[len(s)-1] == ')' && validStoreFlags(s)
 }
 
-// extractHeaderFieldNames extracts the header field names from BODY[HEADER.FIELDS (...)].
-func extractHeaderFieldNames(dataItems string) []string {
-	// Find the parenthesized list after HEADER.FIELDS
-	start := strings.Index(strings.ToUpper(dataItems), "HEADER.FIELDS")
-	if start < 0 {
-		return nil
+// parseHeaderFields parses the complete RFC 3501 §9 section-msgtext form
+// HEADER.FIELDS[.NOT] SP header-list. Literal arguments have already been
+// converted to quoted strings by readLiteralArgs. Keep decoded names separate
+// from their wire tokens so quoted names match and response labels stay valid.
+func parseHeaderFields(section string) (fields, wire []string, exclude, ok bool) {
+	for i := range len(section) {
+		if c := section[i]; c == 0 || c == '\r' || c == '\n' || c >= 0x7f {
+			return nil, nil, false, false
+		}
 	}
-	rest := dataItems[start:]
-	parenStart := strings.Index(rest, "(")
-	parenEnd := strings.Index(rest, ")")
-	if parenStart < 0 || parenEnd < 0 {
-		return nil
+	rest := section
+	up := strings.ToUpper(rest)
+	switch {
+	case strings.HasPrefix(up, "HEADER.FIELDS.NOT "):
+		rest, exclude = rest[len("HEADER.FIELDS.NOT "):], true
+	case strings.HasPrefix(up, "HEADER.FIELDS "):
+		rest = rest[len("HEADER.FIELDS "):]
+	default:
+		return nil, nil, false, false
 	}
-	fieldStr := rest[parenStart+1 : parenEnd]
-	var fields []string
-	for _, f := range strings.Fields(fieldStr) {
-		fields = append(fields, strings.TrimSpace(f))
+	if len(rest) < 3 || rest[0] != '(' || rest[len(rest)-1] != ')' {
+		return nil, nil, false, false
 	}
-	return fields
+	rest = rest[1 : len(rest)-1]
+	for rest != "" {
+		end := strings.IndexByte(rest, ' ')
+		if rest[0] == '"' {
+			end = quotedStringEnd(rest)
+			if end < 0 {
+				return nil, nil, false, false
+			}
+			end++
+		} else if end < 0 {
+			end = len(rest)
+		}
+		token := rest[:end]
+		if !validAstring(token) {
+			return nil, nil, false, false
+		}
+		fields = append(fields, unquote(token))
+		wire = append(wire, token)
+		rest = rest[end:]
+		if rest == "" {
+			return fields, wire, exclude, true
+		}
+		var sep bool
+		rest, sep = cutSingleSP(rest)
+		if !sep || rest == "" {
+			return nil, nil, false, false
+		}
+	}
+	return nil, nil, false, false
 }
 
 // filterHeaders extracts only the requested headers from a raw RFC 2822 message
@@ -794,7 +827,7 @@ func selectHeaders(raw string, fields []string, exclude bool) string {
 	// Build a set of field names to match (case-insensitive).
 	set := make(map[string]bool, len(fields))
 	for _, f := range fields {
-		set[strings.ToLower(strings.TrimSpace(f))] = true
+		set[strings.ToLower(f)] = true
 	}
 
 	var result strings.Builder
@@ -848,8 +881,8 @@ func headerFieldValues(raw, name string) []string {
 }
 
 // parseFetchItems validates the outer RFC 3501 §9 FETCH argument grammar and
-// known data-item names before dispatch. BODY section semantics and header-list
-// grammar remain separate; bracket/quote framing is checked here so section
+// known data-item names before dispatch. Numeric BODY section semantics remain
+// separate; bracket/quote framing is checked here so section
 // spaces cannot be mistaken for separators between top-level items.
 func parseFetchItems(s string) ([]string, bool) {
 	// FETCH names and header-field names are ASCII. Check before case folding:
@@ -899,12 +932,18 @@ func parseFetchItems(s string) ([]string, bool) {
 		}
 		switch c := s[i]; c {
 		case '[':
+			if parens != 0 {
+				continue
+			}
 			if sectionSeen {
 				return nil, false
 			}
 			bracket, sectionSeen = true, true
 		case ']':
-			if !bracket || parens != 0 {
+			if parens != 0 {
+				continue
+			}
+			if !bracket {
 				return nil, false
 			}
 			bracket = false
@@ -933,7 +972,7 @@ func parseFetchItems(s string) ([]string, bool) {
 			}
 		}
 	}
-	if !list && len(tokens) != 1 || !validFetchPartials(tokens) {
+	if !list && len(tokens) != 1 || !validFetchSections(tokens) {
 		return nil, false
 	}
 	return tokens, true
@@ -1018,15 +1057,17 @@ func bodySection(item string, loadRaw func() (string, bool)) (name, payload stri
 		name, payload = "BODY[HEADER]", headerSection(raw)
 	case section == "TEXT":
 		name, payload = "BODY[TEXT]", textSection(raw)
-	case strings.HasPrefix(section, "HEADER.FIELDS.NOT"):
-		// HEADER.FIELDS.NOT (f...) returns every header EXCEPT the listed ones
-		// (RFC 3501 §6.4.5). Checked before the HEADER.FIELDS prefix below, which
-		// it would otherwise match.
-		fields := extractHeaderFieldNames(item)
-		name, payload = "BODY[HEADER.FIELDS.NOT ("+strings.Join(fields, " ")+")]", selectHeaders(raw, fields, true)
 	case strings.HasPrefix(section, "HEADER.FIELDS"):
-		fields := extractHeaderFieldNames(item)
-		name, payload = "BODY[HEADER.FIELDS ("+strings.Join(fields, " ")+")]", filterHeaders(raw, fields)
+		fields, wire, exclude, valid := parseHeaderFields(item[lb+1 : rb])
+		if !valid {
+			return "", "", peek, false
+		}
+		label := "HEADER.FIELDS"
+		if exclude {
+			label += ".NOT"
+		}
+		name = "BODY[" + label + " (" + strings.Join(wire, " ") + ")]"
+		payload = selectHeaders(raw, fields, exclude)
 	default:
 		// Unsupported section spec (e.g. a MIME part number) — fall back to the
 		// full message rather than nothing, preserving prior lenient behavior.
@@ -1044,11 +1085,12 @@ func bodySection(item string, loadRaw func() (string, bool)) (name, payload stri
 	return name, payload, peek, true
 }
 
-// validFetchPartials checks every BODY section suffix before any message is
+// validFetchSections checks BODY partial suffixes and HEADER.FIELDS lists before
+// any message is
 // read or changed. In particular an invalid later item cannot follow an earlier
 // BODY[] read/Seen update, and an empty UID result cannot hide invalid syntax.
-// Other FETCH data-item and section grammar is not validated here.
-func validFetchPartials(tokens []string) bool {
+// Other section grammar remains incomplete.
+func validFetchSections(tokens []string) bool {
 	for _, item := range tokens {
 		up := strings.ToUpper(item)
 		if !strings.HasPrefix(up, "BODY[") && !strings.HasPrefix(up, "BODY.PEEK[") {
@@ -1057,6 +1099,13 @@ func validFetchPartials(tokens []string) bool {
 		rb := strings.LastIndexByte(item, ']')
 		if rb < 0 {
 			return false
+		}
+		lb := strings.IndexByte(item, '[')
+		section := item[lb+1 : rb]
+		if strings.HasPrefix(strings.ToUpper(section), "HEADER.FIELDS") {
+			if _, _, _, ok := parseHeaderFields(section); !ok {
+				return false
+			}
 		}
 		if _, ok := parseBodyPartial(item[rb+1:]); !ok {
 			return false
