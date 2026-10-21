@@ -279,3 +279,33 @@ func (*uidCopyOnlyMoveMailbox) AppendUID(string, imap.FlagUpdate, []byte) (uint3
 func (*uidCopyOnlyMoveMailbox) CopyUID(uint32, string) (uint32, error) {
 	return 0, errors.New("unused")
 }
+
+// TestMoveInvalidArguments proves malformed sets and destinations get BAD
+// before any move or EXPUNGE, and leave the mailbox intact.
+// checklist: IMAP-MOVE-12
+func TestMoveInvalidArguments(t *testing.T) {
+	for _, command := range []string{"MOVE", "UID MOVE"} {
+		for _, args := range invalidSetMailboxArgs {
+			if command == "UID MOVE" {
+				args = strings.Replace(args, "2", "304", 1)
+			}
+			t.Run(command+" "+args, func(t *testing.T) {
+				m := newMoveMailbox()
+				c := expungeClient(t, m)
+				lines, tagged := c.command("M1", "%s %s", command, args)
+				requireExactly(t, lines)
+				if !strings.HasPrefix(tagged, "M1 BAD ") {
+					t.Fatalf("%s %s: %q, want BAD", command, args, tagged)
+				}
+				requireCopies(t, m.copyMailbox, "")
+				requireRemaining(t, c, 300, 304, 319, 320)
+			})
+		}
+	}
+	m := newMoveMailbox()
+	c := expungeClient(t, m)
+	lines, tagged := c.command("M1", `UID MOVE 304 "Arch\\ive"`)
+	requireOK(t, tagged, "M1")
+	requireExactly(t, lines, "* 2 EXPUNGE")
+	requireCopies(t, m.copyMailbox, `Arch\ive`, 304)
+}

@@ -250,3 +250,53 @@ func TestCopyUIDMapping(t *testing.T) {
 		})
 	}
 }
+
+// invalidSetMailboxArgs are COPY/MOVE argument strings the RFC 3501 §9 grammar
+// refuses: malformed sequence-sets, malformed astrings and trailing text.
+var invalidSetMailboxArgs = []string{
+	"0 Archive", "0:2 Archive", "02 Archive", "+2 Archive", "a Archive",
+	"4294967296 Archive", "2, Archive", ",2 Archive", "2,,3 Archive", "2: Archive",
+	":2 Archive", "2:3:4 Archive", "** Archive", "2", "2 ", "2  Archive",
+	`2 "Archive`, `2 "Arch\ive"`, `2 "Archive"x`, "2 Arch%", "2 Arch*", `2 Arch"ive`,
+	`2 Arch\ive`, "2 Arch)ive", "2 Arch(ive", "2 Archive extra", "2 \"Arch\x00ive\"",
+	"2 Arch\x7five", "2 Arch\xc3\xa9",
+}
+
+// TestCopyInvalidArguments proves malformed sets and destinations get BAD
+// before any copy, while astring forms the grammar allows still work.
+// checklist: IMAP-COPY-14
+func TestCopyInvalidArguments(t *testing.T) {
+	for _, command := range []string{"COPY", "UID COPY"} {
+		for _, args := range invalidSetMailboxArgs {
+			if command == "UID COPY" {
+				args = strings.Replace(args, "2", "304", 1)
+			}
+			t.Run(command+" "+args, func(t *testing.T) {
+				m := newCopyMailbox()
+				c := expungeClient(t, m)
+				lines, tagged := c.command("C1", "%s %s", command, args)
+				requireExactly(t, lines)
+				if !strings.HasPrefix(tagged, "C1 BAD ") {
+					t.Fatalf("%s %s: %q, want BAD", command, args, tagged)
+				}
+				requireCopies(t, m, "")
+			})
+		}
+	}
+	for _, tc := range []struct{ dest, want string }{
+		{`"Arch\"ive"`, `Arch"ive`},
+		{`"Arch\\ive"`, `Arch\ive`},
+		{`""`, ""},
+		{"Arch]ive", "Arch]ive"},
+		{"{7+}\r\nArchive", "Archive"},
+		{"{8+}\r\nArch ive", "Arch ive"},
+	} {
+		t.Run("valid "+tc.dest, func(t *testing.T) {
+			m := newCopyMailbox()
+			c := expungeClient(t, m)
+			_, tagged := c.command("C1", "COPY 4294967295,2 %s", tc.dest)
+			requireOK(t, tagged, "C1")
+			requireCopies(t, m, tc.want, 304)
+		})
+	}
+}
