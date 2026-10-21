@@ -85,6 +85,15 @@ var MaxLiteralSize = 8 * 1024
 // response instead of buffering the whole line. A read error (including EOF) is
 // returned in err with whatever partial line was read.
 func (s *Session) readLine() (line string, tooLong bool, err error) {
+	line, tooLong, _, err = s.readCommandLine()
+	return line, tooLong, err
+}
+
+// readCommandLine is readLine that also reports, for a discarded over-long
+// line, whether it ended in "+}" — a possible LITERAL+ marker whose octets are
+// already in flight (RFC 7888 §3). Only the last few raw octets are kept, so the
+// check costs no extra memory however long the line is.
+func (s *Session) readCommandLine() (line string, tooLong, nonSyncLiteral bool, err error) {
 	var buf []byte
 	for {
 		// ReadSlice yields chunks bounded by the reader's buffer, so a copy into
@@ -95,44 +104,68 @@ func (s *Session) readLine() (line string, tooLong bool, err error) {
 		if len(buf) > MaxCommandLineLength {
 			// Over the cap: stop accumulating (buf is discarded on return, so at
 			// most one chunk beyond the cap is ever held) and resync the stream.
+			tail := lineTail(nil, buf)
 			if e == nil {
 				// Terminator already consumed; stream is at the next line.
-				return "", true, nil
+				return "", true, endsNonSyncLiteral(tail), nil
 			}
 			if errors.Is(e, bufio.ErrBufferFull) {
-				if de := s.discardToLineEnd(); de != nil {
-					return "", true, de
+				tail, de := s.discardToLineEnd(tail)
+				if de != nil {
+					return "", true, false, de
 				}
-				return "", true, nil
+				return "", true, endsNonSyncLiteral(tail), nil
 			}
-			return "", true, e // read error before any terminator
+			return "", true, false, e // read error before any terminator
 		}
 
 		if e == nil {
-			return strings.TrimRight(string(buf), "\r\n"), false, nil
+			return strings.TrimRight(string(buf), "\r\n"), false, false, nil
 		}
 		if errors.Is(e, bufio.ErrBufferFull) {
 			continue // more of the same (still-within-cap) line
 		}
 		// Real read error / EOF, possibly with a partial final line.
-		return strings.TrimRight(string(buf), "\r\n"), false, e
+		return strings.TrimRight(string(buf), "\r\n"), false, false, e
 	}
 }
 
 // discardToLineEnd consumes bytes up to and including the next '\n' without
 // retaining them, resynchronising the stream after an over-long line in
-// constant memory. Work is bounded by the connection's read deadline.
-func (s *Session) discardToLineEnd() error {
+// constant memory. Work is bounded by the connection's read deadline. It
+// returns the line's last few octets, continuing from tail.
+func (s *Session) discardToLineEnd(tail []byte) ([]byte, error) {
 	for {
-		_, err := s.reader.ReadSlice('\n')
+		chunk, err := s.reader.ReadSlice('\n')
+		tail = lineTail(tail, chunk)
 		if err == nil {
-			return nil
+			return tail, nil
 		}
 		if errors.Is(err, bufio.ErrBufferFull) {
 			continue
 		}
-		return err
+		return tail, err
 	}
+}
+
+// lineTail keeps the last four octets of tail followed by chunk: enough for a
+// "+}" marker plus its CRLF terminator.
+func lineTail(tail, chunk []byte) []byte {
+	const keep = 4
+	if len(chunk) >= keep {
+		return append([]byte(nil), chunk[len(chunk)-keep:]...)
+	}
+	tail = append(tail, chunk...)
+	if len(tail) > keep {
+		tail = append([]byte(nil), tail[len(tail)-keep:]...)
+	}
+	return tail
+}
+
+// endsNonSyncLiteral reports whether a line tail ends in "+}" before its
+// terminator.
+func endsNonSyncLiteral(tail []byte) bool {
+	return strings.HasSuffix(strings.TrimRight(string(tail), "\r\n"), "+}")
 }
 
 // readLiteralArgs materializes any synchronizing (or LITERAL+ non-synchronizing)
@@ -305,7 +338,7 @@ func (s *Session) Handle() {
 	for {
 		_ = s.conn.SetDeadline(time.Now().Add(autologoutTimeout))
 
-		line, tooLong, err := s.readLine()
+		line, tooLong, nonSyncLiteral, err := s.readCommandLine()
 		if err != nil {
 			if isAutologout(err) {
 				// Inactivity autologout (RFC 3501 §5.4): announce the close with an
@@ -321,6 +354,13 @@ func (s *Session) Handle() {
 		if tooLong {
 			slog.Debug("imap: command line too long", "remote", s.conn.RemoteAddr(), "limit", MaxCommandLineLength)
 			s.send("* BAD Command line too long (limit %d bytes)", MaxCommandLineLength)
+			if nonSyncLiteral {
+				// The discarded line may have ended in a LITERAL+ marker whose
+				// octets are already in flight; reading on would run them as
+				// commands. RFC 7888 §4 permits BYE-and-close here.
+				s.send("* BYE Command line too long with a pending literal")
+				return
+			}
 			continue
 		}
 

@@ -226,8 +226,8 @@ Early APPEND refusals with a valid `{n+}` marker choose RFC 7888 §4's
 BYE-and-close policy instead of draining potentially large payloads. This
 includes malformed preceding arguments and unauthenticated commands. Invalid
 markers outside the unsigned 32-bit literal grammar are not a supported
-non-synchronizing form. Initial overlong command lines still need their own
-refusal audit. LITERAL+ remains unadvertised.
+non-synchronizing form. An overlong initial APPEND line ending in `+}` is
+covered by IMAP-LITERAL-08. LITERAL+ remains unadvertised.
 
 ## RFC 3501 / RFC 7888: command-argument literals — partial refusal slice
 
@@ -246,9 +246,13 @@ any next literal marker are lost; this path closes conservatively as well.
 | IMAP-LITERAL-05 | RFC 3501 §§2.2.1, 4.3 | Normative | Refusing oversized assembled arguments preserves the next command if no literal remains unread or the next literal is synchronizing and no continuation has been sent. | TestCommandLiteralSafeRefusal |
 | IMAP-LITERAL-06 | RFC 3501 §4.3; RFC 7888 §3 | Normative | Count accepted LOGIN argument octets, support empty literals, send continuations only for synchronizing forms, and preserve a pipelined next command. | TestCommandLiteralAccepted |
 | IMAP-LITERAL-07 | RFC 3501 §§2.2.1, 4.3 | Normative | A read error before all argument octets or the continuation line arrive ends the session without dispatching the incomplete command or unread suffix. | TestCommandLiteralReadFailureEnds |
+| IMAP-LITERAL-08 | RFC 7888 §§3–4 | MUST | An overlong initial command line ending in `+}` (a possible non-synchronizing marker) is refused with BAD, then BYE, and the session ends without dispatching in-flight octets, however the marker and terminator split across reads. | TestCommandLineOverflowLiteralCloses |
+| IMAP-LITERAL-09 | RFC 3501 §§2.2.1, 4.3 | Normative | An overlong initial command line with no marker, or a synchronizing marker whose continuation was never sent, is refused with BAD and the next command still runs. | TestCommandLineOverflowSafeRefusal |
 
-Initial command-line overflow, malformed markers, complete quoting/separator
+The initial overlong line is discarded in constant memory, so only its last
+octets are kept: any line ending in `+}` closes, even when the discarded text
+would not parse as a valid marker. Malformed markers, complete quoting/separator
 and CHAR8 validation, binary literals, literal mailbox names in APPEND, and
-other extension interactions remain unaudited or unsupported. In particular,
-this slice does not fix initial overlong lines discarding a `{n+}` suffix.
+other extension interactions remain unaudited or unsupported. Overlong
+AUTHENTICATE responses and IDLE lines are not part of this slice.
 The accepted non-synchronizing form remains unadvertised compatibility behavior.

@@ -180,3 +180,67 @@ func TestCommandLiteralReadFailureEnds(t *testing.T) {
 		})
 	}
 }
+
+// overlongLine pads an A1 LOGIN line so the whole line, CRLF included, is
+// length octets ending in suffix. Lengths just past a 4 KiB read-buffer boundary
+// split the marker and terminator across chunks.
+func overlongLine(length int, suffix string) string {
+	head := "A1 LOGIN "
+	return head + strings.Repeat("x", length-len(head)-len(suffix)-2) + suffix + "\r\n"
+}
+
+// TestCommandLineOverflowLiteralCloses proves a discarded initial command line
+// ending in a LITERAL+ marker cannot leave its in-flight octets to run as a
+// command: the server answers BAD, sends BYE and ends the session.
+//
+// checklist: IMAP-LITERAL-08
+func TestCommandLineOverflowLiteralCloses(t *testing.T) {
+	payload := "X1 LOGIN " + testUser + " " + testPass + "\r\n"
+	for _, extra := range []int{1, 2, 3, 4, 5, 4096} {
+		t.Run(fmt.Sprintf("extra=%d", extra), func(t *testing.T) {
+			c := dial(t)
+			c.line()
+			length := 2*4096 + extra
+			writeLiteralWire(t, c, overlongLine(length, fmt.Sprintf(" {%d+}", len(payload)))+payload+"N1 NOOP\r\n")
+			if line := c.line(); !strings.HasPrefix(line, "* BAD ") {
+				t.Fatalf("refusal: %q", line)
+			}
+			if line := c.line(); !strings.HasPrefix(line, "* BYE ") || !strings.Contains(line, "literal") {
+				t.Fatalf("closing explanation: %q", line)
+			}
+			if !c.closed() {
+				t.Fatal("in-flight literal or following command was dispatched")
+			}
+			<-c.done
+			if c.backend.calls != 0 {
+				t.Fatalf("literal payload authenticated %d times", c.backend.calls)
+			}
+		})
+	}
+}
+
+// TestCommandLineOverflowSafeRefusal keeps the session when a discarded line
+// leaves nothing in flight: no marker, or a synchronizing marker whose
+// continuation was never sent.
+//
+// checklist: IMAP-LITERAL-09
+func TestCommandLineOverflowSafeRefusal(t *testing.T) {
+	for _, tc := range []struct{ name, suffix string }{
+		{"no marker", " pass"},
+		{"synchronizing", " {5}"},
+		{"brace without plus", " }"},
+	} {
+		for _, extra := range []int{1, 2, 3} {
+			t.Run(fmt.Sprintf("%s/extra=%d", tc.name, extra), func(t *testing.T) {
+				c := dial(t)
+				c.line()
+				writeLiteralWire(t, c, overlongLine(2*4096+extra, tc.suffix)+"N1 NOOP\r\n")
+				if line := c.line(); !strings.HasPrefix(line, "* BAD ") {
+					t.Fatalf("refusal: %q", line)
+				}
+				requireOK(t, c.line(), "N1")
+				c.login()
+			})
+		}
+	}
+}
