@@ -177,8 +177,13 @@ standard keys, MIME decoding and independent Recent search remain explicit gaps.
 The FETCH slice checks literal octets, header subsets, partial ranges, RFC822
 aliases, metadata/macros, UID replies, backend refusal and read-only Seen flags,
 including the §§6.4.5/6.4.8 examples. Numeric MIME sections and strict FETCH
-argument validation remain unsupported. It is growing; it is not yet a full
-conformance claim.
+argument validation remain unsupported.
+The EXPUNGE/CLOSE slice checks removal, sequence renumbering, retry after backend
+refusal, arguments and selection state, including the RFC 3501 examples. A
+partial RFC 4315 UID EXPUNGE slice checks UID filtering, preserved non-target
+marks, backend refusal and read-only operation. CLOSE deletion failures,
+persistent Deleted flags and strict UID-set validation remain explicit gaps.
+It is growing; it is not yet a full conformance claim.
 
 ## Documentation
 

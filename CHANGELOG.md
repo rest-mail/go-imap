@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- EXPUNGE and UID EXPUNGE now return NO when any backend deletion fails,
+  preserving failed messages and their deletion marks for retry. Successful
+  removals still emit EXPUNGE responses; multi-message removal is not atomic.
+- EXPUNGE and CLOSE reject extra arguments with BAD before changing state.
+  EXPUNGE outside the selected state now returns BAD rather than NO.
+
 - FETCH and UID FETCH now return NO when requested message data cannot be
   loaded, instead of OK with omitted data or a partial ENVELOPE fallback.
 - Implicit Seen writes must succeed before FETCH emits the changed flags or
@@ -31,6 +37,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   by `EXAMINE`, preserving both backend and session flags in read-only mode.
 
 ### Added
+
+- Partial EXPUNGE/CLOSE and RFC 4315 UID EXPUNGE checklist rows and external
+  wire proofs for RFC examples, sequence renumbering, UID filtering, backend
+  failure/retry, read-only operation, arguments and selection state. Persistent
+  Deleted flags, CLOSE deletion failures and strict UID-set validation are
+  explicit gaps.
 
 - A partial FETCH/UID FETCH checklist and external wire proofs for literal
   octets, sections/aliases, header subsets, partial ranges, metadata/macros,
