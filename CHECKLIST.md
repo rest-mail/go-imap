@@ -129,6 +129,10 @@ containing exactly the three expected matches and near misses for each A282
 predicate. It does not replay A284's UTF-8 literal. Calendar-date tests supply
 `Message.Date` as the internal date, including positive/negative timezone
 offsets that cross UTC midnight. Hosts must supply that metadata correctly.
+Size searches similarly trust the host's nonnegative `Message.Size`, the full
+RFC822.SIZE octet count, including headers. Synthetic boundary fixtures and a
+UTF-8/quoted-printable message distinguish strict octet comparisons from decoded
+body or character counts; size searches never fetch message content.
 
 | ID | Section | Level | Requirement | Tests |
 |----|---------|-------|-------------|-------|
@@ -142,14 +146,16 @@ offsets that cross UTC midnight. Hosts must supply that metadata correctly.
 | IMAP-SEARCH-08 | RFC 3501 §§6.4.4, 9 | Normative | Require at least one key, including inside groups; reject unknown keys, missing operands, invalid dates and unbalanced groups with tagged BAD and no partial SEARCH result. | TestSearchInvalidCriteria |
 | IMAP-SEARCH-09 | RFC 3501 §§3, 6.4 | Normative | SEARCH and UID SEARCH require a selected mailbox; authenticating alone does not permit searching. | TestSearchRequiresSelection |
 | IMAP-SEARCH-10 | RFC 3501 §6.4.4 | MUST | Decode MIME transfer encodings and encoded headers to the selected character set before searching. | n/a: not supported yet; BODY/TEXT search raw fetched bytes and header keys use host metadata without MIME/charset decoding. Tracked in rest-mail/rest-mail-server#374. |
-| IMAP-SEARCH-11 | RFC 3501 §6.4.4 | Normative | Support the remaining standard search keys, including BCC/CC, HEADER, KEYWORD/UNKEYWORD, LARGER/SMALLER and SENTBEFORE/SENTON/SENTSINCE. | n/a: not supported yet; parser rejects these keys; Message does not expose all required metadata. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-SEARCH-11 | RFC 3501 §6.4.4 | Normative | Support the remaining standard search keys, including BCC/CC, HEADER, KEYWORD/UNKEYWORD and SENTBEFORE/SENTON/SENTSINCE. | n/a: not supported yet; parser rejects these keys; Message does not expose all required metadata. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-SEARCH-12 | RFC 3501 §6.4.4 | Normative | RECENT, NEW and OLD search independent Recent state. | n/a: not supported yet; RECENT approximates unseen, NEW/OLD are rejected and Message has no Recent field. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-SEARCH-13 | RFC 3501 §§6.4.4, 6.4.8, 9 | Normative | Reject malformed bare sequence-set keys and UID set operands with BAD and no partial SEARCH result or content evaluation, including inside NOT, OR and groups and in empty mailboxes; keep the session reusable. | TestSearchInvalidSequenceSet |
 | IMAP-SEARCH-14 | RFC 3501 §§6.4.4, 6.4.8, 9 | Normative | Valid reversed, star, overlapping and unsigned-32-bit boundary sets retain sequence/UID membership semantics under SEARCH and UID SEARCH, with each match returned once and no content reads or flag writes. | TestSearchValidSequenceSet |
 | IMAP-SEARCH-15 | RFC 3501 §§6.4.4, 6.4.8 | Normative | ANSWERED/UNANSWERED and DRAFT/UNDRAFT match the presence/absence of their respective system flag under SEARCH and UID SEARCH, including Boolean/group combinations and empty/read-only mailboxes, without content reads or flag changes. | TestSearchAnsweredDraftKeys |
 | IMAP-SEARCH-16 | RFC 3501 §§6.4.4, 6.4.6, 6.4.8 | Normative | Flag searches use current selected-session Answered/Draft values after successful STORE and UID STORE addition, removal and replacement; a refused backend update leaves search membership unchanged. | TestSearchAnsweredDraftStore |
+| IMAP-SEARCH-17 | RFC 3501 §§6.4.4, 6.4.8, 9 | Normative | LARGER and SMALLER strictly compare full RFC822.SIZE octets with an unsigned 32-bit number, accepting zero and leading zeroes; SEARCH and UID SEARCH retain Boolean/group/set semantics without content reads or flag changes. | TestSearchSizeKeys, TestSearchSizeOctets |
+| IMAP-SEARCH-18 | RFC 3501 §§6.4.4, 6.4.8, 9 | Normative | Missing, signed, quoted, literal, nondecimal and overflowing size operands produce BAD before results or content evaluation, even inside Boolean/groups or empty mailboxes; the session remains reusable. | TestSearchInvalidSize |
 
-This is not a full search grammar or conformance audit. Search literals,
+This is not a full search grammar or conformance audit. Search string literals,
 quoted-string escapes and separators between keys remain unaudited; the existing
 parser does not reliably validate all of these. Out-of-range message sequence
 number rejection is also outside this slice. FROM display-name matching,

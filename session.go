@@ -1078,7 +1078,9 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) error {
 
 type searchCriterion struct {
 	kind string // "all", "seen", "unseen", "recent", "flagged", "unflagged", "deleted", "undeleted",
+	// "answered", "unanswered", "draft", "undraft", "larger", "smaller",
 	// "from", "to", "subject", "body", "text", "since", "before", "on", "uid", "seqset", "not", "or", "and"
+	size   uint64            // unsigned 32-bit SEARCH number, compared without narrowing to int
 	value  string            // for string/date/uid/seqset criteria
 	date   time.Time         // parsed date for since/before/on
 	sub    []searchCriterion // for NOT (1 element), OR (2 elements) or AND (a "(...)" group)
@@ -1125,7 +1127,7 @@ func (s *Session) handleSearch(tag, args string) {
 		return
 	}
 
-	criteria, serr := s.parseSearchCriteria(strings.TrimSpace(args))
+	criteria, serr := s.parseSearchCriteria(args)
 	if serr != nil {
 		s.tagged(tag, serr.status, serr.text)
 		return
@@ -1322,6 +1324,17 @@ func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriter
 			return searchCriterion{}, idx, badSearch(keyword + " requires a string argument")
 		}
 		return searchCriterion{kind: strings.ToLower(keyword), value: unquote(tokens[idx+1])}, idx + 2, nil
+	case "LARGER", "SMALLER":
+		if idx+1 >= len(tokens) {
+			return searchCriterion{}, idx, badSearch(keyword + " requires a number")
+		}
+		// RFC 3501 §9 number is 1*DIGIT, unsigned 32-bit; ParseUint
+		// rejects signs, quoted strings and overflow, but permits leading zeroes.
+		n, err := strconv.ParseUint(tokens[idx+1], 10, 32)
+		if err != nil {
+			return searchCriterion{}, idx, badSearch("invalid " + keyword + " number")
+		}
+		return searchCriterion{kind: strings.ToLower(keyword), size: n}, idx + 2, nil
 	case "SINCE", "BEFORE", "ON":
 		if idx+1 >= len(tokens) {
 			return searchCriterion{}, idx, badSearch(keyword + " requires a date")
@@ -1456,6 +1469,13 @@ func (s *Session) matchOne(msg Message, c searchCriterion, loadRaw func() (strin
 		return s.deleted[msg.UID]
 	case "undeleted":
 		return !s.deleted[msg.UID]
+	case "larger", "smaller":
+		// Size is the host's full RFC822.SIZE octet count, also used by
+		// FETCH. Avoid narrowing the operand to int on 32-bit hosts.
+		if c.kind == "larger" {
+			return msg.Size >= 0 && uint64(msg.Size) > c.size
+		}
+		return msg.Size >= 0 && uint64(msg.Size) < c.size
 	case "from":
 		return strings.Contains(strings.ToLower(msg.From.Email), strings.ToLower(c.value))
 	case "to":

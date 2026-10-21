@@ -188,8 +188,11 @@ forms reject malformed bare sequence sets and UID operands before evaluating
 content, including in Boolean/group keys and empty mailboxes; valid reversed,
 star, overlapping and unsigned-32-bit boundary sets retain membership semantics.
 ANSWERED/UNANSWERED and DRAFT/UNDRAFT search current system flags, including
-STORE/UID STORE changes and read-only selections. Other missing standard keys,
-MIME decoding and independent Recent search remain gaps.
+STORE/UID STORE changes and read-only selections. LARGER/SMALLER compare the
+host-supplied RFC822.SIZE octet count strictly, accept unsigned 32-bit numbers
+(including zero and leading zeroes), and reject malformed operands before
+evaluation. Size-only searches do not read content or change flags. Other missing
+standard keys, MIME decoding and independent Recent search remain gaps.
 The FETCH slice checks literal octets, header subsets, partial ranges, RFC822
 aliases, metadata/macros, UID replies, backend refusal and read-only Seen flags,
 including the §§6.4.5/6.4.8 examples. FETCH and UID FETCH reject malformed
