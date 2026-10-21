@@ -112,9 +112,10 @@ func TestAppendQuotedMailboxGrammar(t *testing.T) {
 
 type appendMailbox struct {
 	mailbox
-	records  []appendRecord
-	messages []imap.Message
-	fail     bool
+	records   []appendRecord
+	messages  []imap.Message
+	fail      bool
+	dateCalls int
 }
 
 func (m *appendMailbox) Messages(string) ([]imap.Message, error) {
@@ -133,6 +134,7 @@ func (m *appendMailbox) Append(folder string, flags imap.FlagUpdate, raw []byte)
 type datedAppendMailbox struct{ *appendMailbox }
 
 func (m *datedAppendMailbox) AppendWithDate(folder string, flags imap.FlagUpdate, date time.Time, raw []byte) (uint32, error) {
+	m.dateCalls++
 	if err := m.Append(folder, flags, raw); err != nil {
 		return 0, err
 	}

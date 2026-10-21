@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- APPEND validates the RFC 3501 fixed-width date-time grammar before accepting
+  message bytes. Bare single-digit days, extra spaces, fractional seconds,
+  backslash escapes and invalid zone values now receive BAD. Space-padded and
+  zero-padded days remain accepted. Explicit dates equal to Go's zero time now
+  reach DateAppender instead of being mistaken for an omitted argument. Adds
+  checked wire proofs for acceptance, refusal, recovery and LITERAL+ framing.
+
 - FETCH and UID FETCH strictly validate HEADER.FIELDS[.NOT] lists before any
   reads, Seen writes or responses, including empty/nonmatching sets. Quoted and
   literal names now match decoded values instead of their quote characters;

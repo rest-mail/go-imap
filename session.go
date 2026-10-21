@@ -1427,11 +1427,27 @@ func parseSearchGroup(tokens []string, idx int, maxUID uint32) (searchCriterion,
 
 // parseIMAPDateTime parses an IMAP date-time (RFC 3501 §9) as sent in the
 // optional APPEND argument, e.g. "25-Jul-2026 13:04:05 +0000". A single-digit
-// day may be space-padded per the grammar or bare; both are accepted. ok is
-// false when s is not a valid date-time.
+// day must be space-padded or zero-padded. Validate the wire grammar before
+// time.Parse, which also accepts bare days, fractional seconds and extra spaces.
 func parseIMAPDateTime(s string) (time.Time, bool) {
-	s = strings.TrimSpace(s)
-	if t, err := time.Parse("2-Jan-2006 15:04:05 -0700", s); err == nil {
+	if len(s) != 26 || s[2] != '-' || s[6] != '-' || s[11] != ' ' ||
+		s[14] != ':' || s[17] != ':' || s[20] != ' ' || (s[21] != '+' && s[21] != '-') {
+		return time.Time{}, false
+	}
+	for _, i := range []int{0, 1, 7, 8, 9, 10, 12, 13, 15, 16, 18, 19, 22, 23, 24, 25} {
+		if i == 0 && s[i] == ' ' {
+			continue
+		}
+		if s[i] < '0' || s[i] > '9' {
+			return time.Time{}, false
+		}
+	}
+	// Go's numeric-zone parser permits hour 24 and minute 60. Neither is a
+	// valid hhmm offset; reject them instead of silently normalizing the zone.
+	if s[22:24] > "23" || s[24:26] > "59" {
+		return time.Time{}, false
+	}
+	if t, err := time.Parse("_2-Jan-2006 15:04:05 -0700", s); err == nil {
 		return t, true
 	}
 	return time.Time{}, false
@@ -2080,9 +2096,12 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 	// message's INTERNALDATE. Parsed and validated here; it is stored only if the
 	// backend implements DateAppender (otherwise it is dropped, best-effort).
 	var internalDate time.Time
+	var hasInternalDate bool
 	if strings.HasPrefix(rest, `"`) {
 		dateStr, after, dok := parseAstring(rest)
-		if !dok {
+		// date-time is its own DQUOTE-delimited grammar, not a quoted-string:
+		// backslash escapes must not turn malformed wire text into a valid date.
+		if !dok || rest[:len(rest)-len(after)] != `"`+dateStr+`"` {
 			s.tagged(tag, "BAD", "Malformed date-time")
 			return
 		}
@@ -2092,6 +2111,7 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 			return
 		}
 		internalDate = t
+		hasInternalDate = true
 		if rest, ok = cutSingleSP(after); !ok {
 			s.tagged(tag, "BAD", "Invalid argument separator")
 			return
@@ -2156,7 +2176,7 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 	da, isDater := s.mailbox.(DateAppender)
 	var uid uint32
 	switch {
-	case !internalDate.IsZero() && isDater:
+	case hasInternalDate && isDater:
 		uid, err = da.AppendWithDate(folder, flags, internalDate, data)
 	case isUIDPlus:
 		uid, err = up.AppendUID(folder, flags, data)
