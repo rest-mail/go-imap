@@ -387,7 +387,7 @@ func (s *Session) Handle() {
 		// rather than misreading the octet line as a new command and desyncing.
 		// APPEND is the sole exception: its terminal message literal is read on
 		// handleAppend's large-message path, which needs the raw octets, not a
-		// re-encoded argument.
+		// re-encoded argument; handleAppend reads a literal mailbox name itself.
 		if ucmd != "APPEND" {
 			materialized, argsOK, closeConn := s.readLiteralArgs(tag, args)
 			if closeConn {
@@ -2017,10 +2017,50 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 		s.tagged(tag, "BAD", "Invalid argument separator")
 		return
 	}
-	folder, rest, ok := parseAstring(args)
-	if !ok || folder == "" || (strings.HasPrefix(args, `"`) && !validAppendQuotedMailbox(args[:len(args)-len(rest)])) {
-		s.tagged(tag, "BAD", "Invalid mailbox name")
-		return
+	var folder, rest string
+	var ok bool
+	if prefix, size, sync, isLit := splitTrailingLiteral(args); isLit && prefix == "" {
+		// A line that is only a literal marker carries the mailbox name as a
+		// literal astring (RFC 3501 §§4.3, 9); the rest of the command, ending
+		// in the message literal, follows its octets.
+		if size == 0 || size > MaxCommandLineLength {
+			s.tagged(tag, "BAD", "Invalid mailbox name")
+			return
+		}
+		if sync {
+			s.send("+ Ready for literal data")
+		}
+		name := make([]byte, size)
+		if _, err := io.ReadFull(s.reader, name); err != nil {
+			rejectNonSync = false
+			return true
+		}
+		cont, tooLong, err := s.readLine()
+		if err != nil {
+			rejectNonSync = false
+			return true
+		}
+		if tooLong {
+			// readLine discarded the suffix, including the message literal marker.
+			rejectNonSync = false
+			s.tagged(tag, "BAD", fmt.Sprintf("Command line too long (limit %d bytes)", MaxCommandLineLength))
+			s.send("* BYE Command literal rejected; stream cannot be reused")
+			return true
+		}
+		_, _, synchronizing, literal = splitTrailingLiteral(cont)
+		rejectNonSync = literal && !synchronizing
+		// A literal is CHAR8, which excludes NUL (RFC 3501 §9).
+		if bytes.IndexByte(name, 0) >= 0 {
+			s.tagged(tag, "BAD", "Invalid mailbox name")
+			return
+		}
+		folder, rest = string(name), cont
+	} else {
+		folder, rest, ok = parseAstring(args)
+		if !ok || folder == "" || (strings.HasPrefix(args, `"`) && !validAppendQuotedMailbox(args[:len(args)-len(rest)])) {
+			s.tagged(tag, "BAD", "Invalid mailbox name")
+			return
+		}
 	}
 	if rest, ok = cutSingleSP(rest); !ok {
 		s.tagged(tag, "BAD", "Invalid argument separator")
