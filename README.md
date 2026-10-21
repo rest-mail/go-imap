@@ -199,7 +199,7 @@ flags/dates, selected-mailbox notifications, backend refusal and terminal litera
 framing, including the accepted non-synchronizing form. Early refusal of a
 valid `{n+}` APPEND sends BYE and closes without dispatching unread payload;
 backend refusal after consuming the command keeps the session usable. A
-malformed flag-list receives BAD before the continuation. Backend
+malformed flag-list or argument separator receives BAD before the continuation. Backend
 atomicity, nonexistent destinations/TRYCREATE, Recent/Deleted/keywords, default dates,
 literal mailbox names and the remaining grammar validation remain explicit gaps.
 The command-argument literal slice checks individual/aggregate size refusal,

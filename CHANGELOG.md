@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- APPEND now requires exactly one SP between the mailbox, flag-list, date-time
+  and message literal, answering BAD before sending a continuation. Doubled,
+  leading and missing separators (for example `INBOX{3}` or
+  `INBOX(\Seen) {3}`) were previously skipped and the message stored. Checked
+  RFC 3501 wire tests keep every single-SP combination working.
+
 - APPEND now rejects a malformed flag-list with BAD before sending a
   continuation. Nested parentheses, doubled, leading, trailing or tab
   separators, a list not followed by SP, and flags that are not an atom with an
