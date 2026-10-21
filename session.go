@@ -935,9 +935,9 @@ func (s *Session) handleFetch(tag, args string) {
 		s.tagged(tag, "BAD", "Invalid sequence set")
 		return
 	}
-	tokens := fetchItemTokens(parts[1])
-	if !validFetchPartials(tokens) {
-		s.tagged(tag, "BAD", "Invalid FETCH body partial")
+	tokens, ok := parseFetchItems(parts[1])
+	if !ok {
+		s.tagged(tag, "BAD", "Invalid FETCH data items")
 		return
 	}
 
@@ -2515,9 +2515,9 @@ func (s *Session) handleUIDFetch(tag, args string) {
 		s.tagged(tag, "BAD", "Invalid uid set")
 		return
 	}
-	tokens := fetchItemTokens(parts[1])
-	if !validFetchPartials(tokens) {
-		s.tagged(tag, "BAD", "Invalid FETCH body partial")
+	tokens, ok := parseFetchItems(parts[1])
+	if !ok {
+		s.tagged(tag, "BAD", "Invalid FETCH data items")
 		return
 	}
 

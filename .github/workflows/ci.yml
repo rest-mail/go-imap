@@ -51,3 +51,6 @@ jobs:
 
       - name: Fuzz FETCH partial ranges
         run: go test -run='^$' -fuzz='^FuzzBodyPartial$' -fuzztime=30s .
+
+      - name: Fuzz FETCH data-item lists
+        run: go test -run='^$' -fuzz='^FuzzFetchItems$' -fuzztime=30s .

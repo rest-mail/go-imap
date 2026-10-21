@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- FETCH and UID FETCH reject unknown data-item names, empty/malformed outer
+  lists, multiple bare items and macros inside lists or mixed with other items.
+  Validation precedes content access, Seen writes and responses, including with
+  no matching messages. Checked RFC 3501 wire tests compare standalone macros
+  and singleton items with their explicit lists, including exact literals and
+  side effects; a new parser fuzz target also checks the flat-item grammar.
+  Numeric MIME sections and complete header-field-list grammar remain separate
+  gaps.
+
 - SEARCH and UID SEARCH now support HEADER, CC, BCC, SENTBEFORE, SENTON and
   SENTSINCE, previously rejected as unknown keys. They read the message's raw
   header block: header strings match the unfolded field text after the colon,
