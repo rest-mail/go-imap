@@ -3,8 +3,8 @@
 This is an explicitly **PARTIAL** checklist: the first RFC 3501 rows for the
 connection greeting, the any-state commands (CAPABILITY, NOOP, LOGOUT), LOGIN,
 tagged completion, selection-state (SELECT/EXAMINE), STORE, SEARCH, FETCH,
-EXPUNGE, CLOSE, APPEND and COPY slices, plus partial RFC 4315 UID EXPUNGE/COPYUID and
-RFC 7888 non-synchronizing APPEND and command-argument refusal slices. It is not
+EXPUNGE, CLOSE, APPEND and COPY slices, plus partial RFC 4315 UID EXPUNGE/COPYUID,
+RFC 6851 MOVE and RFC 7888 non-synchronizing APPEND and command-argument refusal slices. It is not
 an inventory of all applicable RFC requirements, a full conformance claim, or
 a coverage badge. A mapped row means its named wire test
 in `internal/rfctest` asserts the stated behavior through the public
@@ -293,3 +293,31 @@ earlier destination writes can remain and a retry may duplicate them. This is an
 explicit RFC rollback gap, not atomic COPY conformance. Concurrent updates,
 copy-to-self notifications and the remaining UIDPLUS requirements remain for
 later slices. No batch backend interface or public capability changes are made.
+
+## RFC 6851: MOVE and UID MOVE — partial dispatch slice
+
+`TestMoveUIDExample` follows the shape of RFC 6851's UID MOVE example:
+COPYUID in an untagged OK, then one EXPUNGE per moved message, then the tagged
+OK. Fixtures record `Mailbox.Move` / `Mover.MoveUID` dispatch and refuse selected
+messages. They do not prove a real store moves each message atomically.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-MOVE-01 | RFC 6851 §3.1 | Normative | MOVE passes each selected message's UID and the destination to the backend, sends an untagged EXPUNGE for each moved message and returns tagged OK; moved messages leave the selected view. Base backends omit COPYUID. | TestMoveExample |
+| IMAP-MOVE-02 | RFC 6851 §§3.3, 4; RFC 4315 §3 | SHOULD | With UIDPLUS and destination UID metadata, send COPYUID in an untagged OK before any EXPUNGE, with corresponding source/destination UIDs in move order. | TestMoveUIDExample, TestMoveUIDMapping |
+| IMAP-MOVE-03 | RFC 6851 §3.2; RFC 3501 §§2.3.1.1, 6.4.8 | Normative | UID MOVE uses UIDs and ignores nonexistent UIDs; reversed ranges and star denote the same members; an empty match succeeds without EXPUNGE or COPYUID. | TestMoveUIDExample, TestMoveSets |
+| IMAP-MOVE-04 | RFC 3501 §9; RFC 6851 §3.3 | Normative | Overlapping sequence-set members identify each message once: one backend move, one EXPUNGE and one COPYUID member per message, and no unrelated message leaves the view. | TestMoveSets, TestMoveUIDMapping |
+| IMAP-MOVE-05 | RFC 6851 §3.3 | MUST | A backend move failure stops dispatch and returns tagged NO; messages already moved are still reported (COPYUID when available, then EXPUNGE) and unmoved messages stay in the source view; the session accepts a later retry. | TestMoveBackendFailure |
+| IMAP-MOVE-06 | RFC 6851 §3.1; RFC 3501 §6.3.2 | Normative | MOVE/UID MOVE expunge the source, so they are refused with NO on an EXAMINE selection without dispatching a backend move. | TestMoveReadOnly |
+| IMAP-MOVE-07 | RFC 6851 §3.1; RFC 3501 §§3, 6.4 | Normative | MOVE/UID MOVE require a selected mailbox and dispatch no backend move before selection. | TestMoveRequiresSelection |
+| IMAP-MOVE-08 | RFC 3501 §5.1; RFC 6851 §3.1 | Normative | Quoted destination names retain spaces and INBOX is case-insensitive. | TestMoveNames |
+| IMAP-MOVE-09 | RFC 4315 §3; RFC 6851 §4 | Normative | Omit COPYUID when destination UIDVALIDITY is unavailable or the backend has no atomic Mover; the completed move still succeeds. | TestMoveUIDValidityFallback |
+| IMAP-MOVE-10 | RFC 6851 §3.3 | SHOULD | Each message is either moved or unaffected, never left in both mailboxes; no message is lost. | n/a: backend responsibility; the base `Mailbox.Move` fallback and `Mover.MoveUID` are trusted per message and not verified by these dispatch fixtures. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-MOVE-11 | RFC 6851 §3.3; RFC 3501 §6.4.7 | MUST | Refuse nonexistent destinations without auto-creation and prefix NO with TRYCREATE unless creation is known impossible. | n/a: not supported yet; backend errors do not expose missing destinations, so MOVE returns generic NO. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-MOVE-12 | RFC 6851 §3.1; RFC 3501 §9 | Normative | Reject invalid sequence sets and mailbox argument syntax with BAD. | n/a: not supported yet; shared parsers accept malformed sequence sets and destination argument text. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-MOVE-13 | RFC 6851 §4 | Normative | With QRESYNC enabled, report moved messages with VANISHED instead of EXPUNGE; other sessions selecting the source learn of the removal. | n/a: not supported yet; QRESYNC is not implemented and other sessions are not notified. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-MOVE-14 | RFC 4315 §§3, 4 | Normative | COPYUID contains only valid nonzero destination UIDs, with no extraneous or repeated UIDs. | n/a: not supported yet for invalid backend results; MoveUID return values are trusted. Tracked in rest-mail/rest-mail-server#374. |
+
+A refused move stops at the failing message and reports only what the backend
+actually moved. No rollback is attempted: RFC 6851 permits partial moves as long
+as every message ends up in exactly one mailbox, which is the backend's job.
