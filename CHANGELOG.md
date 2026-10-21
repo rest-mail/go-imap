@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- STORE and UID STORE now reject a malformed flag operand with BAD before
+  changing flags. Unbalanced or nested parentheses, doubled or tab separators,
+  quoted strings and flags that are not an atom with an optional leading `\`
+  (such as `\*`, `k]` or non-ASCII names) were previously split on whitespace
+  and applied. Checked RFC 3501 wire tests cover every action with and without
+  .SILENT, and preserve empty lists, bare flags, keywords and flag-extensions.
+
 - SEARCH and UID SEARCH now reject malformed bare sequence-set keys and UID
   operands with BAD before evaluating content, including inside NOT, OR and
   parenthesized groups. Invalid list/range members previously could be ignored

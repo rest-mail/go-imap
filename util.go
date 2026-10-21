@@ -677,6 +677,31 @@ func parseFlags(s string) []string {
 	return flags
 }
 
+// validStoreFlags reports whether s is the flag operand of an RFC 3501 §9
+// store-att-flags: a parenthesised flag-list, which may be empty, or one or
+// more bare flags. Flags are separated by a single SP, and each is an atom with
+// an optional leading "\" (a system flag, flag-keyword or flag-extension).
+func validStoreFlags(s string) bool {
+	if len(s) >= 2 && s[0] == '(' && s[len(s)-1] == ')' {
+		s = s[1 : len(s)-1]
+		if s == "" {
+			return true
+		}
+	}
+	for _, f := range strings.Split(s, " ") {
+		f = strings.TrimPrefix(f, `\`)
+		if f == "" {
+			return false
+		}
+		for i := 0; i < len(f); i++ {
+			if c := f[i]; c <= 0x20 || c >= 0x7f || strings.IndexByte(`(){%*"\]`, c) >= 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // extractHeaderFieldNames extracts the header field names from BODY[HEADER.FIELDS (...)].
 func extractHeaderFieldNames(dataItems string) []string {
 	// Find the parenthesized list after HEADER.FIELDS
