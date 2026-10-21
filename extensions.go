@@ -95,13 +95,28 @@ func (s *Session) copyMessages(seqNums []int, dest string) (string, error) {
 		}
 	}
 
-	if uidPlus && len(dstUIDs) > 0 {
+	if uidPlus && len(dstUIDs) > 0 && validCopyUIDs(dstUIDs) {
 		if v, ok := s.uidValidity(dest); ok {
 			return "COPYUID " + strconv.FormatUint(uint64(v), 10) + " " +
 				joinUIDs(srcUIDs) + " " + joinUIDs(dstUIDs), nil
 		}
 	}
 	return "", nil
+}
+
+// validCopyUIDs reports whether the destination UIDs a backend returned can be
+// quoted in a COPYUID response code: each must be a nonzero UID and none may
+// repeat (RFC 4315 §§3, 4). [Mover.MoveUID] may return 0 when the backend cannot
+// report the new UID; then COPYUID is omitted rather than sent malformed.
+func validCopyUIDs(uids []uint32) bool {
+	seen := make(map[uint32]bool, len(uids))
+	for _, uid := range uids {
+		if uid == 0 || seen[uid] {
+			return false
+		}
+		seen[uid] = true
+	}
+	return true
 }
 
 // moveMessages relocates the messages at the given sequence numbers to dest and
@@ -153,7 +168,7 @@ func (s *Session) moveMessages(tag, cmdName string, seqNums []int, dest string) 
 
 	// RFC 6851: send COPYUID in an untagged OK *before* the EXPUNGEs, so a client
 	// never sees a message expunged before it learns the copy's UID.
-	if hasMover && len(dstUIDs) > 0 {
+	if hasMover && len(dstUIDs) > 0 && validCopyUIDs(dstUIDs) {
 		if v, ok := s.uidValidity(dest); ok {
 			s.send("* OK [COPYUID %d %s %s]", v, joinUIDs(srcUIDs), joinUIDs(dstUIDs))
 		}

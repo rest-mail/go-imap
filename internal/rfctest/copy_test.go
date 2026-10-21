@@ -40,6 +40,7 @@ type uidCopyMailbox struct {
 	*copyMailbox
 	validity    uint32
 	validityErr error
+	assigned    []uint32 // destination UIDs to report in call order; nil counts from 3956
 }
 
 func (m *uidCopyMailbox) UIDValidity(string) (uint32, error) { return m.validity, m.validityErr }
@@ -49,6 +50,9 @@ func (*uidCopyMailbox) AppendUID(string, imap.FlagUpdate, []byte) (uint32, error
 func (m *uidCopyMailbox) CopyUID(uid uint32, dest string) (uint32, error) {
 	if err := m.Copy(uid, dest); err != nil {
 		return 0, err
+	}
+	if m.assigned != nil {
+		return m.assigned[len(m.calls)-1], nil
 	}
 	return 3955 + uint32(len(m.calls)), nil
 }
@@ -298,5 +302,42 @@ func TestCopyInvalidArguments(t *testing.T) {
 			requireOK(t, tagged, "C1")
 			requireCopies(t, m, tc.want, 304)
 		})
+	}
+}
+
+// TestCopyUIDInvalidBackendUIDs gives COPYUID only valid nonzero destination
+// UIDs with no repeats: a backend result that breaks either rule leaves the
+// copy successful but omits the response code instead of quoting it.
+// checklist: IMAP-COPY-16
+func TestCopyUIDInvalidBackendUIDs(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		assigned []uint32
+		want     string
+	}{
+		{"valid", []uint32{3956, 3957, 3958}, "C1 OK [COPYUID 38505 304,319,320 3956,3957,3958] "},
+		{"zero first", []uint32{0, 3957, 3958}, "C1 OK "},
+		{"zero last", []uint32{3956, 3957, 0}, "C1 OK "},
+		{"repeated", []uint32{3956, 3957, 3956}, "C1 OK "},
+		{"all repeated", []uint32{7, 7, 7}, "C1 OK "},
+	} {
+		for _, cmd := range []struct{ name, args string }{{"COPY", "2:4"}, {"UID COPY", "304:320"}} {
+			t.Run(tc.name+"/"+cmd.name, func(t *testing.T) {
+				m := &uidCopyMailbox{copyMailbox: newCopyMailbox(), validity: 38505, assigned: tc.assigned}
+				c := expungeClient(t, m)
+				lines, tagged := c.command("C1", "%s %s Archive", cmd.name, cmd.args)
+				requireExactly(t, lines)
+				if want := tc.want + cmd.name + " completed"; tagged != want {
+					t.Fatalf("tagged %q, want %q", tagged, want)
+				}
+				requireCopies(t, m.copyMailbox, "Archive", 304, 319, 320)
+				// The omitted code is command-local: a later valid copy reports it.
+				m.calls, m.assigned = nil, nil
+				_, tagged = c.command("C2", "UID COPY 300 Archive")
+				if tagged != "C2 OK [COPYUID 38505 300 3956] UID COPY completed" {
+					t.Fatalf("follow-up copy %q", tagged)
+				}
+			})
+		}
 	}
 }
