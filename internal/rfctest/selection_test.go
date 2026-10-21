@@ -98,7 +98,7 @@ func TestSelectionExamples(t *testing.T) {
 			if tc.command == "EXAMINE" {
 				requireLine(t, lines, "* OK [PERMANENTFLAGS ()]")
 			} else {
-				requireLine(t, lines, `* OK [PERMANENTFLAGS (\Seen \Answered \Flagged \Deleted \Draft \*)]`)
+				requireLine(t, lines, `* OK [PERMANENTFLAGS (\Seen \Answered \Flagged \Deleted \Draft)]`)
 			}
 			if box.stores+box.deletes+box.moves != 0 {
 				t.Fatal("selection changed permanent state")

@@ -821,7 +821,9 @@ func (s *Session) handleSelect(tag, args string, readOnly bool) {
 		s.tagged(tag, "OK", "[READ-ONLY] EXAMINE completed")
 		return
 	}
-	s.send("* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Deleted \\Draft \\*)]")
+	// No \* entry: Message and FlagUpdate carry only system flags, so a keyword
+	// cannot be stored and must not be advertised as creatable (RFC 3501 §7.1).
+	s.send("* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Deleted \\Draft)]")
 	s.tagged(tag, "OK", "[READ-WRITE] SELECT completed")
 }
 
@@ -1333,6 +1335,14 @@ func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriter
 		// set as RECENT in SELECT/EXAMINE and STATUS; SEARCH RECENT matches that
 		// same set (RFC 3501 §6.4.4).
 		return searchCriterion{kind: "recent"}, idx + 1, nil
+	case "KEYWORD", "UNKEYWORD":
+		// No keyword can be stored (PERMANENTFLAGS lists no \*), so KEYWORD
+		// matches nothing and UNKEYWORD matches every message (RFC 3501 §6.4.4).
+		// The operand must still be a flag-keyword atom.
+		if idx+1 >= len(tokens) || !validFlagKeyword(tokens[idx+1]) {
+			return searchCriterion{}, idx, badSearch(keyword + " requires a flag keyword")
+		}
+		return searchCriterion{kind: strings.ToLower(keyword)}, idx + 2, nil
 	case "FROM", "TO", "SUBJECT", "BODY", "TEXT":
 		if idx+1 >= len(tokens) {
 			return searchCriterion{}, idx, badSearch(keyword + " requires a string argument")
@@ -1531,6 +1541,10 @@ func (s *Session) matchOne(msg Message, c searchCriterion, loadRaw func() (strin
 		// The engine models \Recent as the unseen set (see parseSingleCriterion),
 		// matching the RECENT count reported by SELECT/EXAMINE and STATUS.
 		return !msg.Seen
+	case "keyword":
+		return false
+	case "unkeyword":
+		return true
 	case "flagged":
 		return msg.Flagged
 	case "unflagged":
@@ -1551,23 +1565,24 @@ func (s *Session) matchOne(msg Message, c searchCriterion, loadRaw func() (strin
 	case "to":
 		return strings.Contains(strings.ToLower(msg.To), strings.ToLower(c.value))
 	case "subject":
-		return strings.Contains(strings.ToLower(msg.Subject), strings.ToLower(c.value))
+		return strings.Contains(strings.ToLower(decodeSearchHeader(msg.Subject)), strings.ToLower(c.value))
 	case "body":
 		// BODY <string>: case-insensitive substring in the message body (the text
-		// after the header block), RFC 3501 §6.4.4. Missing body ⇒ no match.
+		// after the header block) once transfer encodings and charsets are
+		// decoded, RFC 3501 §6.4.4. Missing body ⇒ no match.
 		raw, ok := loadRaw()
 		if !ok {
 			return false
 		}
-		return strings.Contains(strings.ToLower(textSection(raw)), strings.ToLower(c.value))
+		return strings.Contains(strings.ToLower(searchBodyText(messageNode(raw), 0)), strings.ToLower(c.value))
 	case "text":
 		// TEXT <string>: case-insensitive substring in the header OR the body —
-		// i.e. anywhere in the raw message (RFC 3501 §6.4.4). Missing raw ⇒ no match.
+		// i.e. anywhere in the decoded message (RFC 3501 §6.4.4). Missing raw ⇒ no match.
 		raw, ok := loadRaw()
 		if !ok {
 			return false
 		}
-		return strings.Contains(strings.ToLower(raw), strings.ToLower(c.value))
+		return strings.Contains(strings.ToLower(searchMessageText(raw)), strings.ToLower(c.value))
 	case "header":
 		// HEADER <field-name> <string> (and CC/BCC): a header with that field
 		// name whose text after the colon contains the string, case-insensitive;
@@ -1579,7 +1594,7 @@ func (s *Session) matchOne(msg Message, c searchCriterion, loadRaw func() (strin
 		}
 		needle := strings.ToLower(c.value)
 		for _, v := range headerFieldValues(raw, c.field) {
-			if strings.Contains(strings.ToLower(v), needle) {
+			if strings.Contains(strings.ToLower(decodeSearchHeader(v)), needle) {
 				return true
 			}
 		}

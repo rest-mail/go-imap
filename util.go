@@ -405,6 +405,20 @@ func parseSetMailbox(args string) (set, mailbox, problem string) {
 	return set, mailbox, ""
 }
 
+// validFlagKeyword reports whether s is an RFC 3501 §9 flag-keyword: one atom
+// of ATOM-CHARs, excluding atom-specials and the resp-special "]".
+func validFlagKeyword(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c <= 0x20 || c >= 0x7f || strings.IndexByte(`(){%*"\]`, c) >= 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // validAstring reports whether s is exactly one RFC 3501 §9 astring: an atom of
 // ASTRING-CHARs or a quoted-string whose only escapes are \" and \\. NUL is
 // refused in both forms. Octets above 0x7F are let through a quoted-string,

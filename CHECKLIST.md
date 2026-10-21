@@ -43,8 +43,8 @@ TLS handshake on the public `Session`, configured with a TLS config. Implicit TL
 | IMAP-STARTTLS-05 | RFC 3501 §§6.2.1, 9; RFC 2595 §3.1 | Normative | STARTTLS is refused with BAD when TLS is not configured, when arguments are supplied or when TLS is already active, including in the authenticated state; the session stays usable. | TestStartTLSRefusals |
 | IMAP-STARTTLS-06 | RFC 3501 §6.2.1 | Normative | Cleartext pipelined behind STARTTLS is discarded and never runs inside the TLS layer (CVE-2011-0411 class). | TestStartTLSDiscardsPipelinedPlaintext |
 | IMAP-STARTTLS-07 | RFC 3501 §6.2.1 | Normative | A failed TLS negotiation ends the session; cleartext sent after the STARTTLS OK never runs as commands. | TestStartTLSFailedNegotiation |
-| IMAP-STARTTLS-08 | RFC 3501 §6.2.3 | SHOULD NOT | Do not permit LOGIN without protection against password snooping. | n/a: deployment responsibility; with no TLS config (development) the session advertises AUTH=PLAIN and accepts cleartext LOGIN. Tracked in rest-mail/rest-mail-server#374. |
-| IMAP-STARTTLS-09 | RFC 2595 §3.1; RFC 3501 §6.2.1 | MAY | Authenticate with SASL EXTERNAL from TLS client credentials. | n/a: not supported; only AUTH=PLAIN is offered. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-STARTTLS-08 | RFC 3501 §6.2.3 | SHOULD NOT | When TLS is configured, do not permit LOGIN or AUTHENTICATE before TLS is active: every credential form, including literals and SASL initial responses, gets NO [PRIVACYREQUIRED] with no continuation and no backend credential check. A session built without TLS is a development deployment outside this row. | TestStartTLSCleartextCredentialsRefused |
+| IMAP-STARTTLS-09 | RFC 2595 §3.1; RFC 3501 §6.2.1 | MAY | Authenticate with SASL EXTERNAL from TLS client credentials. | n/a: optional (MAY) and not offered. AUTH=EXTERNAL is never advertised and AUTHENTICATE EXTERNAL gets NO, before and after TLS; the session has no client-certificate identity source. Tracked in rest-mail/rest-mail-server#374. |
 
 ## RFC 3501: SELECT/EXAMINE — partial selection-state slice
 
@@ -116,7 +116,7 @@ example. Flag lists are sets; this engine orders system flags as \Seen,
 | IMAP-STORE-03 | RFC 3501 §6.4.6 | SHOULD | With .SILENT, apply the change but send no untagged FETCH, for STORE and UID STORE. | TestStoreSilent |
 | IMAP-STORE-04 | RFC 3501 §6.4.8 | MUST | An untagged FETCH caused by UID STORE includes the UID data item. | TestUIDStoreReportsUID |
 | IMAP-STORE-05 | RFC 3501 §6.4.6 | Normative | A refused backend write answers NO (§6.4.6 "store error") and leaves the session's flags for that message unchanged, for STORE and UID STORE. | TestStoreBackendFailure |
-| IMAP-STORE-06 | RFC 3501 §§2.3.2, 6.4.6, 7.1 | Normative | Keywords a client may create (PERMANENTFLAGS lists `\*`) are stored and reported back by FETCH FLAGS. | n/a: not supported yet; FlagUpdate and Message model only system flags, so keywords are accepted and dropped. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-STORE-06 | RFC 3501 §§2.3.2, 6.4.6, 7.1 | Normative | PERMANENTFLAGS lists `\*` only if keywords a client creates are stored and reported back by FETCH FLAGS. The engine stores no keywords, so it never lists `\*` and never reports an unstored keyword. | TestKeywordsNotAdvertised |
 | IMAP-STORE-07 | RFC 3501 §§6.4.6, 6.4.8, 9 | Normative | STORE and UID STORE reject malformed sequence sets with BAD before backend writes, session flag changes or FETCH responses, including .SILENT and empty mailboxes; the selection remains writable and reusable. | TestStoreInvalidSequenceSet |
 | IMAP-STORE-08 | RFC 3501 §§6.4.6, 6.4.8, 9 | Normative | Accept reversed ranges, star, lists and unsigned-32-bit sequence-set bounds; resolve sparse or nonexistent UIDs by mailbox membership and preserve normal/silent flag updates and UID replies. | TestStoreValidSequenceSet |
 | IMAP-STORE-09 | RFC 3501 §§6.4.6, 9 | Normative | STORE and UID STORE reject a malformed flag operand with BAD before backend writes, session flag changes or FETCH responses: unbalanced, nested or repeated parentheses, extra or non-SP separators, quoted strings, and flags that are not an atom with an optional leading `\` (atom-specials, `\*`, non-ASCII or control octets). | TestStoreInvalidFlagList |
@@ -138,8 +138,8 @@ Size searches similarly trust the host's nonnegative `Message.Size`, the full
 RFC822.SIZE octet count, including headers. Synthetic boundary fixtures and a
 UTF-8/quoted-printable message distinguish strict octet comparisons from decoded
 body or character counts; size searches never fetch message content. HEADER,
-CC, BCC and SENT* keys read the raw header block from the backend; their values
-are matched without MIME encoded-word or charset decoding (IMAP-SEARCH-10).
+CC, BCC and SENT* keys read the raw header block from the backend; HEADER, CC
+and BCC values are matched after RFC 2047 encoded-word decoding (IMAP-SEARCH-10).
 
 | ID | Section | Level | Requirement | Tests |
 |----|---------|-------|-------------|-------|
@@ -152,8 +152,8 @@ are matched without MIME encoded-word or charset decoding (IMAP-SEARCH-10).
 | IMAP-SEARCH-07 | RFC 3501 §6.4.4 | MUST | Accept US-ASCII; supported UTF-8 matches UTF-8 subject metadata. Unsupported CHARSET produces tagged NO with BADCHARSET and supported alternatives, without a SEARCH result. | TestSearchCharsets |
 | IMAP-SEARCH-08 | RFC 3501 §§6.4.4, 9 | Normative | Require at least one key, including inside groups; reject unknown keys, missing operands, invalid dates and unbalanced groups with tagged BAD and no partial SEARCH result. | TestSearchInvalidCriteria |
 | IMAP-SEARCH-09 | RFC 3501 §§3, 6.4 | Normative | SEARCH and UID SEARCH require a selected mailbox; authenticating alone does not permit searching. | TestSearchRequiresSelection |
-| IMAP-SEARCH-10 | RFC 3501 §6.4.4 | MUST | Decode MIME transfer encodings and encoded headers to the selected character set before searching. | n/a: not supported yet; BODY/TEXT search raw fetched bytes and header keys use host metadata without MIME/charset decoding. Tracked in rest-mail/rest-mail-server#374. |
-| IMAP-SEARCH-11 | RFC 3501 §6.4.4 | Normative | Support the KEYWORD and UNKEYWORD search keys. | n/a: not supported yet; parser rejects these keys; Message does not expose keyword flags. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-SEARCH-10 | RFC 3501 §6.4.4 | MUST | Decode MIME transfer encodings and encoded headers to the selected character set before searching: BODY/TEXT remove base64 and quoted-printable encodings in every MIME leaf, including encapsulated messages; TEXT, HEADER and SUBJECT decode RFC 2047 encoded words; UTF-8, US-ASCII and ISO-8859-1 content is compared as UTF-8. Malformed encodings, and parts in other charsets, are compared as stored. | TestSearchDecodesMIME |
+| IMAP-SEARCH-11 | RFC 3501 §6.4.4 | Normative | Support the KEYWORD and UNKEYWORD search keys with a flag-keyword atom operand. No keyword can be stored, so KEYWORD matches nothing and UNKEYWORD matches every message; a missing or non-atom operand is BAD. | TestSearchKeywordKeys |
 | IMAP-SEARCH-12 | RFC 3501 §6.4.4 | Normative | RECENT, NEW and OLD search independent Recent state. | n/a: not supported yet; RECENT approximates unseen, NEW/OLD are rejected and Message has no Recent field. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-SEARCH-13 | RFC 3501 §§6.4.4, 6.4.8, 9 | Normative | Reject malformed bare sequence-set keys and UID set operands with BAD and no partial SEARCH result or content evaluation, including inside NOT, OR and groups and in empty mailboxes; keep the session reusable. | TestSearchInvalidSequenceSet |
 | IMAP-SEARCH-14 | RFC 3501 §§6.4.4, 6.4.8, 9 | Normative | Valid reversed, star, overlapping and unsigned-32-bit boundary sets retain sequence/UID membership semantics under SEARCH and UID SEARCH, with each match returned once and no content reads or flag writes. | TestSearchValidSequenceSet |
@@ -413,7 +413,7 @@ messages. They do not prove a real store moves each message atomically.
 | IMAP-MOVE-10 | RFC 6851 §3.3 | SHOULD | Each message is either moved or unaffected, never left in both mailboxes; no message is lost. | n/a: backend responsibility; the base `Mailbox.Move` fallback and `Mover.MoveUID` are trusted per message and not verified by these dispatch fixtures. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-MOVE-11 | RFC 6851 §3.3; RFC 3501 §6.4.7 | MUST | Refuse nonexistent destinations without auto-creation and prefix NO with TRYCREATE unless creation is known impossible. | n/a: not supported yet; backend errors do not expose missing destinations, so MOVE returns generic NO. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-MOVE-12 | RFC 6851 §3.1; RFC 3501 §9 | Normative | Reject invalid sequence sets and mailbox argument syntax with BAD. | TestMoveInvalidArguments |
-| IMAP-MOVE-13 | RFC 6851 §4 | Normative | With QRESYNC enabled, report moved messages with VANISHED instead of EXPUNGE; other sessions selecting the source learn of the removal. | n/a: not supported yet; QRESYNC is not implemented and other sessions are not notified. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-MOVE-13 | RFC 6851 §4 | Normative | With QRESYNC enabled, report moved messages with VANISHED instead of EXPUNGE; other sessions selecting the source learn of the removal. | n/a: the QRESYNC half does not apply: QRESYNC is neither advertised nor enabled, so VANISHED is never due. Telling other sessions on the source mailbox about moved messages needs cross-session notification, which the engine does not have. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-MOVE-14 | RFC 4315 §§3, 4 | Normative | COPYUID contains only valid nonzero destination UIDs, with no extraneous or repeated UIDs. | TestMoveUIDInvalidBackendUIDs |
 
 A refused move stops at the failing message and reports only what the backend
