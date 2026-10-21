@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- MOVE and UID MOVE now stop at the first backend failure and return NO, still
+  sending EXPUNGE (and COPYUID) for the messages already moved, instead of
+  ignoring failures and reporting successful completion.
+- Overlapping UID MOVE sets move each message once, preventing duplicate backend
+  moves, duplicate COPYUID members and repeated EXPUNGEs that dropped an
+  unrelated message from the session view. Adds partial RFC 6851 checklist rows
+  and public-Session wire tests.
 - COPY and UID COPY now stop at the first backend failure and return NO without
   COPYUID, instead of ignoring failures and reporting successful completion.
   Earlier destination copies cannot be rolled back through the current backend

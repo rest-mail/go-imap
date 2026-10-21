@@ -204,6 +204,12 @@ names, backend errors and selection state. Errors stop dispatch and return NO
 without COPYUID. Destination rollback, storage/flag/date preservation, TRYCREATE,
 strict grammar and destination permission/UID validation remain explicit gaps.
 Earlier copies may remain after failure; the per-message API cannot undo them.
+The MOVE/UID MOVE slice checks the RFC 6851 UID MOVE response order (COPYUID,
+EXPUNGEs, tagged OK), sparse/overlapping sets, read-only refusal, destination
+names, selection state and backend errors. A failure stops the move with NO and
+reports EXPUNGE only for messages already moved. Per-message atomicity,
+TRYCREATE, strict grammar, QRESYNC VANISHED and backend UID validation remain
+explicit gaps.
 It is growing; it is not yet a full conformance claim.
 
 ## Documentation

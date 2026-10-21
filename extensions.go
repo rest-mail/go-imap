@@ -107,7 +107,8 @@ func (s *Session) copyMessages(seqNums []int, dest string) (string, error) {
 // moveMessages relocates the messages at the given sequence numbers to dest and
 // writes the full MOVE response: an untagged COPYUID resp-code first (RFC 6851,
 // when the mailbox supports UIDPLUS and the atomic [Mover]), then an untagged
-// EXPUNGE per moved message, then the tagged completion. It is shared by MOVE
+// EXPUNGE per moved message, then the tagged completion: NO if the backend
+// refused a message, which stops the move there. It is shared by MOVE
 // and UID MOVE. A backend that implements [Mover] moves atomically; otherwise
 // the move falls back to [Mailbox.Move] per message.
 func (s *Session) moveMessages(tag, cmdName string, seqNums []int, dest string) {
@@ -123,10 +124,13 @@ func (s *Session) moveMessages(tag, cmdName string, seqNums []int, dest string) 
 
 	var srcUIDs, dstUIDs []uint32
 	var doneSeq []int
+	var moveErr error
+	seen := make(map[int]bool)
 	for _, seq := range seqNums {
-		if seq < 1 || seq > len(s.messages) {
+		if seq < 1 || seq > len(s.messages) || seen[seq] {
 			continue
 		}
+		seen[seq] = true
 		msg := s.messages[seq-1]
 		var newUID uint32
 		var err error
@@ -136,8 +140,11 @@ func (s *Session) moveMessages(tag, cmdName string, seqNums []int, dest string) 
 			err = s.mailbox.Move(msg.UID, dest)
 		}
 		if err != nil {
+			// Stop at the first failure (RFC 6851 §3.3): the messages already
+			// moved have left the source, so they are still expunged below.
 			slog.Warn("imap: move failed", "uid", msg.UID, "error", err)
-			continue
+			moveErr = err
+			break
 		}
 		srcUIDs = append(srcUIDs, msg.UID)
 		dstUIDs = append(dstUIDs, newUID)
@@ -164,6 +171,10 @@ func (s *Session) moveMessages(tag, cmdName string, seqNums []int, dest string) 
 	}
 	if s.selected != nil {
 		s.selected.total = int64(len(s.messages))
+	}
+	if moveErr != nil {
+		s.tagged(tag, "NO", cmdName+" failed")
+		return
 	}
 	s.tagged(tag, "OK", cmdName+" completed")
 }
