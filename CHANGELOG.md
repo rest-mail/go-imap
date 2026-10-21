@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- ENVELOPE address personal names, mailboxes and hosts now use counted
+  literals for 8-bit octets and CR/LF decoded from RFC 2047 encoded words,
+  instead of placing them in quoted strings where a decoded CRLF could inject
+  a response line. Applies to top-level and MESSAGE/RFC822 envelopes. Adds
+  checked RFC 3501 row IMAP-ENV-13 with public-Session wire tests.
+
 - BODY/BODYSTRUCTURE MIME strings now use counted literals for 8-bit and
   decoded CRLF values instead of placing those octets in quoted strings.
   Empty content-type and disposition parameter values remain empty strings
