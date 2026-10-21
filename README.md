@@ -227,6 +227,11 @@ malformed flag-list or argument separator receives BAD before the continuation. 
 atomicity, nonexistent destinations/TRYCREATE, Recent/Deleted/keywords, default dates
 and the remaining grammar validation remain explicit gaps. A mailbox name sent as a
 synchronizing or LITERAL+ literal is accepted before the message literal.
+Unquoted mailbox names require RFC 3501 ASTRING-CHAR octets: controls, non-ASCII
+octets, wildcards and quoted-specials receive BAD before a continuation or
+backend call. Checked wire tests enumerate all octets except CR/LF framing,
+including accepted `]`, `}` and `+`, and cover flags, both literal modes and
+pipelined payload refusal.
 The command-argument literal slice checks individual/aggregate size refusal,
 assembled-command limits, overlong continuation lines and accepted LOGIN framing.
 Ambiguous refusals send BYE and end the session; synchronizing refusals and
