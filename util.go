@@ -379,6 +379,58 @@ func validSeqNumber(n string) bool {
 	return err == nil
 }
 
+// parseSetMailbox splits COPY/MOVE arguments into a sequence-set and a
+// destination mailbox (RFC 3501 §§6.4.7, 9; RFC 6851 §3.1). problem is empty
+// on success, otherwise the reason for a BAD: a malformed set, a malformed
+// astring, or text after the mailbox. Literal mailboxes arrive here already
+// spliced in as quoted-strings by quoteLiteral.
+func parseSetMailbox(args string) (set, mailbox, problem string) {
+	set, rest, _ := strings.Cut(args, " ")
+	if !validSequenceSet(set) {
+		return "", "", "Invalid sequence set"
+	}
+	mailbox, after, ok := parseAstring(rest)
+	if !ok || !validAstring(rest[:len(rest)-len(after)]) {
+		return "", "", "Invalid mailbox name"
+	}
+	if after != "" {
+		return "", "", "Unexpected arguments after mailbox name"
+	}
+	return set, mailbox, ""
+}
+
+// validAstring reports whether s is exactly one RFC 3501 §9 astring: an atom of
+// ASTRING-CHARs or a quoted-string whose only escapes are \" and \\. NUL is
+// refused in both forms. Octets above 0x7F are let through a quoted-string,
+// because a spliced literal carries them there.
+func validAstring(s string) bool {
+	if s == "" {
+		return false
+	}
+	if s[0] != '"' {
+		for i := 0; i < len(s); i++ {
+			if c := s[i]; c <= 0x20 || c >= 0x7f || strings.IndexByte(`(){%*"\`, c) >= 0 {
+				return false
+			}
+		}
+		return true
+	}
+	for i := 1; i < len(s); i++ {
+		switch s[i] {
+		case 0x00:
+			return false
+		case '\\':
+			if i+1 >= len(s) || (s[i+1] != '"' && s[i+1] != '\\') {
+				return false
+			}
+			i++
+		case '"':
+			return i == len(s)-1
+		}
+	}
+	return false
+}
+
 // parseSequenceSet parses an IMAP sequence set like "1", "1:5", "1,3,5", "1:*".
 func parseSequenceSet(seqStr string, total int) []int {
 	if total == 0 {

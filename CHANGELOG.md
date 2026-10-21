@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- COPY, UID COPY, MOVE and UID MOVE now answer BAD before dispatch when the
+  sequence-set does not match the RFC 3501 §9 grammar, the destination is not a
+  well-formed astring (bad quoted escapes, NUL, list wildcards or other
+  atom-specials, non-ASCII atoms) or text follows it. Malformed sets used to be
+  skipped silently and could copy or move the wrong messages. Adds checked
+  RFC 3501/6851 wire tests.
+
 - UID EXPUNGE now rejects a UID set that does not match the RFC 3501 §9
   sequence-set grammar (zero, leading zeros, values above 2^32-1, empty items
   or bounds, trailing arguments) with BAD before deleting anything, instead of
