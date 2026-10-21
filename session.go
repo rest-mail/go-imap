@@ -1922,8 +1922,8 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 		return
 	}
 	folder, rest, ok := parseAstring(args)
-	if !ok || folder == "" {
-		s.tagged(tag, "BAD", "Missing mailbox name")
+	if !ok || folder == "" || (strings.HasPrefix(args, `"`) && !validAppendQuotedMailbox(args[:len(args)-len(rest)])) {
+		s.tagged(tag, "BAD", "Invalid mailbox name")
 		return
 	}
 	if rest, ok = cutSingleSP(rest); !ok {

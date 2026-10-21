@@ -607,6 +607,31 @@ func parseAstring(s string) (val, rest string, ok bool) {
 	return s, "", true
 }
 
+// validAppendQuotedMailbox checks RFC 3501 §9's quoted grammar before APPEND
+// decodes the mailbox with parseAstring. Only DQUOTE and backslash may be
+// escaped; CHAR excludes NUL and 8-bit octets, and TEXT-CHAR excludes CR/LF.
+func validAppendQuotedMailbox(token string) bool {
+	if len(token) < 2 || token[0] != '"' || token[len(token)-1] != '"' {
+		return false
+	}
+	for i := 1; i < len(token)-1; i++ {
+		c := token[i]
+		if c == 0 || c == '\r' || c == '\n' || c >= 0x80 {
+			return false
+		}
+		switch c {
+		case '\\':
+			i++
+			if i >= len(token)-1 || (token[i] != '\\' && token[i] != '"') {
+				return false
+			}
+		case '"':
+			return false
+		}
+	}
+	return true
+}
+
 // cutSingleSP removes the one SP that separates two command arguments (RFC 3501
 // §9). It reports false when the separator is missing or doubled.
 func cutSingleSP(s string) (string, bool) {
