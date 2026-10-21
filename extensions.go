@@ -63,24 +63,27 @@ func (s *Session) uidValidity(folder string) (uint32, bool) {
 // copyMessages copies the messages at the given sequence numbers into dest and
 // returns a COPYUID response code body (without the surrounding brackets) when
 // the mailbox implements [UIDPlusMailbox], or "" otherwise. It is shared by COPY
-// and UID COPY.
-func (s *Session) copyMessages(seqNums []int, dest string) string {
+// and UID COPY. It stops at the first backend failure and returns no COPYUID
+// on failure. The per-message backend API cannot roll back earlier copies.
+func (s *Session) copyMessages(seqNums []int, dest string) (string, error) {
 	// "INBOX" is case-insensitive (RFC 3501 §5.1): fold an any-case destination to
 	// the one real INBOX. Shared by COPY and UID COPY.
 	dest = canonicalizeInbox(dest)
 	up, uidPlus := s.mailbox.(UIDPlusMailbox)
 	var srcUIDs, dstUIDs []uint32
+	seen := make(map[int]bool)
 
 	for _, seq := range seqNums {
-		if seq < 1 || seq > len(s.messages) {
+		if seq < 1 || seq > len(s.messages) || seen[seq] {
 			continue
 		}
+		seen[seq] = true
 		msg := s.messages[seq-1]
 		if uidPlus {
 			newUID, err := up.CopyUID(msg.UID, dest)
 			if err != nil {
 				slog.Warn("imap: copy failed", "uid", msg.UID, "error", err)
-				continue
+				return "", err
 			}
 			srcUIDs = append(srcUIDs, msg.UID)
 			dstUIDs = append(dstUIDs, newUID)
@@ -88,16 +91,17 @@ func (s *Session) copyMessages(seqNums []int, dest string) string {
 		}
 		if err := s.mailbox.Copy(msg.UID, dest); err != nil {
 			slog.Warn("imap: copy failed", "uid", msg.UID, "error", err)
+			return "", err
 		}
 	}
 
 	if uidPlus && len(dstUIDs) > 0 {
 		if v, ok := s.uidValidity(dest); ok {
 			return "COPYUID " + strconv.FormatUint(uint64(v), 10) + " " +
-				joinUIDs(srcUIDs) + " " + joinUIDs(dstUIDs)
+				joinUIDs(srcUIDs) + " " + joinUIDs(dstUIDs), nil
 		}
 	}
-	return ""
+	return "", nil
 }
 
 // moveMessages relocates the messages at the given sequence numbers to dest and
