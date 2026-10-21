@@ -196,6 +196,10 @@ func (s *Session) handleUIDExpunge(tag, args string) {
 		s.tagged(tag, "BAD", "UID EXPUNGE requires a uid set")
 		return
 	}
+	if !validSequenceSet(uidSetStr) {
+		s.tagged(tag, "BAD", "Invalid uid set")
+		return
+	}
 
 	targets := make(map[int]bool)
 	for _, seq := range s.parseUIDSet(uidSetStr) {

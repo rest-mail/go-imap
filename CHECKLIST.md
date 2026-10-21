@@ -204,7 +204,7 @@ response codes are not covered by this slice.
 | IMAP-UIDEXPUNGE-02 | RFC 4315 §2.1 | Normative | Backend expunge failure returns NO; successful removals are reported and failed messages remain marked for retry. | TestExpungeBackendFailure |
 | IMAP-UIDEXPUNGE-03 | RFC 4315 §2.1; RFC 3501 §6.3.2 | Normative | UID EXPUNGE cannot remove messages from a mailbox selected read-only by EXAMINE. | TestReadOnlyCloseAndExpunge |
 | IMAP-UIDEXPUNGE-04 | RFC 4315 §§1, 2.1 | Normative | Without UIDPLUS support or the required UID set, UID EXPUNGE receives BAD without changing deletion marks or messages. | TestUIDExpungeCapabilityAndMissingSet |
-| IMAP-UIDEXPUNGE-05 | RFC 4315 §§2.1, 4 | Normative | Invalid UID sequence sets receive BAD before deletion. | n/a: not supported yet; parseUIDSet ignores numeric errors and accepts malformed sets. Strict grammar and boundary checks remain required. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-UIDEXPUNGE-05 | RFC 4315 §§2.1, 4; RFC 3501 §9 | Normative | Invalid UID sequence sets (zero, leading zeros, values above 2^32-1, empty items or range bounds, extra separators or trailing arguments) receive BAD before deletion; valid reversed, `*` and maximum-UID sets are still accepted. | TestUIDExpungeInvalidSet |
 
 ## RFC 3501: APPEND — partial message-literal slice
 
