@@ -296,15 +296,16 @@ func buildAddressList(list string) string {
 	return b.String()
 }
 
-// quoteString wraps a string in IMAP quotes, or returns NIL for empty.
+// quoteString encodes an IMAP nstring (RFC 3501 §9): NIL for empty, otherwise
+// the same quoted-or-literal framing as encodeMailboxName. Envelope address
+// components are decoded by net/mail, so an RFC 2047 personal name can carry
+// 8-bit octets or even CR/LF; those must travel as a counted literal rather than
+// break the quoted string or inject response lines.
 func quoteString(s string) string {
 	if s == "" {
 		return "NIL"
 	}
-	// Escape backslashes and double quotes
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `"`, `\"`)
-	return `"` + s + `"`
+	return encodeMailboxName(s)
 }
 
 // encodeMailboxName encodes a mailbox name for output in a response as an IMAP

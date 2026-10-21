@@ -112,6 +112,28 @@ func TestEnvelopeScalarStrings(t *testing.T) {
 		"(NIL {5} NIL NIL NIL NIL NIL NIL NIL {16})", "café", "<é@example.com>")
 }
 
+// TestEnvelopeAddressStrings frames each address component independently:
+// quoted-specials stay escaped, while 8-bit names, mailboxes and hosts, and a
+// CRLF decoded from an RFC 2047 personal name, use counted literals so they
+// cannot break the quoted string or inject a response line.
+//
+// checklist: IMAP-ENV-03 IMAP-ENV-05 IMAP-ENV-13
+func TestEnvelopeAddressStrings(t *testing.T) {
+	for _, tc := range []struct {
+		name, header, list string
+		literals           []string
+	}{
+		{"quoted-specials", `To: "a \"b\" \\c" <x@example.com>`, `(("a \"b\" \\c" NIL "x" "example.com"))`, nil},
+		{"encoded-word name", "To: =?UTF-8?Q?J=C3=B6rg?= <j@example.com>", `(({5} NIL "j" "example.com"))`, []string{"Jörg"}},
+		{"utf-8 mailbox and host", "To: jörg@exämple.com", `((NIL NIL {5} {12}))`, []string{"jörg", "exämple.com"}},
+		{"decoded CRLF name", "To: =?UTF-8?Q?a=0D=0A*_1_BYE?= <x@example.com>", `(({10} NIL "x" "example.com"))`, []string{"a\r\n* 1 BYE"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			requireEnvelope(t, tc.header+"\r\n\r\nbody", "(NIL NIL NIL NIL NIL "+tc.list+" NIL NIL NIL NIL)", tc.literals...)
+		})
+	}
+}
+
 // TestEnvelopeReadOnlyAndSharedLoad checks metadata has no Seen side effects
 // under EXAMINE, and repeated ENVELOPE items share one raw-message read.
 //
