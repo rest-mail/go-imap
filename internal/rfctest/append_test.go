@@ -19,6 +19,44 @@ type appendRecord struct {
 	date   time.Time
 }
 
+// RFC 3501 §9 defines a message literal as CHAR8 octets, which exclude NUL.
+// The complete command has been consumed when validation runs, so a rejected
+// message must leave the next command framed correctly.
+//
+// checklist: IMAP-APPEND-27
+func TestAppendRejectsNULMessageOctet(t *testing.T) {
+	for _, raw := range []string{"\x00abc", "ab\x00cd", "abc\x00"} {
+		for _, nonSync := range []bool{false, true} {
+			t.Run(fmt.Sprintf("nul=%d/nonSync=%t", strings.IndexByte(raw, 0), nonSync), func(t *testing.T) {
+				box := &appendMailbox{}
+				c := selectionClient(t, box)
+				marker := fmt.Sprintf("{%d}", len(raw))
+				if nonSync {
+					marker = fmt.Sprintf("{%d+}", len(raw))
+				}
+				if _, err := fmt.Fprintf(c.conn, "A1 APPEND INBOX %s\r\n", marker); err != nil {
+					t.Fatal(err)
+				}
+				if !nonSync {
+					if line := c.line(); !strings.HasPrefix(line, "+ ") {
+						t.Fatalf("continuation: %q", line)
+					}
+				}
+				if _, err := io.WriteString(c.conn, raw+"\r\nN1 NOOP\r\n"); err != nil {
+					t.Fatal(err)
+				}
+				if line := c.line(); !strings.HasPrefix(line, "A1 BAD ") {
+					t.Fatalf("NUL append: %q", line)
+				}
+				requireOK(t, c.line(), "N1")
+				if len(box.records) != 0 {
+					t.Fatalf("NUL reached backend: %+v", box.records)
+				}
+			})
+		}
+	}
+}
+
 type appendMailbox struct {
 	mailbox
 	records  []appendRecord

@@ -2,6 +2,7 @@ package imap
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -2041,6 +2042,13 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 	if string(terminator[:]) != "\r\n" {
 		s.tagged(tag, "BAD", "Expected CRLF after message literal")
 		return true
+	}
+	// RFC 3501 §9 literal payloads are CHAR8 (%x01-ff). After the counted
+	// octets and terminator have been consumed, this refusal leaves the next
+	// command boundary intact, including for a non-synchronizing literal.
+	if bytes.IndexByte(data, 0) >= 0 {
+		s.tagged(tag, "BAD", "NUL in message literal")
+		return false
 	}
 
 	var err error
