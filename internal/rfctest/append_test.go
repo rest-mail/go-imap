@@ -57,6 +57,59 @@ func TestAppendRejectsNULMessageOctet(t *testing.T) {
 	}
 }
 
+// RFC 3501 §9 quoted-specials permits escaping only DQUOTE and backslash.
+// A malformed mailbox is refused before the message-literal continuation.
+//
+// checklist: IMAP-APPEND-28
+func TestAppendQuotedMailboxGrammar(t *testing.T) {
+	for _, tc := range []struct{ wire, folder string }{
+		{`"with space"`, "with space"},
+		{`"a\"b"`, `a"b`},
+		{`"a\\b"`, `a\b`},
+	} {
+		t.Run(tc.wire, func(t *testing.T) {
+			box := &appendMailbox{}
+			c := selectionClient(t, box)
+			_, tagged := appendCommand(t, c, tc.wire, "msg")
+			requireOK(t, tagged, "A1")
+			if len(box.records) != 1 || box.records[0].folder != tc.folder {
+				t.Fatalf("folder: %+v, want %q", box.records, tc.folder)
+			}
+		})
+	}
+	for _, wire := range []string{`"a\qb"`, `"a\ b"`, `"a\`, `"a"b"`, "\"a\x00b\"", "\"a\x80b\""} {
+		t.Run(fmt.Sprintf("invalid/%q", wire), func(t *testing.T) {
+			box := &appendMailbox{}
+			c := selectionClient(t, box)
+			_, tagged := c.command("A1", "APPEND %s {3}", wire)
+			if !strings.HasPrefix(tagged, "A1 BAD ") {
+				t.Fatalf("invalid mailbox: %q", tagged)
+			}
+			if len(box.records) != 0 {
+				t.Fatalf("invalid mailbox stored: %+v", box.records)
+			}
+			_, tagged = c.command("N1", "NOOP")
+			requireOK(t, tagged, "N1")
+		})
+	}
+	t.Run("non-synchronizing refusal", func(t *testing.T) {
+		box := &appendMailbox{}
+		c := selectionClient(t, box)
+		if _, err := io.WriteString(c.conn, "A1 APPEND \"a\\qb\" {3+}\r\nabc\r\n"); err != nil {
+			t.Fatal(err)
+		}
+		if line := c.line(); !strings.HasPrefix(line, "A1 BAD ") {
+			t.Fatalf("invalid mailbox: %q", line)
+		}
+		if line := c.line(); !strings.HasPrefix(line, "* BYE ") {
+			t.Fatalf("unread literal refusal: %q", line)
+		}
+		if len(box.records) != 0 {
+			t.Fatalf("invalid mailbox stored: %+v", box.records)
+		}
+	})
+}
+
 type appendMailbox struct {
 	mailbox
 	records  []appendRecord

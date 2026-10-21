@@ -14,6 +14,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   backend cannot report one. The copy or move itself still succeeds. Checked
   wire tests cover IMAP-COPY-16 and IMAP-MOVE-14.
 
+- APPEND now validates quoted mailbox names against RFC 3501's escape and
+  character grammar before inviting the message literal. Invalid escapes,
+  NUL and 8-bit octets receive BAD; escaped quotes and backslashes still
+  deliver to their decoded mailbox names.
+
 - APPEND now rejects NUL inside a counted message literal with BAD before
   calling the backend. RFC 3501's CHAR8 grammar excludes NUL; checked wire
   tests cover both literal modes and keep the following command synchronized.
