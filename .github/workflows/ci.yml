@@ -48,3 +48,6 @@ jobs:
 
       - name: Fuzz Content-Type comments
         run: go test -run='^$' -fuzz='^FuzzContentTypeComments$' -fuzztime=30s .
+
+      - name: Fuzz FETCH partial ranges
+        run: go test -run='^$' -fuzz='^FuzzBodyPartial$' -fuzztime=30s .

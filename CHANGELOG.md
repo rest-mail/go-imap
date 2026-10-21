@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- FETCH and UID FETCH now reject malformed BODY/BODY.PEEK partial ranges with
+  BAD before reading content, changing Seen or sending a FETCH response, even
+  with no matching messages. Requests require `<origin.count>` with unsigned
+  32-bit operands and a nonzero count without leading zeroes, per RFC 3501 §9.
+  Response-only `<origin>` forms and signed/overflowing operands are rejected.
+  Valid ranges keep their exact octets, truncation and origin-only response
+  labels, including on 32-bit hosts. Checked wire tests and a grammar-based
+  parser fuzz target cover this slice; other FETCH grammar gaps remain.
+
 - STATUS now validates its complete mailbox/item-list syntax before reading
   metadata. Trailing arguments, malformed astrings and doubled, leading,
   trailing or non-SP separators receive BAD instead of being ignored or
