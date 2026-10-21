@@ -18,8 +18,8 @@ The store surface is deliberately small. `Backend` has one method,
 `Authenticate`; the `Mailbox` it returns lists folders, returns a folder's
 messages, and fetches, stores, moves, copies, deletes and appends by UID. The
 server caches the message slice for the selected folder and derives sequence
-numbers, flags, `ENVELOPE` and `SEARCH` results from it, calling `Fetch` only
-when a body is requested. Folders are implicit — there is no folder-management
+numbers, flags and `SEARCH` results from it. It calls `Fetch` for raw content,
+including `ENVELOPE`, whose fields come from the stored message headers. Folders are implicit — there is no folder-management
 method, so a folder exists once a message names it.
 
 Richer extensions light up only when the concrete backend opts in through the
@@ -215,6 +215,11 @@ LOGINDISABLED until TLS, changed capabilities afterwards, no implicit
 authentication, BAD for arguments or a repeated STARTTLS, discarded pipelined
 cleartext and a closed session after a failed negotiation. Cleartext LOGIN with
 no TLS config and SASL EXTERNAL remain explicit gaps.
+The top-level ENVELOPE slice checks the RFC 3501 §8 example, ten-field order,
+header values over cached summaries, missing/empty headers, Sender/Reply-To
+defaults, read-only metadata, and quoted/literal scalar framing. Groups, source
+routes, literal address components, malformed/binary header policy and nested
+MESSAGE/RFC822 envelopes remain explicit gaps.
 It is growing; it is not yet a full conformance claim.
 
 ## Documentation
