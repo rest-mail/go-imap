@@ -320,7 +320,7 @@ store preserves content/metadata or atomically copies a whole set.
 | IMAP-COPY-13 | RFC 3501 §6.4.7 | MUST | Refuse nonexistent destinations without auto-creation and prefix NO with TRYCREATE unless creation is known impossible. | n/a: not supported yet; backend errors expose neither missing destinations nor creation permissions, so COPY returns generic NO. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-COPY-14 | RFC 3501 §§6.4.7, 9 | Normative | Reject invalid sequence sets and mailbox argument syntax with BAD. | TestCopyInvalidArguments |
 | IMAP-COPY-15 | RFC 4315 §§3, 5 | SHOULD NOT | Suppress COPYUID for a destination the user cannot SELECT/EXAMINE and for UIDNOTSTICKY stores. | n/a: not supported yet; backend API exposes no destination readability or UIDNOTSTICKY marker. Hosts can suppress metadata by returning zero/error UIDValidity, but that policy is not independently checked here. Tracked in rest-mail/rest-mail-server#374. |
-| IMAP-COPY-16 | RFC 4315 §§3, 4 | Normative | COPYUID contains only valid nonzero destination UIDs, with no extraneous or repeated UIDs. | n/a: not supported yet for invalid backend results; CopyUID return values are trusted, including zero/repeated UIDs. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-COPY-16 | RFC 4315 §§3, 4 | Normative | COPYUID contains only valid nonzero destination UIDs, with no extraneous or repeated UIDs. | TestCopyUIDInvalidBackendUIDs |
 
 This slice stops at the first backend failure and suppresses COPYUID on NO;
 earlier destination writes can remain and a retry may duplicate them. This is an
@@ -350,7 +350,7 @@ messages. They do not prove a real store moves each message atomically.
 | IMAP-MOVE-11 | RFC 6851 §3.3; RFC 3501 §6.4.7 | MUST | Refuse nonexistent destinations without auto-creation and prefix NO with TRYCREATE unless creation is known impossible. | n/a: not supported yet; backend errors do not expose missing destinations, so MOVE returns generic NO. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-MOVE-12 | RFC 6851 §3.1; RFC 3501 §9 | Normative | Reject invalid sequence sets and mailbox argument syntax with BAD. | TestMoveInvalidArguments |
 | IMAP-MOVE-13 | RFC 6851 §4 | Normative | With QRESYNC enabled, report moved messages with VANISHED instead of EXPUNGE; other sessions selecting the source learn of the removal. | n/a: not supported yet; QRESYNC is not implemented and other sessions are not notified. Tracked in rest-mail/rest-mail-server#374. |
-| IMAP-MOVE-14 | RFC 4315 §§3, 4 | Normative | COPYUID contains only valid nonzero destination UIDs, with no extraneous or repeated UIDs. | n/a: not supported yet for invalid backend results; MoveUID return values are trusted. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-MOVE-14 | RFC 4315 §§3, 4 | Normative | COPYUID contains only valid nonzero destination UIDs, with no extraneous or repeated UIDs. | TestMoveUIDInvalidBackendUIDs |
 
 A refused move stops at the failing message and reports only what the backend
 actually moved. No rollback is attempted: RFC 6851 permits partial moves as long

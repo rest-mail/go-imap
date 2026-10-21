@@ -174,6 +174,7 @@ type UIDPlusMailbox interface {
 	AppendUID(dest string, f FlagUpdate, raw []byte) (uid uint32, err error)
 	// CopyUID duplicates the message named by srcUID into dest exactly like
 	// [Mailbox.Copy] and returns the UID assigned to the copy, for COPYUID.
+	// COPYUID is omitted when any returned UID is zero or repeats in the command.
 	CopyUID(srcUID uint32, dest string) (uid uint32, err error)
 }
 
@@ -188,7 +189,8 @@ type UIDPlusMailbox interface {
 type Mover interface {
 	// MoveUID relocates the message named by srcUID to dest as one atomic
 	// operation and returns the UID assigned to it in dest, for COPYUID. A
-	// backend that cannot report the new UID may return 0.
+	// backend that cannot report the new UID may return 0; COPYUID is then
+	// omitted, as it is when a returned UID repeats in the command.
 	MoveUID(srcUID uint32, dest string) (uid uint32, err error)
 }
 

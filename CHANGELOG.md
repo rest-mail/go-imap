@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- COPY, UID COPY, MOVE and UID MOVE now omit COPYUID when the backend reports
+  a zero or repeated destination UID, instead of quoting it. RFC 4315 allows
+  only nonzero, distinct UIDs, and `Mover.MoveUID` may return 0 when the
+  backend cannot report one. The copy or move itself still succeeds. Checked
+  wire tests cover IMAP-COPY-16 and IMAP-MOVE-14.
+
 - APPEND now validates quoted mailbox names against RFC 3501's escape and
   character grammar before inviting the message literal. Invalid escapes,
   NUL and 8-bit octets receive BAD; escaped quotes and backslashes still

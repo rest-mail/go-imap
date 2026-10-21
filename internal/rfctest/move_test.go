@@ -29,6 +29,7 @@ type uidMoveMailbox struct {
 	*moveMailbox
 	validity    uint32
 	validityErr error
+	assigned    []uint32 // destination UIDs to report in call order; nil counts from 1202
 }
 
 func (m *uidMoveMailbox) UIDValidity(string) (uint32, error) { return m.validity, m.validityErr }
@@ -39,6 +40,9 @@ func (*uidMoveMailbox) CopyUID(uint32, string) (uint32, error) { return 0, error
 func (m *uidMoveMailbox) MoveUID(uid uint32, dest string) (uint32, error) {
 	if err := m.Move(uid, dest); err != nil {
 		return 0, err
+	}
+	if m.assigned != nil {
+		return m.assigned[len(m.calls)-1], nil
 	}
 	return 1201 + uint32(len(m.calls)), nil
 }
@@ -308,4 +312,48 @@ func TestMoveInvalidArguments(t *testing.T) {
 	requireOK(t, tagged, "M1")
 	requireExactly(t, lines, "* 2 EXPUNGE")
 	requireCopies(t, m.copyMailbox, `Arch\ive`, 304)
+}
+
+// TestMoveUIDInvalidBackendUIDs omits COPYUID when MoveUID reports a zero UID
+// (allowed when the backend cannot report one) or repeats a UID. The move
+// still succeeds and the EXPUNGEs are still sent.
+// checklist: IMAP-MOVE-14
+func TestMoveUIDInvalidBackendUIDs(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		assigned []uint32
+		copyUID  bool
+	}{
+		{"valid", []uint32{1202, 1203, 1204}, true},
+		{"unreported", []uint32{0, 0, 0}, false},
+		{"zero middle", []uint32{1202, 0, 1204}, false},
+		{"repeated", []uint32{1202, 1203, 1202}, false},
+	} {
+		for _, command := range []string{"MOVE 2:4 Archive", "UID MOVE 304:320 Archive"} {
+			t.Run(tc.name+"/"+command, func(t *testing.T) {
+				m := &uidMoveMailbox{moveMailbox: newMoveMailbox(), validity: 38505, assigned: tc.assigned}
+				c := expungeClient(t, m)
+				lines, tagged := c.command("M1", "%s", command)
+				requireOK(t, tagged, "M1")
+				want := []string{"* 4 EXPUNGE", "* 3 EXPUNGE", "* 2 EXPUNGE"}
+				if tc.copyUID {
+					want = append([]string{"* OK [COPYUID 38505 304,319,320 1202,1203,1204]"}, want...)
+				}
+				requireExactly(t, lines, want...)
+				requireCopies(t, m.copyMailbox, "Archive", 304, 319, 320)
+				requireRemaining(t, c, 300)
+			})
+		}
+	}
+
+	// A partial move quotes only the UIDs that moved, and validates only those.
+	m := &uidMoveMailbox{moveMailbox: newMoveMailbox(), validity: 38505, assigned: []uint32{0, 1203}}
+	m.fail = 319
+	c := expungeClient(t, m)
+	lines, tagged := c.command("M1", "MOVE 2:4 Archive")
+	if !strings.HasPrefix(tagged, "M1 NO ") {
+		t.Fatalf("refused move: %q, want NO", tagged)
+	}
+	requireExactly(t, lines, "* 2 EXPUNGE")
+	requireRemaining(t, c, 300, 319, 320)
 }
