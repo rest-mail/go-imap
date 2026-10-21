@@ -197,8 +197,13 @@ The FETCH slice checks literal octets, header subsets, partial ranges, RFC822
 aliases, metadata/macros, UID replies, backend refusal and read-only Seen flags,
 including the §§6.4.5/6.4.8 examples. FETCH and UID FETCH reject malformed
 sequence sets with BAD before reading content or changing Seen, while accepting
-reversed ranges, star and 32-bit bounds. Numeric MIME sections and strict
-data-item validation remain unsupported.
+reversed ranges, star and 32-bit bounds. BODY/BODY.PEEK partial ranges require
+`<origin.count>` with an unsigned 32-bit origin and a nonzero 32-bit count
+(without leading zeroes in the count). Malformed ranges receive BAD before any
+item is dispatched, including for empty/nonmatching sets. Checked wire tests
+cover boundaries, recovery and Seen behavior; a grammar-based fuzz target runs
+for 30 seconds in CI. Numeric MIME sections and other strict data-item
+validation remain unsupported.
 The EXPUNGE/CLOSE slice checks removal, sequence renumbering, retry after backend
 refusal, arguments and selection state, including the RFC 3501 examples. A
 partial RFC 4315 UID EXPUNGE slice checks UID filtering, preserved non-target

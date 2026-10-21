@@ -998,19 +998,37 @@ func bodySection(item string, loadRaw func() (string, bool)) (name, payload stri
 	return name, payload, peek, true
 }
 
-// bodyPartial is the parsed "<start.count>" partial specifier of a FETCH body
-// item (RFC 3501 §6.4.5). count is -1 when only a start was given (accepted
-// leniently — the request grammar normally requires both), meaning "return to
-// the end of the section".
+// validFetchPartials checks every BODY section suffix before any message is
+// read or changed. In particular an invalid later item cannot follow an earlier
+// BODY[] read/Seen update, and an empty UID result cannot hide invalid syntax.
+// Other FETCH data-item and section grammar is not validated here.
+func validFetchPartials(tokens []string) bool {
+	for _, item := range tokens {
+		up := strings.ToUpper(item)
+		if !strings.HasPrefix(up, "BODY[") && !strings.HasPrefix(up, "BODY.PEEK[") {
+			continue
+		}
+		rb := strings.LastIndexByte(item, ']')
+		if rb < 0 {
+			return false
+		}
+		if _, ok := parseBodyPartial(item[rb+1:]); !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// bodyPartial is the RFC 3501 §9 request suffix "<number.nz-number>".
+// Both operands are unsigned 32-bit values, and count must be nonzero.
 type bodyPartial struct {
-	start int
-	count int
+	start uint32
+	count uint32
 }
 
 // parseBodyPartial parses the text following a body section's closing ']'. An
-// empty rem means no partial was requested (nil, true — not an error). A
-// well-formed "<start>" or "<start.count>" yields the parsed spec. Anything else
-// is malformed (nil, false).
+// empty rem means no partial was requested. The response-only "<start>" form
+// is not a valid request; nz-number also excludes leading zeroes in the count.
 func parseBodyPartial(rem string) (*bodyPartial, bool) {
 	if rem == "" {
 		return nil, true
@@ -1019,31 +1037,31 @@ func parseBodyPartial(rem string) (*bodyPartial, bool) {
 		return nil, false
 	}
 	startStr, countStr, hasCount := strings.Cut(rem[1:len(rem)-1], ".")
-	start, err := strconv.Atoi(startStr)
-	if err != nil || start < 0 {
+	if !hasCount || countStr == "" || countStr[0] < '1' || countStr[0] > '9' {
 		return nil, false
 	}
-	count := -1
-	if hasCount {
-		c, err := strconv.Atoi(countStr)
-		if err != nil || c < 0 {
-			return nil, false
-		}
-		count = c
+	// ParseUint's base-10 grammar rejects signs, whitespace and non-digits.
+	start, err := strconv.ParseUint(startStr, 10, 32)
+	if err != nil {
+		return nil, false
 	}
-	return &bodyPartial{start: start, count: count}, true
+	count, err := strconv.ParseUint(countStr, 10, 32)
+	if err != nil {
+		return nil, false
+	}
+	return &bodyPartial{start: uint32(start), count: uint32(count)}, true
 }
 
 // partialOctets returns at most count octets of s beginning at zero-based octet
 // start (RFC 3501 §6.4.5): fewer if the section is shorter, empty if start is at
-// or past the end. count < 0 means "to the end of the section".
-func partialOctets(s string, start, count int) string {
-	if start >= len(s) {
+// or past the end. Compare before converting to int, including on 32-bit hosts.
+func partialOctets(s string, start, count uint32) string {
+	if uint64(start) >= uint64(len(s)) {
 		return ""
 	}
-	s = s[start:]
-	if count >= 0 && count < len(s) {
-		s = s[:count]
+	s = s[int(start):]
+	if uint64(count) < uint64(len(s)) {
+		s = s[:int(count)]
 	}
 	return s
 }

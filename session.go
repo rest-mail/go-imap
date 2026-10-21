@@ -936,6 +936,10 @@ func (s *Session) handleFetch(tag, args string) {
 		return
 	}
 	tokens := fetchItemTokens(parts[1])
+	if !validFetchPartials(tokens) {
+		s.tagged(tag, "BAD", "Invalid FETCH body partial")
+		return
+	}
 
 	// Parse sequence numbers
 	seqNums := parseSequenceSet(seqStr, len(s.messages))
@@ -2512,6 +2516,10 @@ func (s *Session) handleUIDFetch(tag, args string) {
 		return
 	}
 	tokens := fetchItemTokens(parts[1])
+	if !validFetchPartials(tokens) {
+		s.tagged(tag, "BAD", "Invalid FETCH body partial")
+		return
+	}
 
 	seqNums := s.parseUIDSet(uidSetStr)
 
