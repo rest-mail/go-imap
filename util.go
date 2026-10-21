@@ -702,6 +702,12 @@ func validStoreFlags(s string) bool {
 	return true
 }
 
+// validFlagList reports whether s is an RFC 3501 §9 flag-list: a parenthesised,
+// possibly empty, list of flags separated by a single SP, as APPEND requires.
+func validFlagList(s string) bool {
+	return len(s) >= 2 && s[0] == '(' && s[len(s)-1] == ')' && validStoreFlags(s)
+}
+
 // extractHeaderFieldNames extracts the header field names from BODY[HEADER.FIELDS (...)].
 func extractHeaderFieldNames(dataItems string) []string {
 	// Find the parenthesized list after HEADER.FIELDS

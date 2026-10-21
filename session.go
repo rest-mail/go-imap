@@ -1929,8 +1929,11 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 	var appendFlags []string
 	rest = strings.TrimLeft(rest, " ")
 	if strings.HasPrefix(rest, "(") {
+		// No flag contains ')', so the first one closes the list. The list must be
+		// well formed and followed by SP (RFC 3501 §9); a malformed list is BAD,
+		// not an unsupported flag, and is refused before the continuation.
 		end := strings.IndexByte(rest, ')')
-		if end < 0 {
+		if end < 0 || !validFlagList(rest[:end+1]) || !strings.HasPrefix(rest[end+1:], " ") {
 			s.tagged(tag, "BAD", "Malformed flag list")
 			return
 		}
