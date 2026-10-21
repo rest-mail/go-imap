@@ -177,8 +177,11 @@ check reversed/star/32-bit boundary sets, sparse UIDs and recovery after rejecti
 flag-list syntax, out-of-range message sequence numbers and overlapping UID-set
 semantics remain unaudited.
 The SEARCH slice checks Boolean/UID criteria, calendar dates, charsets and
-errors against wire responses, including the first two §6.4.4 examples. Missing
-standard keys, MIME decoding and independent Recent search remain explicit gaps.
+errors against wire responses, including the first two §6.4.4 examples. Both
+forms reject malformed bare sequence sets and UID operands before evaluating
+content, including in Boolean/group keys and empty mailboxes; valid reversed,
+star, overlapping and unsigned-32-bit boundary sets retain membership semantics.
+Missing standard keys, MIME decoding and independent Recent search remain gaps.
 The FETCH slice checks literal octets, header subsets, partial ranges, RFC822
 aliases, metadata/macros, UID replies, backend refusal and read-only Seen flags,
 including the §§6.4.5/6.4.8 examples. FETCH and UID FETCH reject malformed
@@ -190,8 +193,7 @@ refusal, arguments and selection state, including the RFC 3501 examples. A
 partial RFC 4315 UID EXPUNGE slice checks UID filtering, preserved non-target
 marks, backend refusal, read-only operation and RFC 3501 §9 UID-set syntax
 (malformed sets receive BAD before deletion). CLOSE deletion failures and
-persistent Deleted flags remain explicit gaps; strict UID-set validation for
-UID SEARCH is not yet audited.
+persistent Deleted flags remain explicit gaps.
 The APPEND slice checks the §6.3.11 example, exact message octets, supported
 flags/dates, selected-mailbox notifications, backend refusal and terminal literal
 framing, including the accepted non-synchronizing form. Early refusal of a

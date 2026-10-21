@@ -169,8 +169,8 @@ func TestSearchCharsets(t *testing.T) {
 }
 
 // TestSearchInvalidCriteria proves parse failures produce no partial results
-// and do not prevent a later valid search. Sequence and quoted-string grammar
-// edge cases remain outside this partial inventory.
+// and do not prevent a later valid search. Quoted-string grammar edge cases
+// remain outside this partial inventory.
 //
 // checklist: IMAP-SEARCH-08
 func TestSearchInvalidCriteria(t *testing.T) {

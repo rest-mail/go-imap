@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- SEARCH and UID SEARCH now reject malformed bare sequence-set keys and UID
+  operands with BAD before evaluating content, including inside NOT, OR and
+  parenthesized groups. Invalid list/range members previously could be ignored
+  or resolved as zero. Adds checked RFC 3501 wire tests for rejection, session
+  recovery and valid reversed/star/overlapping/unsigned-32-bit boundary sets.
 - STORE and UID STORE now reject malformed sequence sets with BAD before
   changing flags, rather than silently applying valid portions of malformed
   lists/ranges. Checked RFC 3501 wire tests prove rejection without backend or

@@ -117,10 +117,13 @@ offsets that cross UTC midnight. Hosts must supply that metadata correctly.
 | IMAP-SEARCH-10 | RFC 3501 §6.4.4 | MUST | Decode MIME transfer encodings and encoded headers to the selected character set before searching. | n/a: not supported yet; BODY/TEXT search raw fetched bytes and header keys use host metadata without MIME/charset decoding. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-SEARCH-11 | RFC 3501 §6.4.4 | Normative | Support the remaining standard search keys, including ANSWERED/UNANSWERED, DRAFT/UNDRAFT, BCC/CC, HEADER, KEYWORD/UNKEYWORD, LARGER/SMALLER and SENTBEFORE/SENTON/SENTSINCE. | n/a: not supported yet; parser rejects these keys; Message does not expose all required metadata. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-SEARCH-12 | RFC 3501 §6.4.4 | Normative | RECENT, NEW and OLD search independent Recent state. | n/a: not supported yet; RECENT approximates unseen, NEW/OLD are rejected and Message has no Recent field. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-SEARCH-13 | RFC 3501 §§6.4.4, 6.4.8, 9 | Normative | Reject malformed bare sequence-set keys and UID set operands with BAD and no partial SEARCH result or content evaluation, including inside NOT, OR and groups and in empty mailboxes; keep the session reusable. | TestSearchInvalidSequenceSet |
+| IMAP-SEARCH-14 | RFC 3501 §§6.4.4, 6.4.8, 9 | Normative | Valid reversed, star, overlapping and unsigned-32-bit boundary sets retain sequence/UID membership semantics under SEARCH and UID SEARCH, with each match returned once and no content reads or flag writes. | TestSearchValidSequenceSet |
 
 This is not a full search grammar or conformance audit. Search literals,
-quoted-string escapes and malformed sequence sets remain unaudited; the existing
-parser does not reliably validate all of these. FROM display-name matching,
+quoted-string escapes and separators between keys remain unaudited; the existing
+parser does not reliably validate all of these. Out-of-range message sequence
+number rejection is also outside this slice. FROM display-name matching,
 backend Fetch errors, BODY/TEXT matching beyond the empty-result example,
 malformed charset data, concurrency, EXPUNGE suppression and the RFC's UID SEARCH
 example remain for later slices. No coverage gate, parser fuzz target or

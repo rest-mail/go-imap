@@ -1326,8 +1326,8 @@ func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriter
 		}
 		return searchCriterion{kind: strings.ToLower(keyword), value: tokens[idx+1], date: d}, idx + 2, nil
 	case "UID":
-		if idx+1 >= len(tokens) {
-			return searchCriterion{}, idx, badSearch("UID requires a set")
+		if idx+1 >= len(tokens) || !validSequenceSet(tokens[idx+1]) {
+			return searchCriterion{}, idx, badSearch("UID requires a valid sequence set")
 		}
 		return searchCriterion{kind: "uid", value: tokens[idx+1], ranges: parseUIDRanges(tokens[idx+1], maxUID)}, idx + 2, nil
 	case "NOT":
@@ -1353,7 +1353,7 @@ func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriter
 		// A bare message sequence set is a valid search key (RFC 3501 §6.4.4);
 		// resolve it later against the message list. Anything else is unparseable
 		// and must be a tagged BAD, not a silent match-ALL.
-		if looksLikeSeqSet(tok) {
+		if validSequenceSet(tok) {
 			return searchCriterion{kind: "seqset", value: tok}, idx + 1, nil
 		}
 		return searchCriterion{}, idx, badSearch("unknown search criterion: " + tok)
@@ -1381,26 +1381,6 @@ func parseSearchGroup(tokens []string, idx int, maxUID uint32) (searchCriterion,
 		return searchCriterion{}, idx, badSearch("SEARCH group requires at least one search key")
 	}
 	return searchCriterion{kind: "and", sub: group}, j + 1, nil
-}
-
-// looksLikeSeqSet reports whether tok is a bare message sequence set — digits,
-// ',' and ':' separators, and the '*' wildcard, with at least one number or a
-// wildcard so pure punctuation is not mistaken for a set.
-func looksLikeSeqSet(tok string) bool {
-	if tok == "" {
-		return false
-	}
-	hasDigit := false
-	for _, r := range tok {
-		switch {
-		case r >= '0' && r <= '9':
-			hasDigit = true
-		case r == ',' || r == ':' || r == '*':
-		default:
-			return false
-		}
-	}
-	return hasDigit || strings.ContainsRune(tok, '*')
 }
 
 // parseIMAPDateTime parses an IMAP date-time (RFC 3501 §9) as sent in the
