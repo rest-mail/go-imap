@@ -21,7 +21,7 @@ func FuzzSectionSpec(f *testing.F) {
 		f.Add(section, nested)
 	}
 	f.Add("1.1", "Content-Type: multipart/mixed; boundary=x\r\n\r\n--x  \r\n\r\na\r\n--xy\r\n--x--")
-	grammar := regexp.MustCompile(`^((?:[1-9][0-9]*\.)*[1-9][0-9]*)?(?:\.?)(.*)$`)
+	grammar := regexp.MustCompile(`(?s)^((?:[1-9][0-9]*\.)*[1-9][0-9]*)?(?:\.?)(.*)$`)
 	f.Fuzz(func(t *testing.T, section, raw string) {
 		if len(section) > 1024 || len(raw) > 1<<16 {
 			t.Skip()
