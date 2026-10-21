@@ -987,10 +987,7 @@ func singlePartStructure(maintype, subtype string, params map[string]string, hea
 		}
 	}
 
-	encoding := header.Get("Content-Transfer-Encoding")
-	if encoding == "" {
-		encoding = "7BIT"
-	}
+	encoding := transferEncoding(header.Get("Content-Transfer-Encoding"))
 
 	var b strings.Builder
 	b.WriteByte('(')
@@ -1002,7 +999,7 @@ func singlePartStructure(maintype, subtype string, params map[string]string, hea
 	fmt.Fprintf(&b, " %s %s %s %d",
 		nilOrQuote(header.Get("Content-Id")),
 		nilOrQuote(header.Get("Content-Description")),
-		encodeMailboxName(strings.ToUpper(encoding)),
+		encodeMailboxName(encoding),
 		len(body))
 	switch {
 	case strings.EqualFold(maintype, "message") && strings.EqualFold(subtype, "rfc822"):

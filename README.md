@@ -218,6 +218,9 @@ no TLS config and SASL EXTERNAL remain explicit gaps.
 The BODY/BODYSTRUCTURE slice reproduces both RFC 3501 §7.4.2 example
 structures and checks transfer-encoded sizes/line counts through nested MIME
 parts. Quoted-printable parts retain their encoding, octets and soft-break lines.
+Valid Content-Transfer-Encoding tokens drop surrounding whitespace and nested/escaped
+comments at each entity level. Malformed values retain the opaque-string policy;
+this metadata operation does not decode or validate payloads.
 BODY omits extensions; BODYSTRUCTURE reports supplied Content-MD5, disposition,
 Content-Language and Content-Location in the defined order, including nested
 entities. Languages are one string or a list of tags with comments dropped.

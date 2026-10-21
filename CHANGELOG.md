@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- BODY/BODYSTRUCTURE now remove surrounding lexical whitespace and comments
+  from valid Content-Transfer-Encoding tokens rather than advertising them as
+  part of the encoding name. Adds checked RFC 2045/822 wire tests for nested
+  comments, per-entity scope, malformed-value compatibility and encoded sizes,
+  plus a parser fuzz target.
+
 - BODY/BODYSTRUCTURE no longer invent a PLAIN subtype for a bare Content-Type
   token such as `application`. Missing subtypes now use the existing invalid-type
   fallback. Adds checked RFC 2045/2046/3501 wire tests for ordinary MIME defaults,
