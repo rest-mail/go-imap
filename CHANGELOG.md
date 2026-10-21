@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- BODY/BODYSTRUCTURE now remove surrounding lexical whitespace and comments
+  from valid Content-Transfer-Encoding tokens rather than advertising them as
+  part of the encoding name. Adds checked RFC 2045/822 wire tests for nested
+  comments, per-entity scope, malformed-value compatibility and encoded sizes,
+  plus a parser fuzz target.
+
 - BODY/BODYSTRUCTURE now ignore Content-Type comments between lexical tokens
   and accept whitespace around the type/subtype slash. Valid comment-bearing
   fields no longer fall back to TEXT/PLAIN or lose multipart children. Quoted

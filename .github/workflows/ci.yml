@@ -43,5 +43,8 @@ jobs:
       - name: Run tests with race detector
         run: go test -race -count=1 ./...
 
+      - name: Fuzz MIME transfer-encoding token
+        run: go test -run=^$ -fuzz=^FuzzTransferEncoding$ -fuzztime=30s .
+
       - name: Fuzz Content-Type comments
         run: go test -run='^$' -fuzz='^FuzzContentTypeComments$' -fuzztime=30s .

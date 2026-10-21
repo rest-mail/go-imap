@@ -381,6 +381,19 @@ This slice preserves quoted-printable source data via raw MIME part traversal.
 It does not validate or decode transfer encodings, expose numbered MIME FETCH
 sections, or claim complete BODYSTRUCTURE/MIME conformance.
 
+## MIME transfer-encoding token — partial lexical slice
+
+RFC 2045 §§1/6.1 apply RFC 822 §§3.4.2–3.4.3 comments and lexical
+whitespace to a single encoding token. Fixtures are synthetic grammar cases,
+not borrowed message vectors. Malformed values retain the prior opaque-string
+behavior; this is not a full MIME validity or transfer-decoding check.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-CTE-01 | RFC 2045 §§1, 6.1; RFC 822 §§3.4.2–3.4.3 | Normative | BODY/BODYSTRUCTURE derive the case-insensitive encoding token without surrounding whitespace or nested/escaped comments; retain extension tokens and encoded body octets/line counts. | TestBodyStructureEncodingComments, TestBodyStructureEncodingCommentScope |
+| IMAP-CTE-02 | RFC 3501 §§6.4.5, 7.4.2; RFC 2045 §6.1 | Normative | Parse each multipart or encapsulated entity's own encoding, default absent fields to 7BIT without inheritance, and preserve metadata-only behavior under SELECT/EXAMINE and FETCH/UID FETCH. | TestBodyStructureEncodingCommentScope |
+| IMAP-CTE-03 | RFC 2045 §6.1; RFC 822 §3.4.2 | Normative | A single encoding token cannot be manufactured by joining token pieces across comments or whitespace; malformed values retain the existing safely framed opaque-string policy. | TestBodyStructureMalformedEncodingComments |
+
 ## RFC 3501: ENVELOPE — partial header slice
 
 `TestEnvelopeExample` uses the message headers and ENVELOPE in RFC 3501 §8
