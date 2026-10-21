@@ -365,3 +365,55 @@ func TestUIDExpungeCapabilityAndMissingSet(t *testing.T) {
 		})
 	}
 }
+
+// TestUIDExpungeInvalidSet proves malformed UID sets fail with BAD before any
+// deletion, while boundary-valid sets still expunge their marked messages.
+//
+// checklist: IMAP-UIDEXPUNGE-05
+func TestUIDExpungeInvalidSet(t *testing.T) {
+	for _, set := range []string{
+		"0", "0:100", "100:0", "00100", "+100", "-100", "abc", "100a",
+		"4294967296", "100,", ",100", "100,,110", "100:", ":100",
+		"100:110:120", "**", "100 110", "100 (FLAGS)",
+	} {
+		t.Run(set, func(t *testing.T) {
+			m := newExpungeMailbox(2)
+			c := expungeClient(t, &uidExpungeMailbox{m})
+			markDeleted(t, c, "1:2")
+			lines, tagged := c.command("E1", "UID EXPUNGE %s", set)
+			requireExactly(t, lines)
+			if !strings.HasPrefix(tagged, "E1 BAD ") {
+				t.Fatalf("UID EXPUNGE %s: %q, want BAD", set, tagged)
+			}
+			if len(m.attempts) != 0 {
+				t.Fatalf("invalid set deleted %v", m.attempts)
+			}
+			lines, tagged = c.command("F1", "FETCH 1:2 (FLAGS)")
+			requireOK(t, tagged, "F1")
+			requireExactly(t, lines,
+				`* 1 FETCH (UID 100 FLAGS (\Deleted))`,
+				`* 2 FETCH (UID 110 FLAGS (\Deleted))`)
+		})
+	}
+	for _, tc := range []struct {
+		set  string
+		want []uint32
+	}{
+		{"4294967295", nil},
+		{"110:100", []uint32{100, 110}},
+		{"*", []uint32{110}},
+		{"*:100,100", []uint32{100, 110}},
+	} {
+		t.Run("valid "+tc.set, func(t *testing.T) {
+			m := newExpungeMailbox(2)
+			c := expungeClient(t, &uidExpungeMailbox{m})
+			markDeleted(t, c, "1:2")
+			_, tagged := c.command("E1", "UID EXPUNGE %s", tc.set)
+			requireOK(t, tagged, "E1")
+			got := slices.Sorted(slices.Values(m.attempts))
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("UID EXPUNGE %s deleted %v, want %v", tc.set, m.attempts, tc.want)
+			}
+		})
+	}
+}

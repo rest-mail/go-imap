@@ -342,6 +342,43 @@ func mailboxNeedsLiteral(name string) bool {
 	return false
 }
 
+// validSequenceSet reports whether set matches the RFC 3501 §9 sequence-set
+// grammar: comma-separated seq-number or seq-range items, where a seq-number is
+// "*" or a nonzero 32-bit nz-number without leading zeros.
+func validSequenceSet(set string) bool {
+	if set == "" {
+		return false
+	}
+	for _, item := range strings.Split(set, ",") {
+		bounds := strings.Split(item, ":")
+		if len(bounds) > 2 {
+			return false
+		}
+		for _, n := range bounds {
+			if !validSeqNumber(n) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func validSeqNumber(n string) bool {
+	if n == "*" {
+		return true
+	}
+	if n == "" || n[0] < '1' || n[0] > '9' {
+		return false
+	}
+	for i := 1; i < len(n); i++ {
+		if n[i] < '0' || n[i] > '9' {
+			return false
+		}
+	}
+	_, err := strconv.ParseUint(n, 10, 32)
+	return err == nil
+}
+
 // parseSequenceSet parses an IMAP sequence set like "1", "1:5", "1,3,5", "1:*".
 func parseSequenceSet(seqStr string, total int) []int {
 	if total == 0 {

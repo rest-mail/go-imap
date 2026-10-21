@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- UID EXPUNGE now rejects a UID set that does not match the RFC 3501 §9
+  sequence-set grammar (zero, leading zeros, values above 2^32-1, empty items
+  or bounds, trailing arguments) with BAD before deleting anything, instead of
+  silently treating malformed numbers as zero. Adds checked RFC 4315 wire tests
+  for invalid and boundary-valid sets.
+
 - BODYSTRUCTURE now ignores Content-Disposition comments between lexical
   tokens (RFC 2183 §2) instead of reporting NIL for valid comment-bearing
   fields, sharing the Content-Type comment lexer. A type/subtype pair is no
