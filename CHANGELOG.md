@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- APPEND now rejects a malformed flag-list with BAD before sending a
+  continuation. Nested parentheses, doubled, leading, trailing or tab
+  separators, a list not followed by SP, and flags that are not an atom with an
+  optional leading `\` were previously split on whitespace and stored or
+  refused as an unsupported flag. Checked RFC 3501 wire tests keep empty lists
+  and supported flags working.
+
 - STORE and UID STORE now reject a malformed flag operand with BAD before
   changing flags. Unbalanced or nested parentheses, doubled or tab separators,
   quoted strings and flags that are not an atom with an optional leading `\`
