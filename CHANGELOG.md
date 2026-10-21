@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- APPEND now rejects NUL inside a counted message literal with BAD before
+  calling the backend. RFC 3501's CHAR8 grammar excludes NUL; checked wire
+  tests cover both literal modes and keep the following command synchronized.
+
 - APPEND now requires exactly one SP between the mailbox, flag-list, date-time
   and message literal, answering BAD before sending a continuation. Doubled,
   leading and missing separators (for example `INBOX{3}` or
