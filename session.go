@@ -1720,14 +1720,11 @@ func (s *Session) handleCopy(tag, args string) {
 		return
 	}
 
-	parts := strings.SplitN(args, " ", 2)
-	if len(parts) < 2 {
-		s.tagged(tag, "BAD", "COPY requires sequence and destination")
+	seqStr, dest, problem := parseSetMailbox(args)
+	if problem != "" {
+		s.tagged(tag, "BAD", problem)
 		return
 	}
-
-	seqStr := parts[0]
-	dest := unquote(strings.TrimSpace(parts[1]))
 
 	seqNums := parseSequenceSet(seqStr, len(s.messages))
 
@@ -1749,14 +1746,11 @@ func (s *Session) handleMove(tag, args string) {
 		return
 	}
 
-	parts := strings.SplitN(args, " ", 2)
-	if len(parts) < 2 {
-		s.tagged(tag, "BAD", "MOVE requires sequence and destination")
+	seqStr, dest, problem := parseSetMailbox(args)
+	if problem != "" {
+		s.tagged(tag, "BAD", problem)
 		return
 	}
-
-	seqStr := parts[0]
-	dest := unquote(strings.TrimSpace(parts[1]))
 
 	seqNums := parseSequenceSet(seqStr, len(s.messages))
 	s.moveMessages(tag, "MOVE", seqNums, dest)
@@ -2468,14 +2462,11 @@ func (s *Session) handleUIDStore(tag, args string) {
 }
 
 func (s *Session) handleUIDCopy(tag, args string) {
-	parts := strings.SplitN(args, " ", 2)
-	if len(parts) < 2 {
-		s.tagged(tag, "BAD", "UID COPY requires uid set and destination")
+	uidSetStr, dest, problem := parseSetMailbox(args)
+	if problem != "" {
+		s.tagged(tag, "BAD", problem)
 		return
 	}
-
-	uidSetStr := parts[0]
-	dest := unquote(strings.TrimSpace(parts[1]))
 
 	seqNums := s.parseUIDSet(uidSetStr)
 	code, err := s.copyMessages(seqNums, dest)
@@ -2491,14 +2482,11 @@ func (s *Session) handleUIDCopy(tag, args string) {
 }
 
 func (s *Session) handleUIDMove(tag, args string) {
-	parts := strings.SplitN(args, " ", 2)
-	if len(parts) < 2 {
-		s.tagged(tag, "BAD", "UID MOVE requires uid set and destination")
+	uidSetStr, dest, problem := parseSetMailbox(args)
+	if problem != "" {
+		s.tagged(tag, "BAD", problem)
 		return
 	}
-
-	uidSetStr := parts[0]
-	dest := unquote(strings.TrimSpace(parts[1]))
 
 	seqNums := s.parseUIDSet(uidSetStr)
 	s.moveMessages(tag, "UID MOVE", seqNums, dest)

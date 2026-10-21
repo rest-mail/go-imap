@@ -204,16 +204,18 @@ ignored without closing, since neither admits a literal. Malformed markers
 remain unaudited. LITERAL+ is not advertised.
 The COPY/UID COPY slice checks the RFC 3501 §6.4.7 and RFC 4315 §3 examples,
 sparse/overlapping UID sets, COPYUID correspondence, read-only sources, destination
-names, backend errors and selection state. Errors stop dispatch and return NO
-without COPYUID. Destination rollback, storage/flag/date preservation, TRYCREATE,
-strict grammar and destination permission/UID validation remain explicit gaps.
+names, backend errors, selection state and RFC 3501 §9 argument syntax
+(malformed sets or mailbox astrings receive BAD before dispatch). Errors stop
+dispatch and return NO without COPYUID. Destination rollback, storage/flag/date
+preservation, TRYCREATE and destination permission/UID validation remain explicit
+gaps.
 Earlier copies may remain after failure; the per-message API cannot undo them.
 The MOVE/UID MOVE slice checks the RFC 6851 UID MOVE response order (COPYUID,
 EXPUNGEs, tagged OK), sparse/overlapping sets, read-only refusal, destination
-names, selection state and backend errors. A failure stops the move with NO and
-reports EXPUNGE only for messages already moved. Per-message atomicity,
-TRYCREATE, strict grammar, QRESYNC VANISHED and backend UID validation remain
-explicit gaps.
+names, selection state, backend errors and argument syntax (malformed sets or
+mailbox astrings receive BAD before any move). A failure stops the move with NO
+and reports EXPUNGE only for messages already moved. Per-message atomicity,
+TRYCREATE, QRESYNC VANISHED and backend UID validation remain explicit gaps.
 The STARTTLS slice follows the RFC 3501 §6.2.1 example over a real handshake:
 LOGINDISABLED until TLS, changed capabilities afterwards, no implicit
 authentication, BAD for arguments or a repeated STARTTLS, discarded pipelined
