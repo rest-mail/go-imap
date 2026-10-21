@@ -231,6 +231,9 @@ sends descending sequence numbers 11, 7, 4, 3, which §7.4.1 permits, rather
 than the example's ascending-removal responses 3, 3, 5, 8. Tests also check the
 remaining backend UIDs and renumbered FETCH replies. `TestCloseExample` uses
 the §6.4.2 A341 command/completion, with both marked and unmarked messages.
+`TestCloseBackendFailure` refuses deletions during CLOSE: the engine answers NO,
+stays selected, reports the removals that succeeded as EXPUNGE and keeps the
+failed marks, so a retried CLOSE completes.
 
 | ID | Section | Level | Requirement | Tests |
 |----|---------|-------|-------------|-------|
@@ -245,7 +248,7 @@ the §6.4.2 A341 command/completion, with both marked and unmarked messages.
 | IMAP-CLOSE-03 | RFC 3501 §6.4.2 | Normative | Successful writable CLOSE removes marked messages without untagged EXPUNGE, enters authenticated state and clears old selection marks before reselection. | TestCloseExample |
 | IMAP-CLOSE-04 | RFC 3501 §6.4.2 | Normative | CLOSE after EXAMINE succeeds silently and deselects without removing messages. | TestReadOnlyCloseAndExpunge |
 | IMAP-CLOSE-05 | RFC 3501 §6.4.2 | Normative | LOGOUT implicitly closes a selected mailbox without expunging marked messages. | TestLogoutDoesNotExpunge |
-| IMAP-CLOSE-06 | RFC 3501 §6.4.2 | Normative | Writable CLOSE removes every marked message before reporting successful completion. | n/a: not supported yet on backend deletion failure; CLOSE ignores Delete errors and deselects with OK. The mapped success case above assumes all deletes succeed. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-CLOSE-06 | RFC 3501 §6.4.2 | Normative | Writable CLOSE removes every marked message before reporting successful completion. | TestCloseBackendFailure |
 | IMAP-EXPUNGE-07 | RFC 3501 §§2.3.2, 6.4.3 | Normative | The Deleted flag is permanent mailbox state visible across sessions until removal. | n/a: not supported yet; Message and FlagUpdate have no Deleted field, so marks exist only in the selecting session. Cross-session deletion and concurrent EXPUNGE suppression remain unaudited. Tracked in rest-mail/rest-mail-server#374. |
 
 On EXPUNGE/UID EXPUNGE backend errors, this engine continues trying other

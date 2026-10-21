@@ -468,14 +468,9 @@ func (s *Session) Handle() {
 				break
 			}
 			// Implicitly expunge \Deleted messages (RFC 3501 §6.4.2), but never
-			// for a mailbox opened read-only via EXAMINE (§6.3.2). Unlike EXPUNGE,
-			// CLOSE does not send untagged EXPUNGE responses.
-			if !s.readOnly {
-				for _, msg := range s.messages {
-					if s.deleted[msg.UID] {
-						_ = s.mailbox.Delete(msg.UID)
-					}
-				}
+			// for a mailbox opened read-only via EXAMINE (§6.3.2).
+			if !s.readOnly && !s.closeExpunge(tag) {
+				break
 			}
 			s.selected = nil
 			s.readOnly = false
@@ -1917,6 +1912,41 @@ func (s *Session) expungeMessages(tag, command string, targets map[int]bool) {
 		return
 	}
 	s.tagged(tag, "OK", command+" completed")
+}
+
+// closeExpunge removes the marked messages for CLOSE and reports whether every
+// removal succeeded. A successful CLOSE sends no untagged EXPUNGE (RFC 3501
+// §6.4.2). A refused delete keeps the mailbox selected and answers NO: the
+// removals that did succeed are then reported as EXPUNGE so the client's
+// sequence numbers stay valid, and failed messages keep their marks for a retry,
+// as with EXPUNGE (§6.4.3).
+func (s *Session) closeExpunge(tag string) bool {
+	var removed []int
+	failed := false
+	for i := len(s.messages) - 1; i >= 0; i-- {
+		msg := s.messages[i]
+		if !s.deleted[msg.UID] {
+			continue
+		}
+		if err := s.mailbox.Delete(msg.UID); err != nil {
+			slog.Warn("imap: expunge failed", "command", "CLOSE", "uid", msg.UID, "error", err)
+			failed = true
+			continue
+		}
+		removed = append(removed, i)
+	}
+	if !failed {
+		return true
+	}
+	// Descending order keeps every reported sequence number valid.
+	for _, i := range removed {
+		s.send("* %d EXPUNGE", i+1)
+		delete(s.deleted, s.messages[i].UID)
+		s.messages = append(s.messages[:i], s.messages[i+1:]...)
+	}
+	s.selected.total = int64(len(s.messages))
+	s.tagged(tag, "NO", "CLOSE failed")
+	return false
 }
 
 func (s *Session) handleCreate(tag, args string) {
