@@ -29,6 +29,9 @@ func (s *Session) capabilities() string {
 	if _, ok := s.mailbox.(UIDPlusMailbox); ok {
 		caps = append(caps, "UIDPLUS")
 	}
+	if _, ok := s.mailbox.(UTF8Mailbox); ok {
+		caps = append(caps, "UTF8=ACCEPT")
+	}
 	if !s.usingTLS && s.tlsConfig != nil {
 		caps = append(caps, "STARTTLS")
 	}
@@ -238,15 +241,36 @@ func (s *Session) handleUnselect(tag string) {
 	s.tagged(tag, "OK", "UNSELECT completed")
 }
 
-// handleEnable implements ENABLE (RFC 5161). No extension currently requires
-// enabling (CONDSTORE/QRESYNC are future work), so every requested capability is
-// unknown and silently ignored per §3.1; the command simply acknowledges. A
-// future enable-able extension would echo the enabled names in an untagged
-// "* ENABLED ..." response here.
+// handleEnable implements ENABLE (RFC 5161). UTF8=ACCEPT (RFC 6855) is the
+// only enable-able extension, and only when the Mailbox implements
+// [UTF8Mailbox]. RFC 6855 §3 allows it only in the authenticated state, so it
+// is ignored once a mailbox is selected. Every other requested capability is
+// unknown and silently ignored per §3.1. Newly enabled names are echoed in an
+// untagged "* ENABLED" response; one already enabled is not repeated.
 func (s *Session) handleEnable(tag, args string) {
 	if !s.auth.authenticated {
 		s.tagged(tag, "NO", "Not authenticated")
 		return
+	}
+	var enabled []string
+	for _, name := range strings.Fields(args) {
+		if !strings.EqualFold(name, "UTF8=ACCEPT") || s.utf8 || s.selected != nil {
+			continue
+		}
+		um, ok := s.mailbox.(UTF8Mailbox)
+		if !ok {
+			continue
+		}
+		if err := um.EnableUTF8(); err != nil {
+			slog.Warn("imap: enable utf8 failed", "error", err)
+			s.tagged(tag, "NO", "ENABLE failed")
+			return
+		}
+		s.utf8 = true
+		enabled = append(enabled, "UTF8=ACCEPT")
+	}
+	if len(enabled) > 0 {
+		s.send("* ENABLED %s", strings.Join(enabled, " "))
 	}
 	s.tagged(tag, "OK", "ENABLE completed")
 }

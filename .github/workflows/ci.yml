@@ -43,26 +43,29 @@ jobs:
       - name: Run tests with race detector
         run: go test -race -count=1 ./...
 
+      # Duration limits can fail at normal shutdown with "context deadline exceeded"
+      # (golang/go#75804). Bound each smoke run by executions instead; failures
+      # still propagate through go test without retries or suppressed errors.
       - name: Fuzz MIME transfer-encoding token
-        run: go test -run=^$ -fuzz=^FuzzTransferEncoding$ -fuzztime=30s .
+        run: go test -run=^$ -fuzz=^FuzzTransferEncoding$ -fuzztime=500000x .
 
       - name: Fuzz Content-Type comments
-        run: go test -run='^$' -fuzz='^FuzzContentTypeComments$' -fuzztime=30s .
+        run: go test -run='^$' -fuzz='^FuzzContentTypeComments$' -fuzztime=500000x .
 
       - name: Fuzz FETCH partial ranges
-        run: go test -run='^$' -fuzz='^FuzzBodyPartial$' -fuzztime=30s .
+        run: go test -run='^$' -fuzz='^FuzzBodyPartial$' -fuzztime=500000x .
 
       - name: Fuzz FETCH data-item lists
-        run: go test -run='^$' -fuzz='^FuzzFetchItems$' -fuzztime=30s .
+        run: go test -run='^$' -fuzz='^FuzzFetchItems$' -fuzztime=500000x .
 
       - name: Fuzz FETCH header lists
-        run: go test -run='^$' -fuzz='^FuzzHeaderFields$' -fuzztime=30s .
+        run: go test -run='^$' -fuzz='^FuzzHeaderFields$' -fuzztime=500000x .
 
       - name: Fuzz FETCH section-specs
-        run: go test -run='^$' -fuzz='^FuzzSectionSpec$' -fuzztime=30s .
+        run: go test -run='^$' -fuzz='^FuzzSectionSpec$' -fuzztime=500000x .
 
       - name: Fuzz SEARCH date tokens
-        run: go test -run='^$' -fuzz='^FuzzSearchDate$' -fuzztime=30s .
+        run: go test -run='^$' -fuzz='^FuzzSearchDate$' -fuzztime=500000x .
 
       - name: Fuzz SEARCH quote framing
-        run: go test -run='^$' -fuzz='^FuzzSearchQuotes$' -fuzztime=30s .
+        run: go test -run='^$' -fuzz='^FuzzSearchQuotes$' -fuzztime=500000x .

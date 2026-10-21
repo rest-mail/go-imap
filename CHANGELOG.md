@@ -326,6 +326,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Optional `UTF8Mailbox` interface for RFC 6855 `UTF8=ACCEPT`. When the
+  authenticated `Mailbox` implements it, CAPABILITY lists `UTF8=ACCEPT` and
+  `ENABLE UTF8=ACCEPT` (authenticated state only) calls `EnableUTF8` once
+  and answers `* ENABLED UTF8=ACCEPT`. A backend error fails ENABLE with NO
+  and leaves the mode off. Backends without it are unchanged. UTF-8 mailbox
+  names and the APPEND `UTF8` data extension are not implemented yet.
 - Checklist rows IMAP-LITERAL-10/11 with public-Session wire tests: an
   overlong AUTHENTICATE response is refused with tagged BAD before any
   credential check, and an overlong line while idling is ignored without

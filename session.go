@@ -35,6 +35,7 @@ type Session struct {
 	readOnly bool            // true when the selection was opened via EXAMINE (RFC 3501 §6.3.2)
 	messages []Message       // cached message list for current selection
 	deleted  map[uint32]bool // UIDs flagged \Deleted in this session
+	utf8     bool            // ENABLE UTF8=ACCEPT succeeded (RFC 6855)
 }
 
 type authState struct {
