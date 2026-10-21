@@ -384,7 +384,9 @@ func (s *Session) Handle() {
 		case "RENAME":
 			s.handleRename(tag, args)
 		case "APPEND":
-			s.handleAppend(tag, args)
+			if s.handleAppend(tag, args) {
+				return
+			}
 		case "NOOP":
 			s.tagged(tag, "OK", "NOOP completed")
 		case "CHECK":
@@ -1835,7 +1837,20 @@ func (s *Session) handleRename(tag, args string) {
 	s.tagged(tag, "OK", "RENAME completed")
 }
 
-func (s *Session) handleAppend(tag, args string) {
+// handleAppend returns true when the command stream cannot safely be reused.
+func (s *Session) handleAppend(tag, args string) (closeConn bool) {
+	// A refused non-synchronizing literal may already be buffered behind this
+	// line. Until we commit to reading it, every refusal must end the session
+	// rather than dispatching those octets as commands (RFC 7888 §§3–4).
+	_, _, synchronizing, literal := splitTrailingLiteral(args)
+	rejectNonSync := literal && !synchronizing
+	defer func() {
+		if rejectNonSync {
+			s.send("* BYE APPEND rejected with unread non-synchronizing literal")
+			closeConn = true
+		}
+	}()
+
 	if !s.auth.authenticated {
 		s.tagged(tag, "NO", "Not authenticated")
 		return
@@ -1929,6 +1944,10 @@ func (s *Session) handleAppend(tag, args string) {
 		return
 	}
 
+	// All early refusals are past. Reading the payload and command terminator
+	// now establishes the next command boundary, even if the backend refuses it.
+	rejectNonSync = false
+
 	// A non-synchronizing {N+} already has its octets in flight and must not
 	// receive a continuation (RFC 7888 §3). Synchronizing literals wait here.
 	if sync {
@@ -1939,8 +1958,7 @@ func (s *Session) handleAppend(tag, args string) {
 	if _, err := io.ReadFull(s.reader, data); err != nil {
 		// Incomplete commands must never reach the backend. The stream cannot
 		// be reused after a partial literal or timeout.
-		_ = s.conn.Close()
-		return
+		return true
 	}
 
 	// The command's CRLF is separate from the literal's counted octets. Do
@@ -1948,13 +1966,11 @@ func (s *Session) handleAppend(tag, args string) {
 	// valid APPEND, and a buffered next command must remain untouched.
 	var terminator [2]byte
 	if _, err := io.ReadFull(s.reader, terminator[:]); err != nil {
-		_ = s.conn.Close()
-		return
+		return true
 	}
 	if string(terminator[:]) != "\r\n" {
 		s.tagged(tag, "BAD", "Expected CRLF after message literal")
-		_ = s.conn.Close()
-		return
+		return true
 	}
 
 	var err error
@@ -1997,6 +2013,7 @@ func (s *Session) handleAppend(tag, args string) {
 		}
 	}
 	s.tagged(tag, "OK", "APPEND completed")
+	return
 }
 
 // notifyAppendToSelected sends an untagged "* n EXISTS" (RFC 3501 §6.3.11) when a

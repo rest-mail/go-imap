@@ -185,10 +185,13 @@ marks, backend refusal and read-only operation. CLOSE deletion failures,
 persistent Deleted flags and strict UID-set validation remain explicit gaps.
 The APPEND slice checks the §6.3.11 example, exact message octets, supported
 flags/dates, selected-mailbox notifications, backend refusal and terminal literal
-framing, including the accepted non-synchronizing form. Backend atomicity,
-nonexistent destinations/TRYCREATE, Recent/Deleted/keywords, default dates,
-literal mailbox names, rejected non-synchronizing payloads and full grammar
-validation remain explicit gaps. LITERAL+ is not advertised.
+framing, including the accepted non-synchronizing form. Early refusal of a
+valid `{n+}` APPEND sends BYE and closes without dispatching unread payload;
+backend refusal after consuming the command keeps the session usable. Backend
+atomicity, nonexistent destinations/TRYCREATE, Recent/Deleted/keywords, default dates,
+literal mailbox names and full grammar validation remain explicit gaps.
+Refusal handling for general command literals and overlong lines remains
+unaudited. LITERAL+ is not advertised.
 It is growing; it is not yet a full conformance claim.
 
 ## Documentation

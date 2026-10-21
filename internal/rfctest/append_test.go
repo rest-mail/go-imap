@@ -350,3 +350,95 @@ func TestAppendRequiresAuthentication(t *testing.T) {
 		t.Fatalf("records after login: %+v", box.records)
 	}
 }
+
+// TestAppendRejectedNonSynchronizing proves that early refusal never promotes
+// an in-flight message (or a later command) into a new command. Header-only
+// cases also prove that refusal does not wait to drain an attacker-sized body.
+//
+// checklist: IMAP-APPEND-22
+func TestAppendRejectedNonSynchronizing(t *testing.T) {
+	for _, tc := range []struct {
+		name, args, status string
+		unauthenticated    bool
+	}{
+		{"authentication", "INBOX", "NO", true},
+		{"empty mailbox", `""`, "BAD", false},
+		{"malformed flags", `INBOX (\Seen`, "BAD", false},
+		{"unsupported flags", `INBOX (\Bogus)`, "NO", false},
+		{"invalid date", `INBOX "bad date"`, "BAD", false},
+		{"unterminated date", `INBOX "bad date`, "BAD", false},
+		{"extra argument", "INBOX garbage", "BAD", false},
+		{"oversized", "INBOX", "NO", false},
+		{"maximum size", "INBOX", "NO", false},
+	} {
+		for _, pipelined := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/pipelined=%t", tc.name, pipelined), func(t *testing.T) {
+				box := &appendMailbox{}
+				c := dialMailbox(t, box)
+				c.line()
+				wantAuth := 0
+				if !tc.unauthenticated {
+					c.login()
+					wantAuth = 1
+				}
+				// If interpreted as commands, these bytes would authenticate and
+				// append a second message. None may run, including from bufio's
+				// read-ahead buffer after the underlying connection is closed.
+				payload := "X1 LOGIN " + testUser + " " + testPass + "\r\n" +
+					"X2 APPEND INBOX {3+}\r\nabc\r\n"
+				size := uint64(len(payload))
+				switch tc.name {
+				case "oversized":
+					size = 10485761
+				case "maximum size":
+					size = 4294967295
+				}
+				wire := fmt.Sprintf("A1 APPEND %s {%d+}\r\n", tc.args, size)
+				if pipelined {
+					wire += payload + "\r\nN1 NOOP\r\n"
+				}
+				written := make(chan error, 1)
+				go func() { _, err := io.WriteString(c.conn, wire); written <- err }()
+				t.Cleanup(func() { _ = c.conn.Close(); <-written })
+				if line := c.line(); !strings.HasPrefix(line, "A1 "+tc.status+" ") {
+					t.Fatalf("refusal: %q", line)
+				}
+				if line := c.line(); !strings.HasPrefix(line, "* BYE ") || !strings.Contains(line, "APPEND") {
+					t.Fatalf("closing explanation: %q", line)
+				}
+				if !c.closed() {
+					t.Fatal("refused literal left connection open or dispatched more commands")
+				}
+				<-c.done
+				if len(box.records) != 0 || c.backend.calls != wantAuth {
+					t.Fatalf("payload executed: records=%+v auth=%d (want %d)", box.records, c.backend.calls, wantAuth)
+				}
+			})
+		}
+	}
+}
+
+// Backend refusal occurs after the complete literal was consumed: this stream
+// remains usable, unlike an early refusal with an unread in-flight payload.
+//
+// checklist: IMAP-APPEND-09 IMAP-APPEND-12 IMAP-APPEND-22
+func TestAppendNonSynchronizingBackendFailure(t *testing.T) {
+	box := &appendMailbox{fail: true}
+	c := selectionClient(t, box)
+	written := make(chan error, 1)
+	go func() {
+		_, err := io.WriteString(c.conn, "A1 APPEND INBOX {3+}\r\nabc\r\nN1 NOOP\r\n")
+		written <- err
+	}()
+	t.Cleanup(func() { _ = c.conn.Close(); <-written })
+	lines, tagged := appendCompletion(t, c)
+	if !strings.HasPrefix(tagged, "A1 NO ") || len(lines) != 0 {
+		t.Fatalf("backend refusal: %q %q", lines, tagged)
+	}
+	requireOK(t, c.line(), "N1")
+	_, tagged = c.command("N2", "NOOP")
+	requireOK(t, tagged, "N2")
+	if len(box.records) != 0 {
+		t.Fatalf("failed append stored: %+v", box.records)
+	}
+}
