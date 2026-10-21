@@ -65,13 +65,18 @@ with the examples; they do not prove independent Recent tracking.
 | IMAP-SELECT-08 | RFC 3501 §§2.3.2, 6.3.1, 6.3.2 | MUST | Report independent Recent state and preserve it on EXAMINE. | n/a: not supported yet; Message has no Recent field and the engine approximates Recent as unseen. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-SELECT-09 | RFC 3501 §§2.3.1.1, 6.3.1 | MUST | UIDNEXT must track past UID assignments even after messages are expunged; UIDVALIDITY must reflect persistent mailbox identity. | n/a: not supported yet for the base Mailbox interface; UIDNEXT is derived from current messages and UIDVALIDITY defaults to 1 without UIDPlusMailbox. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-SELECT-10 | RFC 3501 §6.3.1 | MUST | SELECT must return READ-ONLY when access permits reading but forbids modification. | n/a: not supported yet; Mailbox exposes no per-folder write permission. Host can refuse Messages with an error but cannot select read-only through SELECT. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-SELECT-11 | RFC 3501 §§6.3.1, 6.3.2, 9 | Normative | SELECT/EXAMINE require exactly one mailbox astring: missing, malformed, extra or improperly separated arguments receive BAD without metadata reads or writes; a failed selection drops prior selection and deletion marks without expunging, and a later valid selection recovers. | TestSelectionInvalidArguments, TestSelectionInvalidLiteralArguments |
+| IMAP-SELECT-12 | RFC 3501 §§4.3, 5.1, 6.3.1, 6.3.2, 9 | Normative | Decode bare, quoted and counted-literal mailbox names without trimming significant spaces, preserve escaped quoted-specials and quoted wildcard characters, canonicalize only INBOX, and preserve command framing for synchronizing and LITERAL+ names. An explicit empty string reaches the backend unchanged rather than selecting INBOX. | TestSelectionMailboxAstrings, TestSelectionLiteralMailbox |
 | IMAP-EXAMINE-01 | RFC 3501 §6.3.2 | MUST | Successful EXAMINE starts tagged OK text with READ-ONLY and reports no permanent flags. | TestSelectionExamples |
 | IMAP-EXAMINE-02 | RFC 3501 §6.3.2 | Normative | EXAMINE forbids permanent writes through STORE, EXPUNGE and MOVE (including UID variants) and CLOSE; a later SELECT restores writable access. | TestExaminePreventsPermanentWrites |
 | IMAP-EXAMINE-03 | RFC 3501 §6.3.2 | Normative | Non-peek FETCH and UID FETCH under EXAMINE return the body without persisting or locally setting Seen. | TestExamineBodyFetchDoesNotSetSeen |
 
-Other selection requirements remain unaudited, including syntax validation,
+The argument rows check complete astring tokens after literal materialization.
+Raw quoted and literal octets share that representation, so strict wire-form
+validation (including raw quoted 8-bit octets), modified UTF-7 mailbox semantics,
 permanent keyword support, UID exhaustion, backend error/fallback behavior and
-concurrent sessions. These rows do not claim full §§6.3.1/6.3.2 conformance.
+concurrent sessions remain unaudited. These rows do not claim full
+§§6.3.1/6.3.2 conformance.
 
 ## RFC 3501: STATUS — partial metadata and argument slice
 

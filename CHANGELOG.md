@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- SELECT and EXAMINE require exactly one valid mailbox astring. Missing names
+  no longer select INBOX implicitly; malformed or extra arguments receive BAD
+  before backend access. Explicit empty strings reach the backend unchanged.
+  Checked wire tests cover deselection on refusal, recovery without stale
+  deletion marks, escaped names and both synchronizing and LITERAL+ mailboxes.
+
 - CLOSE no longer answers OK when the backend refuses to delete a marked
   message (RFC 3501 §6.4.2). It answers NO and keeps the mailbox selected.
   Removals that succeeded are reported as EXPUNGE so sequence numbers stay
