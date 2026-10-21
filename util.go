@@ -927,7 +927,10 @@ func multipartStructure(subtype string, params map[string]string, header textpro
 	mr := multipart.NewReader(bytes.NewReader(body), params["boundary"])
 	var parts strings.Builder
 	for {
-		p, err := mr.NextPart()
+		// BODY/BODYSTRUCTURE describe the transfer-encoded octets and lines
+		// (RFC 3501 §7.4.2). NextPart transparently decodes quoted-printable
+		// and removes its encoding header, corrupting all three metadata fields.
+		p, err := mr.NextRawPart()
 		if err != nil {
 			break
 		}

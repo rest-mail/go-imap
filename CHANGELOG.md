@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Multipart BODY/BODYSTRUCTURE now retain quoted-printable transfer encoding,
+  encoded octet sizes and physical line counts instead of silently decoding
+  parts and reporting them as 7BIT. Adds partial RFC 3501 §7.4.2 checklist rows,
+  public-Session wire tests and both RFC example structures with synthetic bodies.
+
 - STARTTLS with arguments now returns BAD instead of starting a TLS negotiation
   (RFC 3501 §6.2.1). Adds partial RFC 3501/RFC 2595 STARTTLS checklist rows and
   public-Session wire tests over a real TLS handshake.

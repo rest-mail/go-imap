@@ -3,7 +3,8 @@
 This is an explicitly **PARTIAL** checklist: the first RFC 3501 rows for the
 connection greeting, the any-state commands (CAPABILITY, NOOP, LOGOUT), LOGIN,
 tagged completion, STARTTLS, selection-state (SELECT/EXAMINE), STORE, SEARCH, FETCH,
-EXPUNGE, CLOSE, APPEND and COPY slices, plus partial RFC 4315 UID EXPUNGE/COPYUID,
+EXPUNGE, CLOSE, APPEND, COPY and encoded BODYSTRUCTURE slices, plus partial
+RFC 4315 UID EXPUNGE/COPYUID,
 RFC 6851 MOVE and RFC 7888 non-synchronizing APPEND and command-argument refusal slices. It is not
 an inventory of all applicable RFC requirements, a full conformance claim, or
 a coverage badge. A mapped row means its named wire test
@@ -339,3 +340,31 @@ messages. They do not prove a real store moves each message atomically.
 A refused move stops at the failing message and reports only what the backend
 actually moved. No rollback is attempted: RFC 6851 permits partial moves as long
 as every message ends up in exactly one mailbox, which is the backend's job.
+
+## RFC 3501: BODY and BODYSTRUCTURE — partial encoded-part slice
+
+The two §7.4.2 example structures are reproduced using synthetic messages with
+exactly the RFC's octet/line dimensions. The RFC provides structures, not raw
+messages; these are not borrowed message test vectors. Exact public-Session
+responses check both FETCH and UID FETCH under SELECT and EXAMINE. Encoded body
+fixtures specify their own octet and physical-line counts independently of the
+MIME parser; quoted-printable soft breaks, invalid escapes, empty bodies, final
+CRLF and nested binary attachments guard against accidental decoding.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-BS-01 | RFC 3501 §7.4.2 | Normative | Reproduce the simple text and two-part text/base64 example structures, with the stated octet and line counts. | TestBodyStructureRFCExample, TestBodyStructureRFCMultipartExample |
+| IMAP-BS-02 | RFC 3501 §7.4.2 | Normative | Basic single-part fields appear in order: type, subtype, parameters, ID, description, transfer encoding and encoded octet size. | TestBodyStructureRFCExample, TestBodyStructureTransferEncoding, TestBodyStructureNestedEncoding, TestBodyStructureRFCMultipartExample |
+| IMAP-BS-03 | RFC 3501 §7.4.2 | Normative | TEXT adds a line count measured in its content transfer encoding, including soft-break lines rather than the decoded text's lines. | TestBodyStructureRFCExample, TestBodyStructureTransferEncoding, TestBodyStructureRFCMultipartExample |
+| IMAP-BS-04 | RFC 3501 §7.4.2 | Normative | Multipart children retain their transfer encoding and encoded dimensions; nested multipart structures precede the subtype, and non-text/non-message parts have no text-line field. | TestBodyStructureTransferEncoding, TestBodyStructureNestedEncoding, TestBodyStructureRFCMultipartExample |
+| IMAP-BS-05 | RFC 3501 §7.4.2 | MUST NOT | BODY omits extension data; BODYSTRUCTURE appends single-part MD5/disposition/language/location or multipart parameters/disposition/language/location in that order. | TestBodyStructureTransferEncoding, TestBodyStructureNestedEncoding, TestBodyStructureRFCMultipartExample |
+| IMAP-BS-06 | RFC 3501 §§6.4.5, 6.4.8 | Normative | BODY and BODYSTRUCTURE metadata do not set Seen, work under EXAMINE, and describe the same message through UID FETCH; requesting both shares one raw-message load. | TestBodyStructureRFCExample, TestBodyStructureTransferEncoding, TestBodyStructureNestedEncoding, TestBodyStructureRFCMultipartExample |
+| IMAP-BS-07 | RFC 3501 §7.4.2 | Normative | Preserve Content-ID, Content-Description and MIME parameters; render attachment and multipart disposition types with their parameters in the extension slot. | TestBodyStructureNestedEncoding, TestBodyStructureRFCMultipartExample |
+| IMAP-BS-08 | RFC 3501 §7.4.2 | MAY | Return MD5, language and location extension data derived from the message. | n/a: not supported yet; these extension slots are always NIL even when source headers exist. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-BS-09 | RFC 3501 §§7.4.2, 9 | Normative | MESSAGE/RFC822 carries its encapsulated envelope, body structure and line count. | n/a: existing unit coverage only; public-Session encapsulation, nested envelope defaults and malformed-message behavior need a separate audit. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-BS-10 | RFC 3501 §§4.3, 7.4.2, 9 | Normative | Encode every body string using valid IMAP string framing for the source octets. | n/a: not supported yet for arbitrary MIME/header values; existing quoted-string paths do not provide literal framing for every field. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-BS-11 | RFC 3501 §7.4.2 | Normative | Default omitted MIME fields according to MIME rules, including defaults that depend on the enclosing multipart subtype. | n/a: not fully audited; multipart/digest child defaults and fabricated text/plain fallback structures need independent verification. This slice checks valid multipart framing and opaque transfer-encoded bodies only. Tracked in rest-mail/rest-mail-server#374. |
+
+This slice preserves quoted-printable source data via raw MIME part traversal.
+It does not validate or decode transfer encodings, expose numbered MIME FETCH
+sections, or claim complete BODYSTRUCTURE/MIME conformance.
