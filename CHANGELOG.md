@@ -14,6 +14,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   refusal with an unread non-synchronizing message literal still closes the
   session. Checked by IMAP-APPEND-21.
 
+- FETCH and UID FETCH strictly validate HEADER.FIELDS[.NOT] lists before any
+  reads, Seen writes or responses, including empty/nonmatching sets. Quoted and
+  literal names now match decoded values instead of their quote characters;
+  significant spaces remain significant. Response labels preserve valid astring
+  tokens, including escaped quotes, backslashes and bracket characters. Adds
+  checked wire tests and a grammar-based header-list fuzz target. Numeric MIME
+  sections and other section names remain separate gaps.
+
 - FETCH and UID FETCH reject unknown data-item names, empty/malformed outer
   lists, multiple bare items and macros inside lists or mixed with other items.
   Validation precedes content access, Seen writes and responses, including with
