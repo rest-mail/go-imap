@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- FETCH and UID FETCH now reject malformed sequence sets with BAD before loading
+  content or marking messages Seen, rather than treating invalid numbers as zero
+  or accepting malformed list/range members. Adds checked RFC 3501 wire tests
+  for rejection without side effects, session recovery and valid reversed/star/
+  unsigned-32-bit boundary sets. Data-item parsing is unchanged.
+
 - COPY, UID COPY, MOVE and UID MOVE now answer BAD before dispatch when the
   sequence-set does not match the RFC 3501 §9 grammar, the destination is not a
   well-formed astring (bad quoted escapes, NUL, list wildcards or other
