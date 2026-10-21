@@ -173,9 +173,9 @@ examples and records Recent, persistent UID metadata and permission gaps; the
 STORE slice includes the RFC 3501 §6.4.6 example and records the keyword gap.
 STORE and UID STORE reject malformed sequence sets with BAD before writing flags
 or changing session state, including .SILENT and empty mailboxes. Wire tests
-check reversed/star/32-bit boundary sets, sparse UIDs and recovery after rejection;
-flag-list syntax, out-of-range message sequence numbers and overlapping UID-set
-semantics remain unaudited.
+check reversed/star/32-bit boundary sets, sparse UIDs and recovery after rejection.
+A malformed flag operand is also refused with BAD before any change; out-of-range
+message sequence numbers and overlapping UID-set semantics remain unaudited.
 The SEARCH slice checks Boolean/UID criteria, calendar dates, charsets and
 errors against wire responses, including the first two §6.4.4 examples. Both
 forms reject malformed bare sequence sets and UID operands before evaluating

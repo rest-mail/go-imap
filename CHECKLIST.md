@@ -89,10 +89,12 @@ example. Flag lists are sets; this engine orders system flags as \Seen,
 | IMAP-STORE-06 | RFC 3501 §§2.3.2, 6.4.6, 7.1 | Normative | Keywords a client may create (PERMANENTFLAGS lists `\*`) are stored and reported back by FETCH FLAGS. | n/a: not supported yet; FlagUpdate and Message model only system flags, so keywords are accepted and dropped. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-STORE-07 | RFC 3501 §§6.4.6, 6.4.8, 9 | Normative | STORE and UID STORE reject malformed sequence sets with BAD before backend writes, session flag changes or FETCH responses, including .SILENT and empty mailboxes; the selection remains writable and reusable. | TestStoreInvalidSequenceSet |
 | IMAP-STORE-08 | RFC 3501 §§6.4.6, 6.4.8, 9 | Normative | Accept reversed ranges, star, lists and unsigned-32-bit sequence-set bounds; resolve sparse or nonexistent UIDs by mailbox membership and preserve normal/silent flag updates and UID replies. | TestStoreValidSequenceSet |
+| IMAP-STORE-09 | RFC 3501 §§6.4.6, 9 | Normative | STORE and UID STORE reject a malformed flag operand with BAD before backend writes, session flag changes or FETCH responses: unbalanced, nested or repeated parentheses, extra or non-SP separators, quoted strings, and flags that are not an atom with an optional leading `\` (atom-specials, `\*`, non-ASCII or control octets). | TestStoreInvalidFlagList |
+| IMAP-STORE-10 | RFC 3501 §§6.4.6, 9 | Normative | Accept an empty flag-list, bare SP-separated flags, case-insensitive system flags, and keywords or flag-extensions using any ATOM-CHAR, for every action with and without .SILENT. | TestStoreValidFlagList |
 
 A NO from a multi-message set reports the first refused write; earlier
-messages in the set keep their applied changes, which RFC 3501 permits. Flag-list
-syntax validation, out-of-range message sequence numbers, overlapping UID-set
+messages in the set keep their applied changes, which RFC 3501 permits.
+Out-of-range message sequence numbers, overlapping UID-set
 semantics and STORE under concurrent sessions remain unaudited.
 
 ## RFC 3501: SEARCH and UID SEARCH — partial criteria slice
