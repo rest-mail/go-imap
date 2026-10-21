@@ -176,6 +176,12 @@ or changing session state, including .SILENT and empty mailboxes. Wire tests
 check reversed/star/32-bit boundary sets, sparse UIDs and recovery after rejection.
 A malformed flag operand is also refused with BAD before any change; out-of-range
 message sequence numbers and overlapping UID-set semantics remain unaudited.
+The STATUS slice checks the §6.3.10 example, requested metadata, mailbox-name
+astrings and preservation of the selected mailbox and read-only state. Malformed
+STATUS arguments get BAD before metadata reads, including trailing text and
+invalid list separators. Independent Recent tracking and persistent UIDNEXT
+remain explicit gaps; literal and raw quoted input share the existing parser
+representation, so this is not a complete wire-form or mailbox-name audit.
 The SEARCH slice checks Boolean/UID criteria, calendar dates, charsets and
 errors against wire responses, including the first two §6.4.4 examples. Both
 forms reject malformed bare sequence sets and UID operands before evaluating

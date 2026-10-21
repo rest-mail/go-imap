@@ -833,23 +833,26 @@ func (s *Session) handleStatus(tag, args string) {
 		return
 	}
 
-	// Parse: STATUS <mailbox> (item …) — RFC 3501 §6.3.10. The client sends a
-	// parenthesized list of the status data items it wants; the response must
-	// return exactly those items, never a fixed subset.
-	parts := parseIMAPArgs(args)
-	if len(parts) < 2 {
-		s.tagged(tag, "BAD", "STATUS requires a mailbox name and item list")
+	// Parse the complete RFC 3501 §9 STATUS grammar before touching the
+	// backend. parseIMAPArgs is permissive and can discard trailing arguments.
+	// Literal mailbox arguments have already been spliced as quoted strings.
+	folder, rest, ok := parseAstring(args)
+	if !ok || !validAstring(args[:len(args)-len(rest)]) {
+		s.tagged(tag, "BAD", "Invalid STATUS mailbox name")
 		return
 	}
-	// "INBOX" is case-insensitive (RFC 3501 §5.1); fold to canonical so any-case
-	// spelling reports the real INBOX's status.
-	folder := canonicalizeInbox(unquote(parts[0]))
-
-	items, ok := parseStatusItems(parts[1])
-	if !ok || len(items) == 0 {
+	rest, ok = cutSingleSP(rest)
+	if !ok {
+		s.tagged(tag, "BAD", "STATUS requires SP before the item list")
+		return
+	}
+	items, ok := parseStatusItems(rest)
+	if !ok {
 		s.tagged(tag, "BAD", "STATUS requires a non-empty parenthesized item list")
 		return
 	}
+	// INBOX is case-insensitive; other names retain their spelling.
+	folder = canonicalizeInbox(folder)
 	// Validate every requested item up front so an unknown one is a BAD syntax
 	// error before any untagged response is emitted.
 	for _, item := range items {
