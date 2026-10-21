@@ -2,7 +2,7 @@
 
 This is an explicitly **PARTIAL** checklist: the first RFC 3501 rows for the
 connection greeting, the any-state commands (CAPABILITY, NOOP, LOGOUT), LOGIN,
-tagged completion, STARTTLS, selection-state (SELECT/EXAMINE), STORE, SEARCH, FETCH,
+tagged completion, STARTTLS, selection-state (SELECT/EXAMINE), STORE, SEARCH, FETCH/ENVELOPE,
 EXPUNGE, CLOSE, APPEND, COPY and encoded BODYSTRUCTURE slices, plus partial
 RFC 4315 UID EXPUNGE/COPYUID,
 RFC 6851 MOVE and RFC 7888 non-synchronizing APPEND and command-argument refusal slices. It is not
@@ -368,3 +368,31 @@ CRLF and nested binary attachments guard against accidental decoding.
 This slice preserves quoted-printable source data via raw MIME part traversal.
 It does not validate or decode transfer encodings, expose numbered MIME FETCH
 sections, or claim complete BODYSTRUCTURE/MIME conformance.
+
+## RFC 3501: ENVELOPE — partial header slice
+
+`TestEnvelopeExample` uses the message headers and ENVELOPE in RFC 3501 §8
+(a003/a004). The full ten-field response is checked through public `Session`
+FETCH and UID FETCH. Cached metadata intentionally disagrees with the raw
+headers. Empty/missing headers are also exercised as robustness cases, even
+where RFC 2822 requires a nonempty Date or From.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-ENV-01 | RFC 3501 §§7.4.2, 8 | Normative | Return ten fields in date, subject, from, sender, reply-to, to, cc, bcc, in-reply-to, message-id order, including the RFC example. | TestEnvelopeExample, TestEnvelopeDistinctFields |
+| IMAP-ENV-02 | RFC 3501 §§2.3.3, 2.3.5, 7.4.2 | Normative | Compute date and subject from raw headers, retaining header text and unfolding continuations; do not substitute INTERNALDATE or a cached subject. | TestEnvelopeExample, TestEnvelopeDistinctFields, TestEnvelopeAbsentAndEmpty, TestEnvelopeScalarStrings |
+| IMAP-ENV-03 | RFC 3501 §7.4.2 | Normative | Address lists preserve mailbox order and personal-name/mailbox/host components; absent or empty From, To, Cc and Bcc are NIL, regardless of cached metadata. | TestEnvelopeExample, TestEnvelopeDistinctFields, TestEnvelopeAbsentAndEmpty |
+| IMAP-ENV-04 | RFC 3501 §7.4.2 | Normative | Explicit Sender and Reply-To take their own address lists rather than From. | TestEnvelopeExample, TestEnvelopeDistinctFields |
+| IMAP-ENV-05 | RFC 3501 §§6.4.5, 6.4.8, 7.4.2 | Normative | FETCH and UID FETCH return ENVELOPE without setting or persisting Seen. | TestEnvelopeExample, TestEnvelopeDistinctFields, TestEnvelopeAbsentAndEmpty, TestEnvelopeScalarStrings, TestEnvelopeReadOnlyAndSharedLoad |
+| IMAP-ENV-06 | RFC 3501 §7.4.2 | Normative | Absent scalar headers are NIL; present empty Date, Subject, In-Reply-To and Message-ID are empty strings. | TestEnvelopeAbsentAndEmpty |
+| IMAP-ENV-07 | RFC 3501 §7.4.2 | Normative | Absent or empty Sender and Reply-To default to the From member, including when From is NIL. | TestEnvelopeAbsentAndEmpty |
+| IMAP-ENV-08 | RFC 3501 §§4.3, 7.4.2, 9 | Normative | Scalar header strings escape quote/backslash and use counted literals for 8-bit octets; encoded words remain header text. | TestEnvelopeScalarStrings |
+| IMAP-ENV-09 | RFC 3501 §§2.3.3, 6.3.2, 6.4.5 | Normative | EXAMINE ENVELOPE remains read-only, INTERNALDATE remains arrival metadata and repeated items share a raw read. | TestEnvelopeReadOnlyAndSharedLoad |
+| IMAP-ENV-10 | RFC 3501 §7.4.2 | Normative | Preserve RFC 2822 groups with group-start and group-end address structures. | n/a: not supported yet; net/mail flattens groups and drops empty groups, so group boundaries are lost. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-ENV-11 | RFC 3501 §§4.3, 7.4.2, 9 | Normative | Preserve source routes and legal address syntax, with literal framing for address components that quoted strings cannot carry. | n/a: not supported yet; source routes are always NIL, net/mail rejects some obsolete syntax, and addressPart still uses quoted strings for all nonempty components. This slice only frames scalar header strings. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-ENV-12 | RFC 3501 §§4.3.1, 7.4.2 | Normative | Treat malformed header blocks and prohibited NUL octets consistently without fabricating valid header information. | n/a: malformed header parsing still falls back to the Message summary; NUL header policy is not defined and the scalar encoder can emit NUL in a literal. Full malformed-message and binary handling remain unaudited. Tracked in rest-mail/rest-mail-server#374. |
+
+This slice covers the top-level FETCH ENVELOPE only. MESSAGE/RFC822 nested
+BODYSTRUCTURE envelopes retain a separate helper and need their own audit.
+The scalar literal encoder also accepts malformed raw 8-bit header text for
+compatibility; this does not advertise or implement UTF8=ACCEPT.

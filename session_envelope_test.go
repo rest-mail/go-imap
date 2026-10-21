@@ -129,17 +129,16 @@ func TestIMAP_Envelope_DateFromHeaderNotArrival(t *testing.T) {
 	}
 }
 
-// Item 2: when the Date: header is missing or unparseable, the ENVELOPE date
-// falls back to the arrival time (ReceivedAt / Message.Date).
-func TestIMAP_Envelope_DateFallsBackToArrival(t *testing.T) {
+// A missing Date header is NIL, rather than a fabricated arrival timestamp.
+func TestIMAP_Envelope_MissingDateIsNil(t *testing.T) {
 	raw := "From: Alice <alice@example.com>\r\n" +
 		"To: Bob <bob@example.org>\r\n" +
 		"Subject: No date header\r\n\r\nbody\r\n"
 	m := newMockBackend()
 	m.seed("INBOX", 1, len(raw), raw)
 	line := fetchEnvelope(t, m)
-	if want := `"Sat, 15 Mar 2025 10:00:00 +0000"`; !strings.Contains(line, want) {
-		t.Errorf("ENVELOPE date should fall back to arrival %s\n  got %s", want, line)
+	if !strings.Contains(line, `ENVELOPE (NIL "No date header"`) {
+		t.Errorf("missing envelope date must be NIL: %s", line)
 	}
 }
 
@@ -160,6 +159,7 @@ func TestBuildEnvelope_FromHeaders(t *testing.T) {
 	// Sender and Reply-To come from their own headers here (distinct from From).
 	for _, want := range []string{
 		`"Mon, 01 Jan 2024 09:00:00 +0000"`,           // date (header, not arrival)
+		`"Hello there"`,                               // subject (header, not summary)
 		`"Alice" NIL "alice" "example.com"`,           // from
 		`"Secretary" NIL "sec" "example.com"`,         // sender
 		`"Alice Replies" NIL "replies" "example.com"`, // reply-to
@@ -177,8 +177,8 @@ func TestBuildEnvelope_FromHeaders(t *testing.T) {
 
 // When no raw message is available (rawOK=false), buildEnvelope degrades to the
 // Message model exactly as before: from/sender/reply-to from Message.From, To from
-// Message.To, and cc/bcc/in-reply-to/message-id NIL. This pins the fallback the
-// FETCH path relies on when Mailbox.Fetch cannot supply bytes.
+// Message.To, and cc/bcc/in-reply-to/message-id NIL. This pins the fallback
+// legacy helper callers use without raw bytes; FETCH itself reports load errors.
 func TestBuildEnvelope_NoRawFallsBackToModel(t *testing.T) {
 	msg := Message{
 		Subject: "Hi",
