@@ -192,7 +192,13 @@ STORE/UID STORE changes and read-only selections. LARGER/SMALLER compare the
 host-supplied RFC822.SIZE octet count strictly, accept unsigned 32-bit numbers
 (including zero and leading zeroes), and reject malformed operands before
 evaluation. Size-only searches do not read content or change flags. Other missing
-standard keys, MIME decoding and independent Recent search remain gaps.
+standard keys, MIME decoding and independent Recent search remain gaps. Quoted
+search strings handle escaped quotes/backslashes without splitting the value;
+malformed quote framing and escapes fail before content evaluation. Checked
+literal tests preserve UTF-8, CRLF and quoted-specials in synchronizing and
+LITERAL+ arguments. A grammar-based quote-token fuzz target runs in CI. The
+shared representation still prevents a complete wire quoted-character audit;
+bare astring and separator grammar also remain gaps.
 The FETCH slice checks literal octets, header subsets, partial ranges, RFC822
 aliases, metadata/macros, UID replies, backend refusal and read-only Seen flags,
 including the §§6.4.5/6.4.8 examples. FETCH and UID FETCH reject malformed

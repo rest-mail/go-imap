@@ -161,18 +161,23 @@ are matched without MIME encoded-word or charset decoding (IMAP-SEARCH-10).
 | IMAP-SEARCH-21 | RFC 3501 §§6.4.4, 9 | Normative | Missing or empty HEADER field names, missing HEADER/CC/BCC strings and missing or invalid SENT* dates produce BAD before results or content reads, even inside Boolean/groups or empty mailboxes; the session remains reusable. | TestSearchInvalidHeaderKeys |
 | IMAP-SEARCH-22 | RFC 3501 §§6.4.4, 6.4.8, 9 | Normative | All six internal/sent-date keys accept bare or DQUOTE-enclosed dates with one/two day digits, a case-insensitive month and four year digits; calendar comparisons retain SELECT/EXAMINE and sequence/UID semantics. | TestSearchDateGrammar |
 | IMAP-SEARCH-23 | RFC 3501 §§6.4.4, 6.4.8, 9 | Normative | Reject date-token padding, controls, non-ASCII digits/months, quoted escapes, malformed widths and invalid calendar dates with BAD before results, content reads or flag changes, including Boolean/groups and empty mailboxes; keep command framing and selection reusable. | TestSearchInvalidDateGrammar |
+| IMAP-SEARCH-24 | RFC 3501 §§4.3, 6.4.4, 6.4.8, 9 | Normative | Quoted SEARCH operands decode escaped DQUOTE and backslash without ending the token early, including Boolean/groups; synchronizing and LITERAL+ string operands preserve quotes, backslashes, parentheses, CRLF, UTF-8 and empty values without flag writes. | TestSearchQuotedStrings, TestSearchQuotedLiterals |
+| IMAP-SEARCH-25 | RFC 3501 §§4.3, 6.4.4, 6.4.8, 9 | Normative | Unterminated quotes, invalid escapes, embedded quotes in bare tokens, NUL and text adjoining a closing quote receive BAD before results or content evaluation, including Boolean/groups and empty/read-only mailboxes; selection and command framing remain reusable. | TestSearchInvalidQuotes |
 
-This is not a full search grammar or conformance audit. Search string literals
-(including literal date operands), quoted-string escapes outside dates and
-separators between keys remain unaudited; the existing parser does not reliably
-validate all of these. Out-of-range message sequence
+This is not a full search grammar or conformance audit. Date tokens and
+quoted-token framing/escapes are checked above, each with a grammar-based fuzz
+target: FuzzSearchDate compares date tokens against an independent RFC grammar
+and Gregorian calendar oracle, and FuzzSearchQuotes covers quoted-token framing;
+CI runs each for 30 seconds. The shared literal reader materializes literals as
+quoted strings, so this slice preserves CR/LF and 8-bit literal bytes and does
+not distinguish them from illegal bytes sent directly in a wire quoted-string.
+Literal date operands, full string character validation, bare astring grammar
+and separators between keys remain unaudited. Out-of-range message sequence
 number rejection is also outside this slice. FROM display-name matching,
 backend Fetch errors, BODY/TEXT matching beyond the empty-result example,
 malformed charset data, concurrency, EXPUNGE suppression and the RFC's UID SEARCH
-example remain for later slices. FuzzSearchDate compares date tokens against
-an independent RFC grammar and Gregorian calendar oracle, with generated valid
-dates and fixed invalid seeds; CI runs it for 30 seconds. A coverage gate and
-broader parser fuzz/reference inventory remain separate work.
+example remain for later slices. No coverage gate or independent implementation
+comparison is added here.
 
 ## RFC 3501: FETCH and UID FETCH — partial data/flag slice
 

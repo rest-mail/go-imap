@@ -16,6 +16,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   forms, leap years and strict day/month/year shapes. General SEARCH literal
   and separator grammar remain separate gaps.
 
+- SEARCH and UID SEARCH retain escaped quotes and backslashes inside string
+  operands rather than splitting at an escaped quote. Unterminated quotes,
+  invalid escapes, NUL, quotes embedded in bare tokens and text adjoining a
+  closing quote receive BAD before evaluation. Checked wire tests cover
+  Boolean/groups, empty/read-only mailboxes, recovery and literal preservation;
+  CI fuzzes the quoted-token grammar. Full wire character and separator
+  validation remain separate gaps.
+
 - APPEND validates the RFC 3501 fixed-width date-time grammar before accepting
   message bytes. Bare single-digit days, extra spaces, fractional seconds,
   backslash escapes and invalid zone values now receive BAD. Space-padded and
