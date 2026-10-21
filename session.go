@@ -1168,7 +1168,10 @@ var searchCharsets = map[string]bool{"US-ASCII": true, "UTF-8": true}
 // Any UID set is parsed into ranges here — once, not once per message — so the
 // per-message match is a cheap membership test (issue #8).
 func (s *Session) parseSearchCriteria(args string) ([]searchCriterion, *searchError) {
-	tokens := tokenizeSearch(args)
+	tokens, ok := tokenizeSearch(args)
+	if !ok {
+		return nil, badSearch("invalid quoted string in SEARCH")
+	}
 
 	// An optional leading "CHARSET <name>" selects the charset the string keys
 	// are encoded in. Only US-ASCII and UTF-8 are supported; any other name is a
@@ -1249,7 +1252,7 @@ func (s *Session) maxUID() uint32 {
 // strings and emitting "(" and ")" as their own tokens so parenthesized key
 // groups (RFC 3501 §6.4.4) parse correctly — "(FROM x)" yields ["(","FROM","x",")"]
 // rather than the mis-split ["(FROM","x)"] that the parens-blind tokenizer produced.
-func tokenizeSearch(args string) []string {
+func tokenizeSearch(args string) ([]string, bool) {
 	var tokens []string
 	i := 0
 	for i < len(args) {
@@ -1262,13 +1265,17 @@ func tokenizeSearch(args string) []string {
 		}
 		switch args[i] {
 		case '"':
-			// Quoted string — find closing quote
-			j := i + 1
-			for j < len(args) && args[j] != '"' {
-				j++
+			// Escaped quotes belong to the value, not the token boundary.
+			end := quotedStringEnd(args[i:])
+			if end < 0 {
+				return nil, false
 			}
-			if j < len(args) {
-				j++ // include closing quote
+			j := i + end + 1
+			// readLiteralArgs also uses this representation for literal bytes;
+			// validAstring preserves their CR/LF and 8-bit content while
+			// validating quote/escape structure and excluding NUL.
+			if !validAstring(args[i:j]) || (j < len(args) && args[j] != ' ' && args[j] != ')') {
+				return nil, false
 			}
 			tokens = append(tokens, args[i:j])
 			i = j
@@ -1281,11 +1288,14 @@ func tokenizeSearch(args string) []string {
 			for j < len(args) && args[j] != ' ' && args[j] != '(' && args[j] != ')' {
 				j++
 			}
+			if strings.ContainsRune(args[i:j], '"') {
+				return nil, false
+			}
 			tokens = append(tokens, args[i:j])
 			i = j
 		}
 	}
-	return tokens
+	return tokens, true
 }
 
 // parseSingleCriterion parses one criterion from the token list starting at idx.
