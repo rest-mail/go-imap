@@ -172,8 +172,14 @@ accepted and, having no enable-able extension yet, is a no-op.
 [CHECKLIST.md](CHECKLIST.md) is a **partial**, CI-checked list of RFC 3501
 requirements, each mapped to a wire test in `internal/rfctest` that drives a
 public `Session`. The selection-state slice includes the RFC SELECT/EXAMINE
-examples and records Recent, persistent UID metadata and permission gaps; the
-STORE slice includes the RFC 3501 §6.4.6 example and records the keyword gap.
+examples and records Recent, persistent UID metadata and permission gaps.
+SELECT/EXAMINE require one mailbox astring; malformed or extra arguments get BAD
+before backend access and leave no mailbox selected. Checked tests cover exact
+quoted/literal name decoding, significant spaces, empty strings, INBOX folding,
+command framing and recovery without stale deletion marks. Literal and raw
+quoted octets share the parser representation, so strict wire-form validation
+remains unaudited. The STORE slice includes the RFC 3501 §6.4.6 example and
+records the keyword gap.
 STORE and UID STORE reject malformed sequence sets with BAD before writing flags
 or changing session state, including .SILENT and empty mailboxes. Wire tests
 check reversed/star/32-bit boundary sets, sparse UIDs and recovery after rejection.

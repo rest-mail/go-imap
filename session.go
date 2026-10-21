@@ -751,15 +751,6 @@ func (s *Session) handleSelect(tag, args string, readOnly bool) {
 		return
 	}
 
-	folder := unquote(strings.TrimSpace(args))
-	if folder == "" {
-		folder = "INBOX"
-	}
-	// "INBOX" is case-insensitive (RFC 3501 §5.1): fold any-case spelling to the
-	// canonical name so the backend lookup, UIDVALIDITY and selection state all
-	// resolve to the one real INBOX.
-	folder = canonicalizeInbox(folder)
-
 	// SELECT/EXAMINE begins a new selection (RFC 3501 §6.3.1/§6.3.2), and "if a
 	// SELECT command that fails is attempted, no mailbox is selected." Drop any
 	// prior selection up front so that a failure below leaves the session in the
@@ -771,6 +762,16 @@ func (s *Session) handleSelect(tag, args string, readOnly bool) {
 	s.readOnly = false
 	s.messages = nil
 	s.deleted = make(map[uint32]bool)
+
+	// SELECT and EXAMINE take exactly one mailbox astring (RFC 3501 §9).
+	// Literal arguments were materialized by readLiteralArgs; retain their
+	// decoded value, including significant spaces, instead of trimming it.
+	folder, rest, ok := parseAstring(args)
+	if !ok || rest != "" || !validAstring(args) {
+		s.tagged(tag, "BAD", "SELECT/EXAMINE requires one mailbox name")
+		return
+	}
+	folder = canonicalizeInbox(folder)
 
 	// Fetch messages for this folder
 	messages, err := s.mailbox.Messages(folder)
