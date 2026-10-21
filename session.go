@@ -866,9 +866,9 @@ func (s *Session) handleFetch(tag, args string) {
 		}
 		msg := s.messages[seq-1]
 
-		if s.fetchResponse(seq, msg, tokens) && !msg.Seen && !s.readOnly {
-			_ = s.mailbox.Store(msg.UID, FlagUpdate{Seen: boolPtr(true)})
-			s.messages[seq-1].Seen = true
+		if err := s.fetchResponse(seq, msg, tokens); err != nil {
+			s.tagged(tag, "NO", "FETCH failed")
+			return
 		}
 	}
 
@@ -876,12 +876,12 @@ func (s *Session) handleFetch(tag, args string) {
 }
 
 // fetchResponse composes and sends a single untagged FETCH response for msg,
-// answering exactly the requested data items (RFC 3501 §7.4.2), and reports
-// whether a non-peek body-content item was fetched — the only case that requires
-// the caller to set \Seen. RFC822.SIZE, RFC822.HEADER, BODY.PEEK[...] and the
-// metadata items (FLAGS, INTERNALDATE, ENVELOPE) never trigger that: they must
-// not implicitly mark a message read. UID and FLAGS are always included.
-func (s *Session) fetchResponse(seq int, msg Message, tokens []string) (marksSeen bool) {
+// answering requested data items (RFC 3501 §7.4.2) plus UID and FLAGS. It loads
+// all requested data and persists any implicit \Seen update before emitting the
+// response, so a backend error cannot produce a successful-looking partial
+// response or phantom flags. Read-only selections never set or echo new \Seen.
+func (s *Session) fetchResponse(seq int, msg Message, tokens []string) error {
+	marksSeen := false
 	// raw is loaded lazily: a metadata-only fetch (FLAGS, RFC822.SIZE, …) must
 	// never pull the body — that is the entire point of answering RFC822.SIZE
 	// from the stored size rather than the message content.
@@ -921,8 +921,8 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) (marksSee
 		case up == "ENVELOPE":
 			// ENVELOPE's recipient/reference fields and its date come from the
 			// message's own headers (RFC 3501 §7.4.2), so load the raw message.
-			// This is still metadata: loadRaw never sets \Seen. When the body
-			// cannot be loaded, buildEnvelope degrades to the Message model.
+			// This is still metadata: loadRaw never sets \Seen. A load failure
+			// is reported before sending this message's response.
 			r, ok := loadRaw()
 			plain = append(plain, "ENVELOPE "+buildEnvelope(msg, r, ok))
 		case up == "BODYSTRUCTURE":
@@ -965,22 +965,26 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) (marksSee
 		}
 	}
 
-	// A fetch marks the message \Seen only when it pulled non-peek body content
-	// (marksSeen) and the message was not already seen. When it does, echo the
-	// post-change flags — including \Seen — so this same FETCH response tells the
-	// client the message is now seen (RFC 3501 §6.4.5). A peek fetch or an
-	// already-seen message leaves the flags unchanged. msg is a local copy, so
-	// this does not mutate session state.
-	echoed := msg
-	if marksSeen && !msg.Seen {
-		echoed.Seen = true
+	if rawLoaded && !rawOK {
+		return errors.New("cannot load message data")
 	}
-	plain[1] = fmt.Sprintf("FLAGS (%s)", s.flagString(echoed))
+
+	// Only advertise a new \Seen after the backend accepted it. Earlier
+	// messages in a multi-message FETCH may already have succeeded; an error
+	// stops this command without rolling their completed writes back.
+	if marksSeen && !msg.Seen && !s.readOnly {
+		if err := s.mailbox.Store(msg.UID, FlagUpdate{Seen: boolPtr(true)}); err != nil {
+			return err
+		}
+		msg.Seen = true
+		s.messages[seq-1].Seen = true
+	}
+	plain[1] = fmt.Sprintf("FLAGS (%s)", s.flagString(msg))
 
 	head := fmt.Sprintf("* %d FETCH (%s", seq, strings.Join(plain, " "))
 	if len(lits) == 0 {
 		s.writeString(head + ")\r\n")
-		return marksSeen
+		return nil
 	}
 	s.writeString(head)
 	for _, lf := range lits {
@@ -988,7 +992,7 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) (marksSee
 		s.writeString(lf.payload)
 	}
 	s.writeString(")\r\n")
-	return marksSeen
+	return nil
 }
 
 // ── SEARCH ────────────────────────────────────────────────────────────
@@ -2302,9 +2306,9 @@ func (s *Session) handleUIDFetch(tag, args string) {
 		}
 		msg := s.messages[seq-1]
 
-		if s.fetchResponse(seq, msg, tokens) && !msg.Seen && !s.readOnly {
-			_ = s.mailbox.Store(msg.UID, FlagUpdate{Seen: boolPtr(true)})
-			s.messages[seq-1].Seen = true
+		if err := s.fetchResponse(seq, msg, tokens); err != nil {
+			s.tagged(tag, "NO", "UID FETCH failed")
+			return
 		}
 	}
 

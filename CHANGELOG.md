@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- FETCH and UID FETCH now return NO when requested message data cannot be
+  loaded, instead of OK with omitted data or a partial ENVELOPE fallback.
+- Implicit Seen writes must succeed before FETCH emits the changed flags or
+  body; backend refusal returns NO without phantom session flags. EXAMINE
+  body responses no longer echo Seen when no flag change was made.
+
 - SEARCH and UID SEARCH compare BEFORE/SINCE against the message's internal
   calendar date, ignoring its time and timezone as RFC 3501 requires, instead
   of comparing UTC instants. ON uses the same date-only comparison.
@@ -25,6 +31,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   by `EXAMINE`, preserving both backend and session flags in read-only mode.
 
 ### Added
+
+- A partial FETCH/UID FETCH checklist and external wire proofs for literal
+  octets, sections/aliases, header subsets, partial ranges, metadata/macros,
+  sparse UID replies, backend errors and read-only flags, including the RFC
+  3501 §§6.4.5/6.4.8 examples. Numeric MIME sections and strict argument
+  validation are explicit unsupported gaps.
 
 - A partial SEARCH/UID SEARCH checklist and public-session wire proofs for
   RFC 3501 examples, Boolean criteria, sparse UID/sequence sets, calendar-date

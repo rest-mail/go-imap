@@ -2,8 +2,8 @@
 
 This is an explicitly **PARTIAL** checklist: the first RFC 3501 rows for the
 connection greeting, the any-state commands (CAPABILITY, NOOP, LOGOUT), LOGIN,
-tagged completion, a selection-state slice (SELECT/EXAMINE) and a STORE
-slice. It is not an inventory of all applicable RFC requirements, a full
+tagged completion, selection-state (SELECT/EXAMINE), STORE, SEARCH and FETCH
+slices. It is not an inventory of all applicable RFC requirements, a full
 conformance claim, or a coverage badge. A mapped row means its named wire test
 in `internal/rfctest` asserts the stated behavior through the public
 `Session`; it does not prove the entire referenced section.
@@ -102,3 +102,39 @@ backend Fetch errors, BODY/TEXT matching beyond the empty-result example,
 malformed charset data, concurrency, EXPUNGE suppression and the RFC's UID SEARCH
 example remain for later slices. No coverage gate, parser fuzz target or
 independent implementation comparison is added here.
+
+## RFC 3501: FETCH and UID FETCH — partial data/flag slice
+
+The wire reader consumes literal octet counts independently of CRLF and tagged
+text in the message. `TestFetchHeaderExample` uses §6.4.5's A654 command and
+three concrete header payloads; `TestUIDFetchExample` reproduces §6.4.8's A999
+UID/sequence-number example. This does not inventory all MIME or grammar rules.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-FETCH-01 | RFC 3501 §§4.3, 6.4.5, 7.4.2 | Normative | BODY[] returns the full raw message and BODY[HEADER]/BODY[TEXT] return the header including its blank line / body excluding the header, framed by exact literal octet counts. | TestFetchSections |
+| IMAP-FETCH-02 | RFC 3501 §6.4.5 | Normative | Non-peek BODY sections implicitly set Seen in a writable selection and report changed flags; BODY.PEEK leaves flags unchanged and answers with the BODY item name. | TestFetchSections |
+| IMAP-FETCH-03 | RFC 3501 §6.4.5 | Normative | RFC822 and RFC822.TEXT behave like BODY[] and BODY[TEXT]; RFC822.HEADER behaves like BODY.PEEK[HEADER], retaining their RFC822 response labels. | TestFetchSections |
+| IMAP-FETCH-04 | RFC 3501 §§6.4.5, 7.4.2 | Normative | Partial text fetches slice zero-based octets, truncate at EOF and return empty beyond it; response labels contain only the origin, including zero, while nonpartial responses have no origin. | TestFetchPartialOctets |
+| IMAP-FETCH-05 | RFC 3501 §6.4.5 | Normative | HEADER.FIELDS includes and HEADER.FIELDS.NOT excludes exactly matching case-insensitive field names, preserving folded continuations and the delimiting blank line. | TestFetchHeaderExample |
+| IMAP-FETCH-06 | RFC 3501 §6.4.5 | Normative | Apply a partial range after header-field subsetting. | TestFetchHeaderExample |
+| IMAP-FETCH-07 | RFC 3501 §§2.3.3, 2.3.4, 6.4.5 | Normative | INTERNALDATE and RFC822.SIZE report stored internal-date and octet-size metadata; metadata and peek items do not set Seen. | TestFetchMetadataAndMacros |
+| IMAP-FETCH-08 | RFC 3501 §6.4.5 | Normative | FAST expands to FLAGS/INTERNALDATE/RFC822.SIZE; ALL adds ENVELOPE and FULL additionally adds non-extensible BODY. | TestFetchMetadataAndMacros |
+| IMAP-FETCH-09 | RFC 3501 §6.4.8 | MUST | UID FETCH responses use sequence-number prefixes and include UID even if not requested; sparse ranges select existing UIDs and nonexistent UIDs cause no error or data response. | TestUIDFetchExample |
+| IMAP-FETCH-10 | RFC 3501 §§6.4.5, 6.4.8 | Normative | Failure to load requested message data yields tagged NO, without a partial data response or Seen write for the failed message; earlier completed message responses remain valid. | TestFetchBackendFailure, TestFetchPartialFailure |
+| IMAP-FETCH-11 | RFC 3501 §§6.4.5, 6.4.8 | Normative | Refused implicit Seen writes yield NO without advertising or caching the failed change; successful writes precede the response, and already Seen messages need no redundant write. | TestFetchSeenFailure, TestFetchPartialFailure |
+| IMAP-FETCH-12 | RFC 3501 §§6.3.2, 6.4.5 | Normative | A non-peek body response after EXAMINE reports unchanged flags rather than a phantom Seen change. | TestFetchExamineEcho |
+| IMAP-FETCH-13 | RFC 3501 §§3, 6.4 | Normative | FETCH and UID FETCH require a selected mailbox, including after UNSELECT. | TestFetchRequiresSelection |
+| IMAP-FETCH-14 | RFC 3501 §6.4.5 | MUST | Numeric MIME part paths retrieve the designated part, with nested MESSAGE/RFC822 and MIME section rules. | n/a: not supported yet; bodySection falls back to the whole raw message for numeric/unsupported sections. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-FETCH-15 | RFC 3501 §§6.4.5, 9 | Normative | Invalid or unknown data items, malformed section/partial syntax and illegal macro combinations receive BAD. | n/a: not supported yet; unknown/malformed items are ignored, macros in singleton lists are expanded, and lenient partial forms are accepted. Tracked in rest-mail/rest-mail-server#374. |
+
+This slice does not prove full ENVELOPE/BODYSTRUCTURE semantics, static attribute
+immutability across sessions, absent-part NIL handling, header-only messages
+without a delimiting blank line, sequence-set grammar/overlap behavior, UID
+exhaustion or concurrent EXPUNGE suppression. Hosts must provide correct raw
+message bytes, octet size, internal date and persistent UID/flag metadata.
+Backend data-load failure now refuses ENVELOPE instead of falling back to partial
+Message metadata. A failure stops a multi-message command without undoing earlier
+successful messages. Network write errors remain best-effort; an accepted Seen
+write can outlive a lost connection. Coverage gates, fuzzing, independent
+comparison and a release remain separate work under the parent issue.
