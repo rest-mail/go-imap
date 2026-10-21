@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Early APPEND refusal with a valid `{n+}` literal marker now sends BYE and
+  ends the session instead of interpreting unread message bytes as commands.
+  Synchronizing refusals and backend failures after complete message reads
+  preserve the connection. Adds checked wire tests for pipelined payloads,
+  header-only refusals and consumed-literal backend failures.
+
 - APPEND validates its complete terminal message-literal marker instead of
   ignoring extra arguments or accepting signed lengths. Accepted `{n+}` message
   literals no longer receive an incorrect continuation.

@@ -193,7 +193,7 @@ response codes are not covered by this slice.
 A003 tag, destination and Seen flag. The remaining tests check the engine's
 callback inputs and wire framing; they do not establish durable storage or
 rollback by arbitrary backends. Draft/incomplete message headers are accepted.
-The RFC 7888 row covers the already accepted `{n+}` form only; this engine does
+The RFC 7888 rows cover the already accepted `{n+}` form only; this engine does
 not advertise LITERAL+ and this slice does not claim full extension support.
 
 | ID | Section | Level | Requirement | Tests |
@@ -206,10 +206,10 @@ not advertise LITERAL+ and this slice does not claim full extension support.
 | IMAP-APPEND-06 | RFC 3501 §§5.1, 6.3.11 | SHOULD | With DateAppender, pass the explicit INTERNALDATE including its timezone; fold mixed-case INBOX to the canonical mailbox. | TestAppendFlagsAndDate |
 | IMAP-APPEND-07 | RFC 3501 §6.3.11 | SHOULD | Notify a selected destination with EXISTS before completion and refresh sequence-number resolution; do not notify an unrelated selection. | TestAppendSelectedMailbox |
 | IMAP-APPEND-08 | RFC 3501 §§3.3, 6.3.2, 6.3.11 | Normative | APPEND remains available in selected state, including after EXAMINE: read-only selection does not prohibit appending to a mailbox. | TestAppendSelectedMailbox |
-| IMAP-APPEND-09 | RFC 3501 §6.3.11 | Normative | Backend append failure produces NO without a success notification; a later retry can succeed. | TestAppendBackendFailure |
+| IMAP-APPEND-09 | RFC 3501 §6.3.11 | Normative | Backend append failure produces NO without a success notification; a later retry can succeed. | TestAppendBackendFailure, TestAppendNonSynchronizingBackendFailure |
 | IMAP-APPEND-10 | RFC 3501 §§6.3.11, 9 | Normative | Invalid terminal literal declarations and extra arguments receive BAD without inviting message bytes or calling the backend. | TestAppendInvalidArguments |
 | IMAP-APPEND-11 | RFC 3501 §§4.3, 6.3.11 | Normative | Refuse unsupported flags and oversized synchronizing message literals before sending a continuation, preserving command synchronization. | TestAppendRefusedBeforeContinuation |
-| IMAP-APPEND-12 | RFC 7888 §3 | Normative | For an accepted non-synchronizing APPEND message literal, send no continuation and preserve a following pipelined command. | TestAppendNonSynchronizing |
+| IMAP-APPEND-12 | RFC 7888 §3 | Normative | For an accepted non-synchronizing APPEND message literal, send no continuation and preserve a following pipelined command. | TestAppendNonSynchronizing, TestAppendNonSynchronizingBackendFailure |
 | IMAP-APPEND-13 | RFC 3501 §§2.2, 6.3.11, 9 | Normative | Only a CRLF after the counted message completes APPEND; reject malformed termination without backend delivery and close the ambiguous stream. | TestAppendMalformedTerminator |
 | IMAP-APPEND-14 | RFC 3501 §§2.2, 6.3.11, 9 | Normative | Disconnect before all message bytes and the command terminator arrive cannot deliver an incomplete APPEND to the backend. | TestAppendDisconnectBeforeCompletion |
 | IMAP-APPEND-15 | RFC 3501 §2.3.2 | Normative | Treat supported system flag names case-insensitively on APPEND. | TestAppendFlagsCaseInsensitive |
@@ -219,5 +219,12 @@ not advertise LITERAL+ and this slice does not claim full extension support.
 | IMAP-APPEND-19 | RFC 3501 §6.3.11 | Normative | Set Recent on the new message and preserve requested Deleted and keyword flags. | n/a: not supported yet; Recent is approximated from unread messages, FlagUpdate has no Deleted or keyword fields, and APPEND accepts but drops Deleted. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-APPEND-20 | RFC 3501 §6.3.11 | SHOULD | Honor explicit INTERNALDATE and use current time by default for every backend. | n/a: explicit dates reach only DateAppender; other backends drop them, and default timestamps are assigned by the host rather than the engine. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-APPEND-21 | RFC 3501 §§4.3, 6.3.11 | Normative | Accept a literal mailbox-name astring before the message literal. | n/a: not supported yet; APPEND bypasses readLiteralArgs and only parses atom or quoted mailbox names. Tracked in rest-mail/rest-mail-server#374. |
-| IMAP-APPEND-22 | RFC 7888 §3 | MUST | Consume or safely terminate rejected non-synchronizing literal commands without reinterpreting their octets as commands. | n/a: not supported yet; early APPEND refusals do not drain or close an in-flight non-synchronizing payload. LITERAL+ is not advertised. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-APPEND-22 | RFC 7888 §§3–4 | MUST | For a syntactically valid non-synchronizing literal marker, early APPEND refusal sends BYE and ends the session without dispatching unread octets; backend refusal after consuming the complete command preserves synchronization. | TestAppendRejectedNonSynchronizing, TestAppendNonSynchronizingBackendFailure |
 | IMAP-APPEND-23 | RFC 3501 §§4.3, 9 | Normative | Enforce the complete APPEND grammar, including separators, quoted escapes and legal CHAR8 message bytes. | n/a: not supported yet; the shared parsers are permissive about separators and quoting, and message bytes are not checked for NUL. This slice validates only the terminal message literal and its CRLF. Tracked in rest-mail/rest-mail-server#374. |
+
+Early APPEND refusals with a valid `{n+}` marker choose RFC 7888 §4's
+BYE-and-close policy instead of draining potentially large payloads. This
+includes malformed preceding arguments and unauthenticated commands. Invalid
+markers outside the unsigned 32-bit literal grammar are not a supported
+non-synchronizing form; general command literals and overlong command lines
+still need their own refusal audit. LITERAL+ remains unadvertised.
