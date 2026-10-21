@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- APPEND validates its complete terminal message-literal marker instead of
+  ignoring extra arguments or accepting signed lengths. Accepted `{n+}` message
+  literals no longer receive an incorrect continuation.
+- APPEND requires the command's CRLF before invoking the backend. Incomplete
+  reads and malformed terminators close the connection without storing a
+  message, instead of ignoring terminator read failures or trailing text.
+- APPEND recognizes supported system flag names case-insensitively.
+
 - EXPUNGE and UID EXPUNGE now return NO when any backend deletion fails,
   preserving failed messages and their deletion marks for retry. Successful
   removals still emit EXPUNGE responses; multi-message removal is not atomic.
@@ -37,6 +45,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   by `EXAMINE`, preserving both backend and session flags in read-only mode.
 
 ### Added
+
+- Partial APPEND checklist and public-Session wire proofs for the RFC 3501
+  example, message octets, flags/dates, selected-state notifications, backend
+  refusal, literal grammar, non-synchronizing continuation behavior and
+  incomplete commands. Storage, flag, date, grammar and extension gaps remain
+  explicit in CHECKLIST.md.
 
 - Partial EXPUNGE/CLOSE and RFC 4315 UID EXPUNGE checklist rows and external
   wire proofs for RFC examples, sequence renumbering, UID filtering, backend

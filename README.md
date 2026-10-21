@@ -183,6 +183,12 @@ refusal, arguments and selection state, including the RFC 3501 examples. A
 partial RFC 4315 UID EXPUNGE slice checks UID filtering, preserved non-target
 marks, backend refusal and read-only operation. CLOSE deletion failures,
 persistent Deleted flags and strict UID-set validation remain explicit gaps.
+The APPEND slice checks the §6.3.11 example, exact message octets, supported
+flags/dates, selected-mailbox notifications, backend refusal and terminal literal
+framing, including the accepted non-synchronizing form. Backend atomicity,
+nonexistent destinations/TRYCREATE, Recent/Deleted/keywords, default dates,
+literal mailbox names, rejected non-synchronizing payloads and full grammar
+validation remain explicit gaps. LITERAL+ is not advertised.
 It is growing; it is not yet a full conformance claim.
 
 ## Documentation
