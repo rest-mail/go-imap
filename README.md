@@ -230,8 +230,13 @@ needed, including in nested parts and disposition parameters. Ordinary entities
 default to TEXT/PLAIN, US-ASCII and 7BIT when the relevant MIME fields are absent;
 valid explicit types and charsets win. Invalid Content-Type syntax, including a
 bare type without the mandatory subtype, uses the plain-text fallback in ordinary
-entities, mixed children and encapsulated messages. Unparseable header blocks,
-MIME comments, malformed/empty multiparts and NUL/binary policy remain gaps.
+entities, mixed children and encapsulated messages.
+Content-Type comments and whitespace between tokens are checked against the RFC
+2045 charset example, including nested/escaped comments and quoted parameter
+data through multipart boundaries and encapsulated messages. A differential fuzz
+target compares comment-bearing types with Go MIME parsing of equivalent
+comment-free fields. Unparseable header blocks, comments in other MIME fields,
+malformed/empty multiparts and NUL/binary policy remain gaps.
 The top-level ENVELOPE slice checks the RFC 3501 §8 example, ten-field order,
 header values over cached summaries, missing/empty headers, Sender/Reply-To
 defaults, read-only metadata, and quoted/literal scalar framing. Groups, source

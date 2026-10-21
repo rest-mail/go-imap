@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- BODY/BODYSTRUCTURE now ignore Content-Type comments between lexical tokens
+  and accept whitespace around the type/subtype slash. Valid comment-bearing
+  fields no longer fall back to TEXT/PLAIN or lose multipart children. Quoted
+  parameter data stays intact; malformed comments and split tokens retain
+  invalid-type recovery. Adds checked RFC 2045/822 wire tests and a differential
+  parser fuzz target run for 30 seconds in CI.
+
 - BODY/BODYSTRUCTURE no longer invent a PLAIN subtype for a bare Content-Type
   token such as `application`. Missing subtypes now use the existing invalid-type
   fallback. Adds checked RFC 2045/2046/3501 wire tests for ordinary MIME defaults,

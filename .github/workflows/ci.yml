@@ -42,3 +42,6 @@ jobs:
 
       - name: Run tests with race detector
         run: go test -race -count=1 ./...
+
+      - name: Fuzz Content-Type comments
+        run: go test -run='^$' -fuzz='^FuzzContentTypeComments$' -fuzztime=30s .
