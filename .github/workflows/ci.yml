@@ -45,3 +45,6 @@ jobs:
 
       - name: Fuzz MIME transfer-encoding token
         run: go test -run=^$ -fuzz=^FuzzTransferEncoding$ -fuzztime=30s .
+
+      - name: Fuzz Content-Type comments
+        run: go test -run='^$' -fuzz='^FuzzContentTypeComments$' -fuzztime=30s .
