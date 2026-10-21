@@ -888,9 +888,27 @@ func buildBodyStructure(raw string, extension bool) string {
 
 // parseContentType adapts mail's RFC 822 lexical rules to mime.ParseMediaType,
 // which does not accept comments or whitespace around the type/subtype slash.
-// Comments separate tokens; deleting them must not join an invalid split token.
-// Quoted parameter values (including parentheses and quoted-pairs) stay intact.
 func parseContentType(value string) (string, map[string]string, error) {
+	uncommented, err := uncommentMIME(value)
+	if err != nil {
+		return "", nil, err
+	}
+	base, parameters, hasParameters := strings.Cut(uncommented, ";")
+	if typ, subtype, ok := strings.Cut(base, "/"); ok {
+		base = strings.TrimSpace(typ) + "/" + strings.TrimSpace(subtype)
+	}
+	if hasParameters {
+		base += ";" + parameters
+	}
+	return mime.ParseMediaType(base)
+}
+
+// uncommentMIME replaces each RFC 822 §3.4.3 comment in a MIME header value
+// (RFC 2045 §5.1, RFC 2183 §2) with a space for mime.ParseMediaType. Comments
+// separate tokens; deleting them must not join an invalid split token. Quoted
+// parameter values (including parentheses and quoted-pairs) stay intact.
+// Unbalanced comments and unterminated quoted strings are errors.
+func uncommentMIME(value string) (string, error) {
 	var b strings.Builder
 	depth := 0
 	quoted := false
@@ -918,23 +936,16 @@ func parseContentType(value string) (string, map[string]string, error) {
 			depth = 1
 			b.WriteByte(' ')
 		case c == ')':
-			return "", nil, mime.ErrInvalidMediaParameter
+			return "", mime.ErrInvalidMediaParameter
 		default:
 			b.WriteByte(c)
 			quoted = c == '"'
 		}
 	}
 	if depth != 0 || quoted {
-		return "", nil, mime.ErrInvalidMediaParameter
+		return "", mime.ErrInvalidMediaParameter
 	}
-	base, parameters, hasParameters := strings.Cut(b.String(), ";")
-	if typ, subtype, ok := strings.Cut(base, "/"); ok {
-		base = strings.TrimSpace(typ) + "/" + strings.TrimSpace(subtype)
-	}
-	if hasParameters {
-		base += ";" + parameters
-	}
-	return mime.ParseMediaType(base)
+	return b.String(), nil
 }
 
 // partStructure builds the body structure for one MIME entity given its header
@@ -1081,15 +1092,21 @@ func singlePartStructure(maintype, subtype string, params map[string]string, hea
 // "(" disp-type SP body-fld-param ")" (RFC 3501 §7.4.2), e.g.
 // ("ATTACHMENT" ("FILENAME" "doc.pdf")), with the disposition type and parameter
 // names uppercased for consistency with the rest of the structure and parameter
-// values preserved verbatim. An absent or unparseable Content-Disposition yields
-// NIL.
+// values preserved verbatim. Comments between tokens are ignored (RFC 2183 §2
+// uses RFC 822 lexical rules). The disposition type is a single token, so a
+// type/subtype pair is invalid. An absent or unparseable Content-Disposition
+// yields NIL.
 func dispositionField(header textproto.MIMEHeader) string {
 	cd := header.Get("Content-Disposition")
 	if cd == "" {
 		return "NIL"
 	}
-	disptype, params, err := mime.ParseMediaType(cd)
-	if err != nil || disptype == "" {
+	uncommented, err := uncommentMIME(cd)
+	if err != nil {
+		return "NIL"
+	}
+	disptype, params, err := mime.ParseMediaType(uncommented)
+	if err != nil || disptype == "" || strings.Contains(disptype, "/") {
 		return "NIL"
 	}
 	return "(" + encodeMailboxName(strings.ToUpper(disptype)) + " " + paramList(params) + ")"

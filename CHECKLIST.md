@@ -363,7 +363,7 @@ CRLF and nested binary attachments guard against accidental decoding.
 | IMAP-BS-08 | RFC 3501 §7.4.2; RFC 3282 §2 | MAY | BODYSTRUCTURE derives the language slot from each entity's own Content-Language list: comments dropped, tags trimmed with case kept; none is NIL, one a string, several a parenthesized list; multipart and MESSAGE/RFC822 values are not inherited and tags use valid string framing. Tags are not validated against the language-tag grammar. | TestBodyStructureLanguage, TestBodyStructureNestedLanguage, TestBodyStructureLanguageStrings |
 | IMAP-BS-09 | RFC 3501 §§7.4.2, 9 | Normative | MESSAGE/RFC822 carries its encapsulated envelope, body structure and line count. | TestMessageStructureRFCEnvelope, TestMessageStructureHeaderDefaults, TestMessageStructureScalarStrings, TestMessageStructureRecursiveBody, TestMessageStructureNestedMessage |
 | IMAP-BS-10 | RFC 3501 §§4.3, 7.4.2, 9 | Normative | Encode every body string using valid IMAP string framing for the source octets. | n/a: not fully audited; MIME strings are checked by IMAP-BS-13 through IMAP-BS-16, encapsulated envelope address components by IMAP-ENV-13, and NUL/binary policy remains undefined. Tracked in rest-mail/rest-mail-server#374. |
-| IMAP-BS-11 | RFC 3501 §7.4.2 | Normative | Default omitted MIME fields according to MIME rules, including defaults that depend on the enclosing multipart subtype. | n/a: not fully audited; fabricated text/plain fallback structures for unparseable header blocks and empty multiparts need independent verification. Ordinary Content-Type/charset defaults and missing subtypes are IMAP-BS-20/21; multipart/digest child defaults are IMAP-BS-12. Content-Type comments are IMAP-BS-22/23; comments in other MIME fields and malformed multipart framing remain unaudited. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-BS-11 | RFC 3501 §7.4.2 | Normative | Default omitted MIME fields according to MIME rules, including defaults that depend on the enclosing multipart subtype. | n/a: not fully audited; fabricated text/plain fallback structures for unparseable header blocks and empty multiparts need independent verification. Ordinary Content-Type/charset defaults and missing subtypes are IMAP-BS-20/21; multipart/digest child defaults are IMAP-BS-12. Content-Type comments are IMAP-BS-22/23, Content-Transfer-Encoding IMAP-CTE-01..03 and Content-Disposition IMAP-CDP-01..03; comments in Content-ID/Description and malformed multipart framing remain unaudited. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-BS-12 | RFC 3501 §7.4.2; RFC 2046 §5.1.5 | Normative | A multipart/digest child without Content-Type is MESSAGE/RFC822 with its envelope, body structure and line count; explicit types still win, and the default does not leak into other multiparts or multiparts nested in the digest. | TestBodyStructureDigestDefault, TestBodyStructureDigestScope |
 | IMAP-BS-13 | RFC 3501 §§4.3, 7.4.2, 9 | Normative | MIME parameter values are strings: preserve empty values as quoted empty strings, escape quoted-specials, retain encoded words, and frame RFC 2231 decoded 8-bit/CRLF values with octet-counted literals. | TestBodyStructureParameterStrings |
 | IMAP-BS-14 | RFC 3501 §§4.3, 7.4.2, 9 | Normative | Content-ID, description and transfer-encoding fields use valid quoted/literal framing; missing optional fields remain NIL and missing transfer encoding defaults to 7BIT. | TestBodyStructureHeaderStrings |
@@ -393,6 +393,20 @@ behavior; this is not a full MIME validity or transfer-decoding check.
 | IMAP-CTE-01 | RFC 2045 §§1, 6.1; RFC 822 §§3.4.2–3.4.3 | Normative | BODY/BODYSTRUCTURE derive the case-insensitive encoding token without surrounding whitespace or nested/escaped comments; retain extension tokens and encoded body octets/line counts. | TestBodyStructureEncodingComments, TestBodyStructureEncodingCommentScope |
 | IMAP-CTE-02 | RFC 3501 §§6.4.5, 7.4.2; RFC 2045 §6.1 | Normative | Parse each multipart or encapsulated entity's own encoding, default absent fields to 7BIT without inheritance, and preserve metadata-only behavior under SELECT/EXAMINE and FETCH/UID FETCH. | TestBodyStructureEncodingCommentScope |
 | IMAP-CTE-03 | RFC 2045 §6.1; RFC 822 §3.4.2 | Normative | A single encoding token cannot be manufactured by joining token pieces across comments or whitespace; malformed values retain the existing safely framed opaque-string policy. | TestBodyStructureMalformedEncodingComments |
+
+## MIME Content-Disposition comments — partial lexical slice
+
+RFC 2183 §2 applies RFC 822 §§3.4.2–3.4.3 comments and lexical whitespace to
+Content-Disposition. The comment lexer is shared with Content-Type
+(IMAP-BS-22/23). Fixtures are synthetic grammar cases, not borrowed message
+vectors. RFC 2183 parameter value syntax (dates, sizes) and RFC 2231
+continuations beyond Go's MIME parser are not audited.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-CDP-01 | RFC 2183 §2; RFC 822 §§3.4.2–3.4.3; RFC 3501 §7.4.2 | Normative | BODYSTRUCTURE body-fld-dsp ignores nested/escaped and folded comments between the disposition type, parameter names and values, and preserves parentheses and quoted-pairs inside quoted parameter values. | TestBodyStructureDispositionComments |
+| IMAP-CDP-02 | RFC 2183 §2; RFC 3501 §7.4.2 | Normative | Each single-part, multipart and encapsulated entity reports its own comment-bearing disposition without inheritance, under SELECT/EXAMINE and FETCH/UID FETCH. | TestBodyStructureDispositionCommentScope |
+| IMAP-CDP-03 | RFC 2183 §2; RFC 822 §3.4.2 | Normative | A comment separates rather than joins tokens; split tokens, unbalanced comments or quotes, an empty type and a type/subtype pair yield NIL while independent fields are retained. | TestBodyStructureInvalidDispositionComments |
 
 ## RFC 3501: ENVELOPE — partial header slice
 
