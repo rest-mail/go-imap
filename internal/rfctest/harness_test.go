@@ -78,7 +78,16 @@ func dial(t *testing.T) *client {
 // dialMailbox supplies an account fixture to the same public-session harness.
 func dialMailbox(t *testing.T, box imap.Mailbox) *client {
 	t.Helper()
+	return dialConn(t, box, nil)
+}
+
+// dialConn optionally wraps the session's transport to inject read failures.
+func dialConn(t *testing.T, box imap.Mailbox, wrap func(net.Conn) net.Conn) *client {
+	t.Helper()
 	clientConn, serverConn := net.Pipe()
+	if wrap != nil {
+		serverConn = wrap(serverConn)
+	}
 	b := &backend{box: box}
 	sess := imap.NewSession(serverConn, b, "imap.test", nil, imap.NopLimiter{})
 	done := make(chan struct{})

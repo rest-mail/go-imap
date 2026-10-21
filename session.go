@@ -154,24 +154,33 @@ func (s *Session) discardToLineEnd() error {
 // may itself end in another literal, so this repeats until the assembled line
 // carries no trailing literal.
 //
-// ok is false after a tagged BAD has been sent for a malformed or over-large
-// literal, or after a read error/EOF (no response, the caller's next read will
-// surface it); the caller must not dispatch the command. Memory stays bounded:
+// ok is false after a tagged BAD for a resource limit, or a read error/EOF;
+// the caller must not dispatch the command. closeConn also tells the caller to
+// end the session when unread literal bytes or a lost line boundary make the
+// stream unsafe to reuse. Refusals with unread non-synchronizing literals send
+// BYE instead of draining potentially large payloads (RFC 7888 §§3–4).
+// Memory stays bounded:
 // the aggregate literal octets are capped at MaxLiteralSize and the assembled
 // line at MaxCommandLineLength, both independent of how the client chunks input.
-func (s *Session) readLiteralArgs(tag, args string) (assembled string, ok bool) {
+func (s *Session) readLiteralArgs(tag, args string) (assembled string, ok, closeConn bool) {
+	reject := func(reason string, fatal bool) (string, bool, bool) {
+		s.tagged(tag, "BAD", reason)
+		if fatal {
+			s.send("* BYE Command literal rejected; stream cannot be reused")
+		}
+		return "", false, fatal
+	}
 	total := 0 // aggregate literal octets across this command
 	for {
 		prefix, size, sync, isLit := splitTrailingLiteral(args)
 		if !isLit {
-			return args, true // no (further) trailing literal
+			return args, true, false // no (further) trailing literal
 		}
 
 		// Bound the literal BEFORE soliciting its octets. A synchronizing literal
 		// is refused without a continuation, so the client never sends the octets.
 		if size > MaxLiteralSize || total+size > MaxLiteralSize {
-			s.tagged(tag, "BAD", fmt.Sprintf("Literal too large (limit %d bytes)", MaxLiteralSize))
-			return "", false
+			return reject(fmt.Sprintf("Literal too large (limit %d bytes)", MaxLiteralSize), !sync)
 		}
 		total += size
 
@@ -181,23 +190,26 @@ func (s *Session) readLiteralArgs(tag, args string) (assembled string, ok bool) 
 
 		buf := make([]byte, size)
 		if _, err := io.ReadFull(s.reader, buf); err != nil {
-			return "", false // connection error mid-literal; caller's read surfaces it
+			return "", false, true // never dispatch buffered partial input after a read error
 		}
 
 		// The command continues on the line following the literal octets.
 		cont, tooLong, err := s.readLine()
 		if err != nil {
-			return "", false
+			return "", false, true
 		}
 		if tooLong {
-			s.tagged(tag, "BAD", fmt.Sprintf("Command line too long (limit %d bytes)", MaxCommandLineLength))
-			return "", false
+			// readLine discarded the suffix, including any next literal marker.
+			return reject(fmt.Sprintf("Command line too long (limit %d bytes)", MaxCommandLineLength), true)
 		}
 
 		args = prefix + quoteLiteral(buf) + cont
 		if len(args) > MaxCommandLineLength {
-			s.tagged(tag, "BAD", fmt.Sprintf("Command too long (limit %d bytes)", MaxCommandLineLength))
-			return "", false
+			// Only the continuation can introduce another unread literal. A
+			// synchronizing marker has not invited bytes; a complete command
+			// without a marker has already consumed its final CRLF.
+			_, _, nextSync, nextLiteral := splitTrailingLiteral(cont)
+			return reject(fmt.Sprintf("Command too long (limit %d bytes)", MaxCommandLineLength), nextLiteral && !nextSync)
 		}
 	}
 }
@@ -335,9 +347,12 @@ func (s *Session) Handle() {
 		// handleAppend's large-message path, which needs the raw octets, not a
 		// re-encoded argument.
 		if ucmd != "APPEND" {
-			materialized, argsOK := s.readLiteralArgs(tag, args)
+			materialized, argsOK, closeConn := s.readLiteralArgs(tag, args)
+			if closeConn {
+				return // buffered unread octets must never become new commands
+			}
 			if !argsOK {
-				continue // tagged error already sent, or the connection failed
+				continue // safe refusal before a continuation or after a complete command
 			}
 			args = materialized
 		}

@@ -4,7 +4,7 @@ This is an explicitly **PARTIAL** checklist: the first RFC 3501 rows for the
 connection greeting, the any-state commands (CAPABILITY, NOOP, LOGOUT), LOGIN,
 tagged completion, selection-state (SELECT/EXAMINE), STORE, SEARCH, FETCH,
 EXPUNGE, CLOSE and APPEND slices, plus partial RFC 4315 UID EXPUNGE and
-RFC 7888 non-synchronizing APPEND slices. It is not
+RFC 7888 non-synchronizing APPEND and command-argument refusal slices. It is not
 an inventory of all applicable RFC requirements, a full conformance claim, or
 a coverage badge. A mapped row means its named wire test
 in `internal/rfctest` asserts the stated behavior through the public
@@ -226,5 +226,29 @@ Early APPEND refusals with a valid `{n+}` marker choose RFC 7888 §4's
 BYE-and-close policy instead of draining potentially large payloads. This
 includes malformed preceding arguments and unauthenticated commands. Invalid
 markers outside the unsigned 32-bit literal grammar are not a supported
-non-synchronizing form; general command literals and overlong command lines
-still need their own refusal audit. LITERAL+ remains unadvertised.
+non-synchronizing form. Initial overlong command lines still need their own
+refusal audit. LITERAL+ remains unadvertised.
+
+## RFC 3501 / RFC 7888: command-argument literals — partial refusal slice
+
+These rows cover the existing non-APPEND literal materialization path and its
+resource limits. They do not prove full command grammar or LITERAL+ support.
+RFC 7888 §§3–4 permit BYE-and-close instead of consuming refused in-flight
+literal data. Once a continuation line exceeds the line cap, its suffix and
+any next literal marker are lost; this path closes conservatively as well.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-LITERAL-01 | RFC 3501 §4.3 | Normative | Refuse oversized synchronizing argument literals before requesting their octets, including aggregate limits across multiple literals; preserve the next command. | TestCommandLiteralSafeRefusal |
+| IMAP-LITERAL-02 | RFC 7888 §§3–4 | MUST | Refusing an individual or aggregate oversized non-synchronizing argument literal sends BYE and ends the session without dispatching unread payload. | TestCommandLiteralRefusalCloses |
+| IMAP-LITERAL-03 | RFC 7888 §§3–4 | MUST | Refusing an oversized assembled command with another non-synchronizing argument literal sends BYE and ends the session without dispatching that literal's unread payload. | TestCommandLiteralRefusalCloses |
+| IMAP-LITERAL-04 | RFC 7888 §3 | MUST | Reject an overlong literal-continuation line with BYE and end the session because a discarded trailing marker may leave in-flight literal octets. | TestCommandLiteralRefusalCloses |
+| IMAP-LITERAL-05 | RFC 3501 §§2.2.1, 4.3 | Normative | Refusing oversized assembled arguments preserves the next command if no literal remains unread or the next literal is synchronizing and no continuation has been sent. | TestCommandLiteralSafeRefusal |
+| IMAP-LITERAL-06 | RFC 3501 §4.3; RFC 7888 §3 | Normative | Count accepted LOGIN argument octets, support empty literals, send continuations only for synchronizing forms, and preserve a pipelined next command. | TestCommandLiteralAccepted |
+| IMAP-LITERAL-07 | RFC 3501 §§2.2.1, 4.3 | Normative | A read error before all argument octets or the continuation line arrive ends the session without dispatching the incomplete command or unread suffix. | TestCommandLiteralReadFailureEnds |
+
+Initial command-line overflow, malformed markers, complete quoting/separator
+and CHAR8 validation, binary literals, literal mailbox names in APPEND, and
+other extension interactions remain unaudited or unsupported. In particular,
+this slice does not fix initial overlong lines discarding a `{n+}` suffix.
+The accepted non-synchronizing form remains unadvertised compatibility behavior.

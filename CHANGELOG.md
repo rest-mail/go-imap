@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Refused non-synchronizing command-argument literals now send BYE and end
+  the session instead of dispatching unread payload as commands. This covers
+  individual/aggregate literal bounds and expanded-command bounds. Overlong
+  literal-continuation lines also close because their discarded suffix may
+  hide another literal. Literal read errors end the session. Safe refusals
+  before a synchronizing continuation or after a complete command keep the
+  connection usable. Initial overlong command lines remain a separate gap.
+  Adds partial checklist rows and public-Session wire tests.
+
 - Early APPEND refusal with a valid `{n+}` literal marker now sends BYE and
   ends the session instead of interpreting unread message bytes as commands.
   Synchronizing refusals and backend failures after complete message reads
