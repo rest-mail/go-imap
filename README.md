@@ -174,7 +174,11 @@ STORE slice includes the RFC 3501 §6.4.6 example and records the keyword gap.
 The SEARCH slice checks Boolean/UID criteria, calendar dates, charsets and
 errors against wire responses, including the first two §6.4.4 examples. Missing
 standard keys, MIME decoding and independent Recent search remain explicit gaps.
-It is growing; it is not yet a full conformance claim.
+The FETCH slice checks literal octets, header subsets, partial ranges, RFC822
+aliases, metadata/macros, UID replies, backend refusal and read-only Seen flags,
+including the §§6.4.5/6.4.8 examples. Numeric MIME sections and strict FETCH
+argument validation remain unsupported. It is growing; it is not yet a full
+conformance claim.
 
 ## Documentation
 
