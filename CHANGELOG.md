@@ -17,6 +17,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Numeric MIME sections and complete header-field-list grammar remain separate
   gaps.
 
+- SEARCH and UID SEARCH now support HEADER, CC, BCC, SENTBEFORE, SENTON and
+  SENTSINCE, previously rejected as unknown keys. They read the message's raw
+  header block: header strings match the unfolded field text after the colon,
+  and the SENT keys compare the Date: header's calendar date. Malformed
+  operands receive BAD before evaluation. Checked wire tests cover
+  IMAP-SEARCH-19/20/21. KEYWORD/UNKEYWORD remain a documented gap.
+
 - FETCH and UID FETCH now reject malformed BODY/BODY.PEEK partial ranges with
   BAD before reading content, changing Seen or sending a FETCH response, even
   with no matching messages. Requests require `<origin.count>` with unsigned
