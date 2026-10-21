@@ -1362,7 +1362,7 @@ func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriter
 		if idx+1 >= len(tokens) {
 			return searchCriterion{}, idx, badSearch(keyword + " requires a date")
 		}
-		d, ok := parseSearchDate(unquote(tokens[idx+1]))
+		d, ok := parseSearchDate(tokens[idx+1])
 		if !ok {
 			return searchCriterion{}, idx, badSearch("invalid " + keyword + " date: " + unquote(tokens[idx+1]))
 		}
@@ -1437,18 +1437,26 @@ func parseIMAPDateTime(s string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// parseSearchDate parses an IMAP SEARCH date ("1-Jan-2006" or "01-Jan-2006",
-// RFC 3501 §9). ok is false when s is not a valid date (bad month, day out of
-// range, non-numeric) — the caller answers BAD rather than comparing against the
-// zero time, which would silently match every message.
+// parseSearchDate parses RFC 3501 §9's date token: date-text, optionally
+// enclosed in DQUOTEs. Unlike an astring, it permits neither quoted escapes
+// nor surrounding whitespace. Validate the wire shape before calendar parsing.
 func parseSearchDate(s string) (time.Time, bool) {
-	s = strings.TrimSpace(s)
-	for _, layout := range []string{"2-Jan-2006", "02-Jan-2006"} {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t, true
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		s = s[1 : len(s)-1]
+	}
+	dayLen := len(s) - 9
+	if (dayLen != 1 && dayLen != 2) || s[dayLen] != '-' || s[dayLen+4] != '-' {
+		return time.Time{}, false
+	}
+	for i := range s {
+		if i < dayLen || i > dayLen+4 {
+			if s[i] < '0' || s[i] > '9' {
+				return time.Time{}, false
+			}
 		}
 	}
-	return time.Time{}, false
+	t, err := time.Parse("2-Jan-2006", s)
+	return t, err == nil
 }
 
 // compareSearchDate applies a SINCE, BEFORE or ON comparison (kind is

@@ -212,6 +212,12 @@ response labels preserve valid wire tokens. Checked tests cover escaped names,
 folded fields, partial-after-subset ranges and Seen rules. Numeric MIME sections
 and other section-name validation remain unsupported; literal names retain the
 existing command parser's ASCII/NUL/line-break restrictions.
+SEARCH's six calendar-date keys require RFC 3501 date tokens: one/two day digits,
+an ASCII month and four year digits, bare or enclosed in DQUOTEs. Invalid dates,
+padding and quoted escapes receive BAD before content evaluation. Checked wire
+tests cover Boolean/groups, empty mailboxes, recovery and calendar boundaries;
+a grammar/calendar oracle fuzz target runs for 30 seconds in CI. General SEARCH
+string/literal and separator grammar remain separate gaps.
 The EXPUNGE/CLOSE slice checks removal, sequence renumbering, retry after backend
 refusal, arguments and selection state, including the RFC 3501 examples. A
 partial RFC 4315 UID EXPUNGE slice checks UID filtering, preserved non-target

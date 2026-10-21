@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- SEARCH and UID SEARCH validate all six date-key operands as RFC 3501 §9
+  date tokens before calendar parsing, instead of trimming malformed padding
+  or decoding quoted escapes. Invalid dates receive BAD before content reads
+  or results, including Boolean/groups and empty mailboxes. Checked wire
+  proofs and a grammar/calendar oracle fuzz target cover valid bare/quoted
+  forms, leap years and strict day/month/year shapes. General SEARCH literal
+  and separator grammar remain separate gaps.
+
 - APPEND rejects invalid unquoted mailbox-name octets before inviting message
   data or calling the backend (RFC 3501 §9). Controls, non-ASCII octets,
   wildcards and quoted-specials require a string rather than an unquoted name;
