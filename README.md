@@ -224,8 +224,9 @@ framing, including the accepted non-synchronizing form. Early refusal of a
 valid `{n+}` APPEND sends BYE and closes without dispatching unread payload;
 backend refusal after consuming the command keeps the session usable. A
 malformed flag-list or argument separator receives BAD before the continuation. Backend
-atomicity, nonexistent destinations/TRYCREATE, Recent/Deleted/keywords, default dates,
-literal mailbox names and the remaining grammar validation remain explicit gaps.
+atomicity, nonexistent destinations/TRYCREATE, Recent/Deleted/keywords, default dates
+and the remaining grammar validation remain explicit gaps. A mailbox name sent as a
+synchronizing or LITERAL+ literal is accepted before the message literal.
 The command-argument literal slice checks individual/aggregate size refusal,
 assembled-command limits, overlong continuation lines and accepted LOGIN framing.
 Ambiguous refusals send BYE and end the session; synchronizing refusals and

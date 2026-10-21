@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- APPEND accepts a mailbox name sent as a synchronizing or LITERAL+ literal
+  before the message literal (RFC 3501 §§4.3, 9), instead of misreading the
+  name's octets. An empty, oversized or NUL-containing name receives BAD, and a
+  refusal with an unread non-synchronizing message literal still closes the
+  session. Checked by IMAP-APPEND-21.
+
 - FETCH and UID FETCH strictly validate HEADER.FIELDS[.NOT] lists before any
   reads, Seen writes or responses, including empty/nonmatching sets. Quoted and
   literal names now match decoded values instead of their quote characters;
