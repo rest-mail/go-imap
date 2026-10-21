@@ -943,12 +943,12 @@ func multipartStructure(subtype string, params map[string]string, header textpro
 		// body-ext-mpart: parameters, disposition, language, location. The
 		// content-type parameters (including boundary) are reported; disposition is
 		// read from the multipart's Content-Disposition when present; location is
-		// taken from Content-Location. Language is not yet implemented.
+		// taken from Content-Location; language from Content-Language.
 		b.WriteByte(' ')
 		b.WriteString(paramList(params))
 		b.WriteByte(' ')
 		b.WriteString(dispositionField(header))
-		fmt.Fprintf(&b, " NIL %s", nilOrQuote(header.Get("Content-Location")))
+		fmt.Fprintf(&b, " %s %s", languageField(header), nilOrQuote(header.Get("Content-Location")))
 	}
 	b.WriteByte(')')
 	return b.String()
@@ -1018,9 +1018,8 @@ func singlePartStructure(maintype, subtype string, params map[string]string, hea
 		// body-ext-1part: MD5, disposition, language, location. Preserve the
 		// supplied Content-MD5 and Content-Location; do not compute or verify a
 		// digest, resolve a URI, or inherit fields from an enclosing entity.
-		// Language is not yet implemented.
-		fmt.Fprintf(&b, " %s %s NIL %s", nilOrQuote(header.Get("Content-Md5")),
-			dispositionField(header), nilOrQuote(header.Get("Content-Location")))
+		fmt.Fprintf(&b, " %s %s %s %s", nilOrQuote(header.Get("Content-Md5")),
+			dispositionField(header), languageField(header), nilOrQuote(header.Get("Content-Location")))
 	}
 	b.WriteByte(')')
 	return b.String()
@@ -1042,6 +1041,52 @@ func dispositionField(header textproto.MIMEHeader) string {
 		return "NIL"
 	}
 	return "(" + encodeMailboxName(strings.ToUpper(disptype)) + " " + paramList(params) + ")"
+}
+
+// languageField renders a part's Content-Language as an IMAP body-fld-lang:
+// nstring / "(" string *(SP string) ")" (RFC 3501 §7.4.2). The header is a
+// comma-separated Language-List with optional CFWS (RFC 3282 §2): comments are
+// dropped, each tag is trimmed and kept as supplied, and empty members are
+// skipped. No tags is NIL, one tag a string, several a parenthesized list.
+// Tags are not validated against the language-tag grammar.
+func languageField(header textproto.MIMEHeader) string {
+	var tags []string
+	for _, v := range header.Values("Content-Language") {
+		for _, tag := range strings.Split(stripComments(v), ",") {
+			if tag = strings.TrimSpace(tag); tag != "" {
+				tags = append(tags, encodeMailboxName(tag))
+			}
+		}
+	}
+	switch len(tags) {
+	case 0:
+		return "NIL"
+	case 1:
+		return tags[0]
+	}
+	return "(" + strings.Join(tags, " ") + ")"
+}
+
+// stripComments removes RFC 5322 §3.2.2 comments — parenthesized, nestable,
+// with backslash quoted-pairs — from a structured header value. An unclosed
+// comment runs to the end of the value.
+func stripComments(s string) string {
+	var b strings.Builder
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case depth > 0 && c == '\\':
+			i++
+		case c == '(':
+			depth++
+		case depth > 0 && c == ')':
+			depth--
+		case depth == 0:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
 }
 
 // buildEncapsulatedEnvelope constructs the IMAP ENVELOPE (RFC 3501 §7.4.2) of a

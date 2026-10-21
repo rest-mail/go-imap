@@ -74,3 +74,52 @@ func TestBodyStructureExtensionStrings(t *testing.T) {
 		})
 	}
 }
+
+// Content-Language is an RFC 3282 §2 Language-List: comma-separated tags with
+// optional CFWS. "da" and "mi, en" are RFC 3282's examples. One tag is a
+// string, several a parenthesized list, none NIL; tags keep their case.
+//
+// checklist: IMAP-BS-08
+func TestBodyStructureLanguage(t *testing.T) {
+	const base = `("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "7BIT" 1 1`
+	for _, tc := range []struct{ name, headers, lang string }{
+		{"absent", "", "NIL"},
+		{"empty", "Content-Language:\r\n", "NIL"},
+		{"only-cfws", "Content-Language: (none) , ,\r\n", "NIL"},
+		{"single", "content-language: da\r\n", `"da"`},
+		{"list", "Content-Language: mi, en\r\n", `("mi" "en")`},
+		{"comments", "Content-Language: en (English),fr-CA (Canadian (Qu\\)bec) French)\r\n", `("en" "fr-CA")`},
+		{"folded", "Content-Language: de-CH,\r\n\tEN-gb\r\n", `("de-CH" "EN-gb")`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			structureResponse(t, tc.headers+"Content-Location: a.txt\r\n\r\nx", base+")",
+				base+" NIL NIL "+tc.lang+` "a.txt")`)
+		})
+	}
+}
+
+// Multipart and MESSAGE/RFC822 entities carry their own language; children and
+// encapsulated bodies do not inherit it.
+//
+// checklist: IMAP-BS-08
+func TestBodyStructureNestedLanguage(t *testing.T) {
+	const base = `("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "7BIT" 1 1`
+	raw := "Content-Type: multipart/alternative; boundary=B\r\nContent-Language: en, fr\r\n\r\n" +
+		"--B\r\nContent-Language: fr\r\n\r\nx\r\n--B\r\n\r\ny\r\n--B--\r\n"
+	structureResponse(t, raw, "("+base+")"+base+`) "ALTERNATIVE")`,
+		"("+base+` NIL NIL "fr" NIL)`+base+` NIL NIL NIL NIL) "ALTERNATIVE" ("BOUNDARY" "B") NIL ("en" "fr") NIL)`)
+
+	inner := "Content-Language: de\r\n\r\nx"
+	message := fmt.Sprintf(`("MESSAGE" "RFC822" NIL NIL NIL "7BIT" %d (NIL NIL NIL NIL NIL NIL NIL NIL NIL NIL) `, len(inner))
+	structureResponse(t, "Content-Type: message/rfc822\r\nContent-Language: en\r\n\r\n"+inner,
+		message+base+") 3)", message+base+` NIL NIL "de" NIL) 3 NIL NIL "en" NIL)`)
+}
+
+// Malformed language values are opaque but still use valid IMAP string framing.
+//
+// checklist: IMAP-BS-08
+func TestBodyStructureLanguageStrings(t *testing.T) {
+	const base = `("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "7BIT" 1 1`
+	structureResponse(t, "Content-Language: a\"b\\c, x\r\n\r\nx", base+")", base+` NIL NIL ("a\"b\\c" "x") NIL)`)
+	structureResponse(t, "Content-Language: café\r\n\r\nx", base+")", base+" NIL NIL {5} NIL)", "café")
+}
