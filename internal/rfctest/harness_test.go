@@ -22,12 +22,18 @@ const (
 )
 
 // backend accepts one user and counts authentication attempts.
-type backend struct{ calls int }
+type backend struct {
+	calls int
+	box   imap.Mailbox
+}
 
 func (b *backend) Authenticate(user, pass string) (imap.Mailbox, error) {
 	b.calls++
 	if user != testUser || pass != testPass {
 		return nil, errors.New("invalid credentials")
+	}
+	if b.box != nil {
+		return b.box, nil
 	}
 	return mailbox{}, nil
 }
@@ -66,8 +72,14 @@ type client struct {
 // still unread.
 func dial(t *testing.T) *client {
 	t.Helper()
+	return dialMailbox(t, nil)
+}
+
+// dialMailbox supplies an account fixture to the same public-session harness.
+func dialMailbox(t *testing.T, box imap.Mailbox) *client {
+	t.Helper()
 	clientConn, serverConn := net.Pipe()
-	b := &backend{}
+	b := &backend{box: box}
 	sess := imap.NewSession(serverConn, b, "imap.test", nil, imap.NopLimiter{})
 	done := make(chan struct{})
 	go func() {
