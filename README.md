@@ -1,6 +1,8 @@
 # go-imap
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
+[![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
+[![Partial checklist: 205/237 mapped](https://img.shields.io/badge/partial%20checklist-205%2F237%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -324,6 +326,14 @@ envelopes share the top-level scalar encoder. Malformed encapsulated headers,
 prohibited transfer encodings and recursion limits remain explicit gaps.
 Untyped multipart/digest children are described as MESSAGE/RFC822.
 It is growing; it is not yet a full conformance claim.
+
+The coverage badge shows the enforced minimum; measured statement coverage is
+printed in each CI run's **Require at least 95% statement coverage** log (see
+[COVERAGE.md](COVERAGE.md)). The checklist badge counts requirements mapped to
+tests over all rows of this partial checklist, including the `n/a` rows with
+documented reasons; it is not a count of every applicable RFC requirement. CI
+checks both badges against the enforced gate, the actual checklist and its test
+mappings. The CI badge reports whether verification passed.
 
 ## Documentation
 

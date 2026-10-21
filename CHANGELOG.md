@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- README badges for the 95% coverage gate and the partial checklist's mapped
+  count. `TestReadmeCoverageBadge` reads the minimum from
+  `.github/scripts/check_coverage.py`; `TestReadmeChecklistBadge` runs the real
+  checker before deriving the count, so neither badge can go stale.
 - CI now measures race-test statement coverage across all packages, including
   the external RFC wire proofs, and fails below 95%. Offline fixtures exercise
   the gate's boundary, malformed reports and failed coverage pipelines.
