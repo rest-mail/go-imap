@@ -942,13 +942,13 @@ func multipartStructure(subtype string, params map[string]string, header textpro
 	if extension {
 		// body-ext-mpart: parameters, disposition, language, location. The
 		// content-type parameters (including boundary) are reported; disposition is
-		// read from the multipart's Content-Disposition when present; language and
-		// location have no source.
+		// read from the multipart's Content-Disposition when present; location is
+		// taken from Content-Location. Language is not yet implemented.
 		b.WriteByte(' ')
 		b.WriteString(paramList(params))
 		b.WriteByte(' ')
 		b.WriteString(dispositionField(header))
-		b.WriteString(" NIL NIL")
+		fmt.Fprintf(&b, " NIL %s", nilOrQuote(header.Get("Content-Location")))
 	}
 	b.WriteByte(')')
 	return b.String()
@@ -1015,10 +1015,12 @@ func singlePartStructure(maintype, subtype string, params map[string]string, hea
 		fmt.Fprintf(&b, " %d", countLines(body))
 	}
 	if extension {
-		// body-ext-1part: MD5, disposition, language, location. MD5, language and
-		// location have no source in the stored message; disposition is read from
-		// the part's Content-Disposition when present.
-		fmt.Fprintf(&b, " NIL %s NIL NIL", dispositionField(header))
+		// body-ext-1part: MD5, disposition, language, location. Preserve the
+		// supplied Content-MD5 and Content-Location; do not compute or verify a
+		// digest, resolve a URI, or inherit fields from an enclosing entity.
+		// Language is not yet implemented.
+		fmt.Fprintf(&b, " %s %s NIL %s", nilOrQuote(header.Get("Content-Md5")),
+			dispositionField(header), nilOrQuote(header.Get("Content-Location")))
 	}
 	b.WriteByte(')')
 	return b.String()
