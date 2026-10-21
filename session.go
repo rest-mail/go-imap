@@ -1295,6 +1295,8 @@ func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriter
 		return searchCriterion{}, idx, badSearch("unbalanced parentheses in SEARCH")
 	case "ALL":
 		return searchCriterion{kind: "all"}, idx + 1, nil
+	case "ANSWERED", "UNANSWERED", "DRAFT", "UNDRAFT":
+		return searchCriterion{kind: strings.ToLower(keyword)}, idx + 1, nil
 	case "SEEN":
 		return searchCriterion{kind: "seen"}, idx + 1, nil
 	case "UNSEEN":
@@ -1427,6 +1429,14 @@ func (s *Session) matchOne(msg Message, c searchCriterion, loadRaw func() (strin
 	switch c.kind {
 	case "all":
 		return true
+	case "answered":
+		return msg.Answered
+	case "unanswered":
+		return !msg.Answered
+	case "draft":
+		return msg.Draft
+	case "undraft":
+		return !msg.Draft
 	case "seen":
 		return msg.Seen
 	case "unseen":

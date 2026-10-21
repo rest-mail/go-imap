@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- SEARCH and UID SEARCH now support ANSWERED, UNANSWERED, DRAFT and UNDRAFT
+  using current selected-session system flags, including after STORE updates.
+  Checked RFC 3501 wire tests cover Boolean combinations, sparse UIDs, empty
+  and read-only mailboxes, and refused backend flag changes.
+
 - COPY, UID COPY, MOVE and UID MOVE now omit COPYUID when the backend reports
   a zero or repeated destination UID, instead of quoting it. RFC 4315 allows
   only nonzero, distinct UIDs, and `Mover.MoveUID` may return 0 when the
