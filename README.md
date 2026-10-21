@@ -229,10 +229,14 @@ flags/dates, selected-mailbox notifications, backend refusal and terminal litera
 framing, including the accepted non-synchronizing form. Early refusal of a
 valid `{n+}` APPEND sends BYE and closes without dispatching unread payload;
 backend refusal after consuming the command keeps the session usable. A
-malformed flag-list or argument separator receives BAD before the continuation. Backend
+malformed flag-list, argument separator or date-time receives BAD before the
+continuation. Date-times use fixed-width fields and space-padded or two-digit
+days, without quoted escapes or fractional seconds; explicit dates, including
+Go's zero time, reach a DateAppender without losing their UTC offset. Backend
 atomicity, nonexistent destinations/TRYCREATE, Recent/Deleted/keywords, default dates
-and the remaining grammar validation remain explicit gaps. A mailbox name sent as a
-synchronizing or LITERAL+ literal is accepted before the message literal.
+remain explicit gaps; a complete grammar audit is still outstanding. A mailbox
+name sent as a synchronizing or LITERAL+ literal is accepted before the message
+literal.
 Unquoted mailbox names require RFC 3501 ASTRING-CHAR octets: controls, non-ASCII
 octets, wildcards and quoted-specials receive BAD before a continuation or
 backend call. Checked wire tests enumerate all octets except CR/LF framing,
