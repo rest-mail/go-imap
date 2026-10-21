@@ -11,7 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - CI now measures race-test statement coverage across all packages, including
   the external RFC wire proofs, and fails below 95%. Offline fixtures exercise
   the gate's boundary, malformed reports and failed coverage pipelines.
-  `COVERAGE.md` records the measurement policy and remaining baseline work.
+  `COVERAGE.md` records the measurement policy and remaining uncovered branches.
+- Session wire tests cover quota and LIST backend failures, mailbox-management
+  validation and moves, state refusals, malformed FETCH/STORE/UID requests and
+  authentication syntax recovery. Sequential package coverage reaches 96.1%
+  on Go 1.25.10, up from the initial CI baseline of 93.0%.
 
 ### Fixed
 

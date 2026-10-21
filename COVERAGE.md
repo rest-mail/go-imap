@@ -22,19 +22,35 @@ statement coverage does not measure RFC conformance or checklist completeness.
 
 ## Baseline and gaps
 
-This change introduces the gate; it does **not** claim the current suite reaches
-95%. Prior measurements recorded under rest-mail/rest-mail-server#374 were below
-95%; the authoritative current measurement is the fresh race-coverage result in
-CI. A failing result must be fixed with tests, rather than lowering the gate or
-removing packages from instrumentation. No full coverage suite is run locally on
-the shared Pi for this workflow change.
+CI run [39689054876](https://github.com/rest-mail/go-imap/actions/runs/39689054876)
+measured **93.0%** before the session branch tests were added. The follow-up
+measurement on Go 1.25.10 linux/arm64 is **96.1%** (2,432 of 2,530 statements).
+Packages were tested separately, sequentially, with `GOMAXPROCS=2 nice -n 10`:
 
-The exact remaining uncovered statements must be inventoried from that profile
-as coverage work continues. Known areas needing an audit include listener setup
-and failure paths in `server.go`, implicit TLS, shutdown/connection registration
-races, and defensive or backend-error branches in the session and MIME code.
-These are test work, not approved exclusions; protocol gaps remain recorded in
-the partial `CHECKLIST.md`.
+```sh
+go test -count=1 -covermode=atomic -coverprofile=root.out .
+go test -count=1 -covermode=atomic -coverpkg=github.com/rest-mail/go-imap -coverprofile=rfc.out ./internal/rfctest
+go test -count=1 -covermode=atomic -coverprofile=checklist.out ./internal/checklist
+```
+
+The profiles are combined by source file and block range, counting each block's
+statements once and marking it covered when any package executed it. This counts
+the external wire proofs with the library tests, like CI's `-coverpkg=./...`.
+Local runs omit the race detector; the fresh CI race run remains authoritative.
+
+New wire tests cover quota units and backend errors; LIST delimiter/attributes
+and backend errors; CREATE/DELETE/RENAME validation and backend moves;
+unauthenticated and unselected command refusals; malformed FETCH/STORE and UID
+commands without backend stores; and authentication syntax refusal and recovery.
+They assert replies, state recovery and backend effects, without production changes.
+
+Remaining uncovered branches include listener binding/implicit TLS and accept-loop
+errors in `server.go`; MIME child/part parse failures; long-line drain boundaries;
+authentication bans; selected-message iteration guards; search flag/date/fetch
+failures and unknown search keys; deleted-flag removal; APPEND literal mailbox
+failures and selected-mailbox refresh errors; IDLE polling/reconciliation guards;
+and defensive parsing/formatting branches in `util.go`. These are test work, not
+approved exclusions; protocol gaps remain recorded in the partial `CHECKLIST.md`.
 
 The checker's `main` calls `os.Exit`, which cannot be exercised in-process.
 Its logic is in `run`, exercised by the checker tests; CI also executes the CLI.
