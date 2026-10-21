@@ -13,6 +13,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   parenthesized groups. Invalid list/range members previously could be ignored
   or resolved as zero. Adds checked RFC 3501 wire tests for rejection, session
   recovery and valid reversed/star/overlapping/unsigned-32-bit boundary sets.
+- STORE and UID STORE now reject malformed sequence sets with BAD before
+  changing flags, rather than silently applying valid portions of malformed
+  lists/ranges. Checked RFC 3501 wire tests prove rejection without backend or
+  session side effects, including .SILENT, empty selections and recovery, and
+  preserve valid reversed/star/unsigned-32-bit boundary sets. Flag-list parsing
+  and out-of-range sequence-number policy are unchanged.
 
 - FETCH and UID FETCH now reject malformed sequence sets with BAD before loading
   content or marking messages Seen, rather than treating invalid numbers as zero
