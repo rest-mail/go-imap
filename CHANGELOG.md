@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Top-level FETCH ENVELOPE now takes Subject and the original Date text from
+  the raw headers. Missing Date/Subject/From/To no longer fabricate values from
+  cached metadata or INTERNALDATE; empty scalar headers remain empty strings.
+  Scalar header strings escape quoted-specials and use counted literals for
+  8-bit octets. Adds partial RFC 3501 ENVELOPE checklist rows and public-Session
+  wire tests, including the §8 example. Address groups, source routes, address
+  literal framing and nested BODYSTRUCTURE envelopes remain unaudited gaps.
+
 - STARTTLS with arguments now returns BAD instead of starting a TLS negotiation
   (RFC 3501 §6.2.1). Adds partial RFC 3501/RFC 2595 STARTTLS checklist rows and
   public-Session wire tests over a real TLS handshake.
