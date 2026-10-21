@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **A partial, checked RFC 3501 checklist** (`CHECKLIST.md`). Its first seven
+  rows cover the greeting, CAPABILITY, NOOP, LOGOUT, LOGIN and tagged
+  completion; each names a wire test in `internal/rfctest` that drives a public
+  `Session`. CI runs `go run ./internal/checklist internal/rfctest`, which fails
+  on a row with no test, a test naming an unknown row, or a duplicate ID.
+
 ## [0.4.0] - 2026-07-26
 
 ### Added
