@@ -181,7 +181,9 @@ errors against wire responses, including the first two §6.4.4 examples. Both
 forms reject malformed bare sequence sets and UID operands before evaluating
 content, including in Boolean/group keys and empty mailboxes; valid reversed,
 star, overlapping and unsigned-32-bit boundary sets retain membership semantics.
-Missing standard keys, MIME decoding and independent Recent search remain gaps.
+ANSWERED/UNANSWERED and DRAFT/UNDRAFT search current system flags, including
+STORE/UID STORE changes and read-only selections. Other missing standard keys,
+MIME decoding and independent Recent search remain gaps.
 The FETCH slice checks literal octets, header subsets, partial ranges, RFC822
 aliases, metadata/macros, UID replies, backend refusal and read-only Seen flags,
 including the §§6.4.5/6.4.8 examples. FETCH and UID FETCH reject malformed
