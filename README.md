@@ -210,6 +210,11 @@ names, selection state and backend errors. A failure stops the move with NO and
 reports EXPUNGE only for messages already moved. Per-message atomicity,
 TRYCREATE, strict grammar, QRESYNC VANISHED and backend UID validation remain
 explicit gaps.
+The STARTTLS slice follows the RFC 3501 §6.2.1 example over a real handshake:
+LOGINDISABLED until TLS, changed capabilities afterwards, no implicit
+authentication, BAD for arguments or a repeated STARTTLS, discarded pipelined
+cleartext and a closed session after a failed negotiation. Cleartext LOGIN with
+no TLS config and SASL EXTERNAL remain explicit gaps.
 It is growing; it is not yet a full conformance claim.
 
 ## Documentation

@@ -401,7 +401,7 @@ func (s *Session) Handle() {
 		case "CAPABILITY":
 			s.handleCapability(tag)
 		case "STARTTLS":
-			if s.handleSTARTTLS(tag) {
+			if s.handleSTARTTLS(tag, args) {
 				return
 			}
 		case "LOGIN":
@@ -514,7 +514,13 @@ func (s *Session) handleCapability(tag string) {
 	s.tagged(tag, "OK", "CAPABILITY completed")
 }
 
-func (s *Session) handleSTARTTLS(tag string) bool {
+func (s *Session) handleSTARTTLS(tag, args string) bool {
+	// STARTTLS takes no arguments (RFC 3501 §6.2.1); refuse rather than begin a
+	// negotiation the client may not expect.
+	if args != "" {
+		s.tagged(tag, "BAD", "STARTTLS takes no arguments")
+		return false
+	}
 	if s.usingTLS {
 		s.tagged(tag, "BAD", "Already in TLS mode")
 		return false

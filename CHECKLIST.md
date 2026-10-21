@@ -2,7 +2,7 @@
 
 This is an explicitly **PARTIAL** checklist: the first RFC 3501 rows for the
 connection greeting, the any-state commands (CAPABILITY, NOOP, LOGOUT), LOGIN,
-tagged completion, selection-state (SELECT/EXAMINE), STORE, SEARCH, FETCH,
+tagged completion, STARTTLS, selection-state (SELECT/EXAMINE), STORE, SEARCH, FETCH,
 EXPUNGE, CLOSE, APPEND and COPY slices, plus partial RFC 4315 UID EXPUNGE/COPYUID,
 RFC 6851 MOVE and RFC 7888 non-synchronizing APPEND and command-argument refusal slices. It is not
 an inventory of all applicable RFC requirements, a full conformance claim, or
@@ -26,6 +26,24 @@ with no test, a test naming an unknown item, or a duplicate ID.
 | IMAP-LOGIN-01 | RFC 3501 §6.2.3 | Normative | LOGIN with valid credentials returns OK and enters the authenticated state; invalid credentials return NO and leave the state unchanged. | TestLogin |
 | IMAP-TAG-01 | RFC 3501 §§2.2.1, 2.2.2 | Normative | The tagged completion result carries the tag of the command it completes. | TestTaggedCompletion |
 | IMAP-BAD-01 | RFC 3501 §7.1.3 | Normative | An unknown command receives a tagged BAD. | TestTaggedCompletion |
+
+## RFC 3501 / RFC 2595: STARTTLS — partial negotiation slice
+
+`TestStartTLSExample` follows the RFC 3501 §6.2.1 example transcript over a real
+TLS handshake on the public `Session`, configured with a TLS config. Implicit TLS
+(port 993) is set only by `Server` and is not covered here.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-STARTTLS-01 | RFC 3501 §§6.1.1, 6.2.3, 7.2.1; RFC 2595 §3.2 | MUST | With TLS configured, a cleartext session advertises STARTTLS and LOGINDISABLED and withholds AUTH=PLAIN; LOGIN gets tagged NO even with valid credentials. AUTHENTICATE is likewise refused before any continuation, and no credentials reach the backend. | TestStartTLSExample |
+| IMAP-STARTTLS-02 | RFC 3501 §6.2.1 | Normative | STARTTLS returns tagged OK and TLS negotiation begins immediately after its CRLF, with no further octets in cleartext. | TestStartTLSExample |
+| IMAP-STARTTLS-03 | RFC 3501 §6.2.1 | MAY | After STARTTLS the server advertises different capabilities: STARTTLS and LOGINDISABLED disappear, AUTH=PLAIN appears and LOGIN succeeds. | TestStartTLSExample |
+| IMAP-STARTTLS-04 | RFC 3501 §6.2.1; RFC 2595 §3.1 | Normative | The session remains not authenticated after TLS negotiation: SELECT is refused and no credentials are checked until LOGIN. | TestStartTLSNonAuthenticated |
+| IMAP-STARTTLS-05 | RFC 3501 §§6.2.1, 9; RFC 2595 §3.1 | Normative | STARTTLS is refused with BAD when TLS is not configured, when arguments are supplied or when TLS is already active, including in the authenticated state; the session stays usable. | TestStartTLSRefusals |
+| IMAP-STARTTLS-06 | RFC 3501 §6.2.1 | Normative | Cleartext pipelined behind STARTTLS is discarded and never runs inside the TLS layer (CVE-2011-0411 class). | TestStartTLSDiscardsPipelinedPlaintext |
+| IMAP-STARTTLS-07 | RFC 3501 §6.2.1 | Normative | A failed TLS negotiation ends the session; cleartext sent after the STARTTLS OK never runs as commands. | TestStartTLSFailedNegotiation |
+| IMAP-STARTTLS-08 | RFC 3501 §6.2.3 | SHOULD NOT | Do not permit LOGIN without protection against password snooping. | n/a: deployment responsibility; with no TLS config (development) the session advertises AUTH=PLAIN and accepts cleartext LOGIN. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-STARTTLS-09 | RFC 2595 §3.1; RFC 3501 §6.2.1 | MAY | Authenticate with SASL EXTERNAL from TLS client credentials. | n/a: not supported; only AUTH=PLAIN is offered. Tracked in rest-mail/rest-mail-server#374. |
 
 ## RFC 3501: SELECT/EXAMINE — partial selection-state slice
 
