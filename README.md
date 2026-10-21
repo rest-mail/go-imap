@@ -164,6 +164,12 @@ accepted and, having no enable-able extension yet, is a no-op.
   a small structural interface (`Accept`/`Release`/`RecordAuthFail`/`IsBanned`/
   `ResetAuth`) any type can satisfy.
 
+## RFC conformance
+
+[CHECKLIST.md](CHECKLIST.md) is a **partial**, CI-checked list of RFC 3501
+requirements, each mapped to a wire test in `internal/rfctest` that drives a
+public `Session`. It is growing; it is not yet a full conformance claim.
+
 ## Documentation
 
 Full API reference:

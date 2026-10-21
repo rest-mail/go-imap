@@ -37,5 +37,8 @@ jobs:
           version: v2.11.4
           args: --timeout=5m
 
+      - name: Validate partial RFC checklist
+        run: go run ./internal/checklist internal/rfctest
+
       - name: Run tests with race detector
         run: go test -race -count=1 ./...
