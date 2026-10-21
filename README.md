@@ -202,8 +202,12 @@ reversed ranges, star and 32-bit bounds. BODY/BODY.PEEK partial ranges require
 (without leading zeroes in the count). Malformed ranges receive BAD before any
 item is dispatched, including for empty/nonmatching sets. Checked wire tests
 cover boundaries, recovery and Seen behavior; a grammar-based fuzz target runs
-for 30 seconds in CI. Numeric MIME sections and other strict data-item
-validation remain unsupported.
+for 30 seconds in CI. Outer data-item lists now require exact SP separators,
+known item names and a nonempty list; FAST/ALL/FULL are accepted only as
+standalone macros. Invalid outer syntax receives BAD before any item dispatch,
+and a separate fuzz target checks the flat-item grammar and section framing.
+Numeric MIME sections and complete section/header-field-list validation remain
+unsupported.
 The EXPUNGE/CLOSE slice checks removal, sequence renumbering, retry after backend
 refusal, arguments and selection state, including the RFC 3501 examples. A
 partial RFC 4315 UID EXPUNGE slice checks UID filtering, preserved non-target

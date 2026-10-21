@@ -827,50 +827,96 @@ func selectHeaders(raw string, fields []string, exclude bool) string {
 	return result.String()
 }
 
-// fetchItemTokens splits a FETCH data-item argument into individual item tokens,
-// respecting bracketed sections and nested parenthesized lists so that, e.g.,
-// "(FLAGS RFC822.SIZE BODY.PEEK[HEADER.FIELDS (DATE FROM)])" yields
-// ["FLAGS", "RFC822.SIZE", "BODY.PEEK[HEADER.FIELDS (DATE FROM)]"]. A single
-// unparenthesized item such as "RFC822.SIZE" is returned as one token. Splitting
-// on exact items (rather than substring matching) is what keeps RFC822.SIZE from
-// being mistaken for an RFC822 body fetch.
-func fetchItemTokens(dataItems string) []string {
-	s := strings.TrimSpace(dataItems)
-	// Strip one layer of the outer "( ... )" list wrapper, if present.
-	if strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
+// parseFetchItems validates the outer RFC 3501 §9 FETCH argument grammar and
+// known data-item names before dispatch. BODY section semantics and header-list
+// grammar remain separate; bracket/quote framing is checked here so section
+// spaces cannot be mistaken for separators between top-level items.
+func parseFetchItems(s string) ([]string, bool) {
+	// FETCH names and header-field names are ASCII. Check before case folding:
+	// Unicode look-alikes must not turn into a recognized macro or item.
+	for i := range len(s) {
+		if s[i] == 0 || s[i] == '\r' || s[i] == '\n' || s[i] >= 0x7f {
+			return nil, false
+		}
+	}
+	if s == "" {
+		return nil, false
+	}
+	list := s[0] == '('
+	if list {
+		if len(s) < 3 || s[len(s)-1] != ')' {
+			return nil, false
+		}
 		s = s[1 : len(s)-1]
+	} else {
+		switch strings.ToUpper(s) {
+		case "ALL", "FAST", "FULL":
+			return expandFetchMacros([]string{s}), true
+		}
 	}
 
 	var tokens []string
-	var cur strings.Builder
-	depth := 0 // nesting depth of [] and ()
-	for i := 0; i < len(s); i++ {
-		switch c := s[i]; c {
-		case '[', '(':
-			depth++
-			cur.WriteByte(c)
-		case ']', ')':
-			if depth > 0 {
-				depth--
+	start, bracket, parens := 0, false, 0
+	sectionSeen := false
+	for i := 0; i <= len(s); i++ {
+		if i == len(s) || s[i] == ' ' && !bracket {
+			if bracket || parens != 0 || i == start {
+				return nil, false
 			}
-			cur.WriteByte(c)
-		case ' ':
-			if depth == 0 {
-				if cur.Len() > 0 {
-					tokens = append(tokens, cur.String())
-					cur.Reset()
+			item := s[start:i]
+			switch up := strings.ToUpper(item); up {
+			case "FLAGS", "UID", "INTERNALDATE", "ENVELOPE", "BODY", "BODYSTRUCTURE",
+				"RFC822", "RFC822.HEADER", "RFC822.TEXT", "RFC822.SIZE":
+			default:
+				if !strings.HasPrefix(up, "BODY[") && !strings.HasPrefix(up, "BODY.PEEK[") {
+					return nil, false
 				}
-			} else {
-				cur.WriteByte(c)
 			}
+			tokens = append(tokens, item)
+			start = i + 1
+			sectionSeen = false
+			continue
+		}
+		switch c := s[i]; c {
+		case '[':
+			if sectionSeen {
+				return nil, false
+			}
+			bracket, sectionSeen = true, true
+		case ']':
+			if !bracket || parens != 0 {
+				return nil, false
+			}
+			bracket = false
+		case '(':
+			if !bracket || parens != 0 {
+				return nil, false
+			}
+			parens++
+		case ')':
+			if !bracket || parens != 1 {
+				return nil, false
+			}
+			parens--
+		case '"':
+			if !bracket || parens != 1 {
+				return nil, false
+			}
+			end := quotedStringEnd(s[i:])
+			if end < 0 {
+				return nil, false
+			}
+			i += end
 		default:
-			cur.WriteByte(c)
+			if c < ' ' || c >= 0x7f {
+				return nil, false
+			}
 		}
 	}
-	if cur.Len() > 0 {
-		tokens = append(tokens, cur.String())
+	if !list && len(tokens) != 1 || !validFetchPartials(tokens) {
+		return nil, false
 	}
-	return expandFetchMacros(tokens)
+	return tokens, true
 }
 
 // expandFetchMacros replaces an RFC 3501 §6.4.5 FETCH macro with its component
