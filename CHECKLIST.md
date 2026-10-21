@@ -2,9 +2,10 @@
 
 This is an explicitly **PARTIAL** checklist: the first RFC 3501 rows for the
 connection greeting, the any-state commands (CAPABILITY, NOOP, LOGOUT), LOGIN,
-tagged completion, selection-state (SELECT/EXAMINE), STORE, SEARCH and FETCH
-slices. It is not an inventory of all applicable RFC requirements, a full
-conformance claim, or a coverage badge. A mapped row means its named wire test
+tagged completion, selection-state (SELECT/EXAMINE), STORE, SEARCH, FETCH,
+EXPUNGE and CLOSE slices, plus a partial RFC 4315 UID EXPUNGE slice. It is not
+an inventory of all applicable RFC requirements, a full conformance claim, or
+a coverage badge. A mapped row means its named wire test
 in `internal/rfctest` asserts the stated behavior through the public
 `Session`; it does not prove the entire referenced section.
 
@@ -138,3 +139,49 @@ Message metadata. A failure stops a multi-message command without undoing earlie
 successful messages. Network write errors remain best-effort; an accepted Seen
 write can outlive a lost connection. Coverage gates, fuzzing, independent
 comparison and a release remain separate work under the parent issue.
+
+## RFC 3501: EXPUNGE and CLOSE — partial removal slice
+
+`TestExpungeExample` uses §6.4.3's marked positions 3, 4, 7 and 11. The engine
+sends descending sequence numbers 11, 7, 4, 3, which §7.4.1 permits, rather
+than the example's ascending-removal responses 3, 3, 5, 8. Tests also check the
+remaining backend UIDs and renumbered FETCH replies. `TestCloseExample` uses
+the §6.4.2 A341 command/completion, with both marked and unmarked messages.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-EXPUNGE-01 | RFC 3501 §6.4.3 | Normative | Remove all marked messages, leave unmarked messages intact and send one EXPUNGE per successful removal before tagged OK; no matches succeeds without removals. | TestExpungeExample, TestExpungeNoMatches |
+| IMAP-EXPUNGE-02 | RFC 3501 §7.4.1 | MUST | Each EXPUNGE reports the removed message's current sequence number, immediately reducing later sequence numbers; surviving messages retain their UIDs. | TestExpungeExample, TestUIDExpungeSubset |
+| IMAP-EXPUNGE-03 | RFC 3501 §§6.4.3, 7.1.2 | Normative | A refused deletion returns NO; report successful removals, keep failed messages and their deletion marks, and allow retry without another STORE. | TestExpungeBackendFailure |
+| IMAP-EXPUNGE-04 | RFC 3501 §§3, 6.4, 7.1.3 | Normative | EXPUNGE outside the selected state receives BAD and makes no changes. | TestExpungeRequiresSelection |
+| IMAP-EXPUNGE-05 | RFC 3501 §§6.4.3, 9 | Normative | EXPUNGE takes no arguments; reject extra arguments with BAD before deletion. | TestExpungeAndCloseArguments |
+| IMAP-EXPUNGE-06 | RFC 3501 §6.3.2 | Normative | EXPUNGE cannot permanently remove messages from a mailbox selected read-only by EXAMINE. | TestReadOnlyCloseAndExpunge |
+| IMAP-CLOSE-01 | RFC 3501 §§3, 6.4, 7.1.3 | Normative | CLOSE outside the selected state receives BAD. | TestExpungeRequiresSelection |
+| IMAP-CLOSE-02 | RFC 3501 §§6.4.2, 9 | Normative | CLOSE takes no arguments; invalid arguments receive BAD without deletion or deselection. | TestExpungeAndCloseArguments |
+| IMAP-CLOSE-03 | RFC 3501 §6.4.2 | Normative | Successful writable CLOSE removes marked messages without untagged EXPUNGE, enters authenticated state and clears old selection marks before reselection. | TestCloseExample |
+| IMAP-CLOSE-04 | RFC 3501 §6.4.2 | Normative | CLOSE after EXAMINE succeeds silently and deselects without removing messages. | TestReadOnlyCloseAndExpunge |
+| IMAP-CLOSE-05 | RFC 3501 §6.4.2 | Normative | LOGOUT implicitly closes a selected mailbox without expunging marked messages. | TestLogoutDoesNotExpunge |
+| IMAP-CLOSE-06 | RFC 3501 §6.4.2 | Normative | Writable CLOSE removes every marked message before reporting successful completion. | n/a: not supported yet on backend deletion failure; CLOSE ignores Delete errors and deselects with OK. The mapped success case above assumes all deletes succeed. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-EXPUNGE-07 | RFC 3501 §§2.3.2, 6.4.3 | Normative | The Deleted flag is permanent mailbox state visible across sessions until removal. | n/a: not supported yet; Message and FlagUpdate have no Deleted field, so marks exist only in the selecting session. Cross-session deletion and concurrent EXPUNGE suppression remain unaudited. Tracked in rest-mail/rest-mail-server#374. |
+
+On EXPUNGE/UID EXPUNGE backend errors, this engine continues trying other
+marked messages and returns NO after reporting successful removals. This is
+not an atomic multi-message operation. Hosts must make Delete's success/error
+accurately reflect whether the message was permanently removed. Disconnected
+clients may miss responses after successful backend deletion.
+
+## RFC 4315: UID EXPUNGE — partial UIDPLUS slice
+
+Requirements paraphrase [RFC 4315](https://www.rfc-editor.org/rfc/rfc4315.txt).
+`TestUIDExpungeSubset` uses §2.1's `A003 UID EXPUNGE 3000:3002` command with
+those three UIDs at positions 3–5; descending responses 5, 4, 3 remove the same
+messages as the example's repeated sequence 3. Other UIDPLUS commands and
+response codes are not covered by this slice.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-UIDEXPUNGE-01 | RFC 4315 §2.1 | Normative | Remove only messages both marked Deleted and in the specified UID set; other messages and deletion marks are unaffected, and nonexistent UIDs cause no removals. | TestUIDExpungeSubset |
+| IMAP-UIDEXPUNGE-02 | RFC 4315 §2.1 | Normative | Backend expunge failure returns NO; successful removals are reported and failed messages remain marked for retry. | TestExpungeBackendFailure |
+| IMAP-UIDEXPUNGE-03 | RFC 4315 §2.1; RFC 3501 §6.3.2 | Normative | UID EXPUNGE cannot remove messages from a mailbox selected read-only by EXAMINE. | TestReadOnlyCloseAndExpunge |
+| IMAP-UIDEXPUNGE-04 | RFC 4315 §§1, 2.1 | Normative | Without UIDPLUS support or the required UID set, UID EXPUNGE receives BAD without changing deletion marks or messages. | TestUIDExpungeCapabilityAndMissingSet |
+| IMAP-UIDEXPUNGE-05 | RFC 4315 §§2.1, 4 | Normative | Invalid UID sequence sets receive BAD before deletion. | n/a: not supported yet; parseUIDSet ignores numeric errors and accepts malformed sets. Strict grammar and boundary checks remain required. Tracked in rest-mail/rest-mail-server#374. |

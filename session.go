@@ -397,6 +397,10 @@ func (s *Session) Handle() {
 			}
 			s.tagged(tag, "OK", "CHECK completed")
 		case "CLOSE":
+			if args != "" {
+				s.tagged(tag, "BAD", "CLOSE takes no arguments")
+				break
+			}
 			// CLOSE is a Selected State command (RFC 3501 §6.4.2): reject it when
 			// no mailbox is selected rather than answering OK.
 			if s.selected == nil {
@@ -419,6 +423,10 @@ func (s *Session) Handle() {
 			s.deleted = make(map[uint32]bool)
 			s.tagged(tag, "OK", "CLOSE completed")
 		case "EXPUNGE":
+			if args != "" {
+				s.tagged(tag, "BAD", "EXPUNGE takes no arguments")
+				break
+			}
 			s.handleExpunge(tag)
 		case "UNSELECT":
 			s.handleUnselect(tag)
@@ -1684,38 +1692,43 @@ func (s *Session) handleMove(tag, args string) {
 
 func (s *Session) handleExpunge(tag string) {
 	if s.selected == nil {
-		s.tagged(tag, "NO", "No mailbox selected")
+		s.tagged(tag, "BAD", "EXPUNGE valid only in selected state")
 		return
 	}
 	if s.refuseReadOnly(tag) {
 		return
 	}
+	s.expungeMessages(tag, "EXPUNGE", nil)
+}
 
-	// Process in reverse order so sequence numbers stay valid
+// expungeMessages removes marked messages, optionally restricted to the given
+// sequence numbers. Descending order keeps every reported sequence valid. A
+// refused delete leaves the message and its mark intact for a later retry;
+// successful removals are still reported before the final NO (RFC 3501 §6.4.3,
+// RFC 4315 §2.1). Backends need not support an atomic multi-message deletion.
+func (s *Session) expungeMessages(tag, command string, targets map[int]bool) {
+	failed := false
 	for i := len(s.messages) - 1; i >= 0; i-- {
 		msg := s.messages[i]
-		if !s.deleted[msg.UID] {
+		if !s.deleted[msg.UID] || (targets != nil && !targets[i+1]) {
 			continue
 		}
-		seq := i + 1
-		// Delete via backend
 		if err := s.mailbox.Delete(msg.UID); err != nil {
-			slog.Warn("imap: expunge failed", "uid", msg.UID, "error", err)
+			slog.Warn("imap: expunge failed", "command", command, "uid", msg.UID, "error", err)
+			failed = true
 			continue
 		}
-		// Send untagged EXPUNGE response
-		s.send("* %d EXPUNGE", seq)
-		// Remove from messages slice
+		s.send("* %d EXPUNGE", i+1)
 		s.messages = append(s.messages[:i], s.messages[i+1:]...)
+		delete(s.deleted, msg.UID)
 	}
 
-	// Update selected mailbox count
-	if s.selected != nil {
-		s.selected.total = int64(len(s.messages))
+	s.selected.total = int64(len(s.messages))
+	if failed {
+		s.tagged(tag, "NO", command+" failed")
+		return
 	}
-
-	s.deleted = make(map[uint32]bool)
-	s.tagged(tag, "OK", "EXPUNGE completed")
+	s.tagged(tag, "OK", command+" completed")
 }
 
 func (s *Session) handleCreate(tag, args string) {

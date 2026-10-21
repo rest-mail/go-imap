@@ -187,26 +187,7 @@ func (s *Session) handleUIDExpunge(tag, args string) {
 		targets[seq] = true
 	}
 
-	// Descending so sequence numbers stay valid as messages are removed.
-	for i := len(s.messages) - 1; i >= 0; i-- {
-		msg := s.messages[i]
-		seq := i + 1
-		if !targets[seq] || !s.deleted[msg.UID] {
-			continue
-		}
-		if err := s.mailbox.Delete(msg.UID); err != nil {
-			slog.Warn("imap: uid expunge failed", "uid", msg.UID, "error", err)
-			continue
-		}
-		s.send("* %d EXPUNGE", seq)
-		s.messages = append(s.messages[:i], s.messages[i+1:]...)
-		delete(s.deleted, msg.UID)
-	}
-
-	if s.selected != nil {
-		s.selected.total = int64(len(s.messages))
-	}
-	s.tagged(tag, "OK", "UID EXPUNGE completed")
+	s.expungeMessages(tag, "UID EXPUNGE", targets)
 }
 
 // handleUnselect implements UNSELECT (RFC 3691): it returns the session to the
