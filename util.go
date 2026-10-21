@@ -997,7 +997,7 @@ func singlePartStructure(maintype, subtype string, params map[string]string, hea
 	fmt.Fprintf(&b, " %s %s %s %d",
 		nilOrQuote(header.Get("Content-Id")),
 		nilOrQuote(header.Get("Content-Description")),
-		quoteString(strings.ToUpper(encoding)),
+		encodeMailboxName(strings.ToUpper(encoding)),
 		len(body))
 	switch {
 	case strings.EqualFold(maintype, "message") && strings.EqualFold(subtype, "rfc822"):
@@ -1038,7 +1038,7 @@ func dispositionField(header textproto.MIMEHeader) string {
 	if err != nil || disptype == "" {
 		return "NIL"
 	}
-	return "(" + quoteString(strings.ToUpper(disptype)) + " " + paramList(params) + ")"
+	return "(" + encodeMailboxName(strings.ToUpper(disptype)) + " " + paramList(params) + ")"
 }
 
 // buildEncapsulatedEnvelope constructs the IMAP ENVELOPE (RFC 3501 §7.4.2) of a
@@ -1076,7 +1076,10 @@ func buildEncapsulatedEnvelope(raw string) string {
 
 // paramList renders a MIME parameter map as an IMAP parenthesized attribute/value
 // list, e.g. ("CHARSET" "US-ASCII"), with attribute names uppercased and keys in
-// sorted order for a deterministic result. An empty map yields NIL.
+// sorted order for a deterministic result. An empty map yields NIL. Parameter
+// names and values are strings, not nstrings: an empty value is "", never NIL.
+// Reuse the astring encoder so decoded RFC 2231 values containing CR/LF or
+// 8-bit octets use counted literals, including in disposition parameters.
 func paramList(params map[string]string) string {
 	if len(params) == 0 {
 		return "NIL"
@@ -1092,9 +1095,9 @@ func paramList(params map[string]string) string {
 		if i > 0 {
 			b.WriteByte(' ')
 		}
-		b.WriteString(quoteString(strings.ToUpper(k)))
+		b.WriteString(encodeMailboxName(strings.ToUpper(k)))
 		b.WriteByte(' ')
-		b.WriteString(quoteString(params[k]))
+		b.WriteString(encodeMailboxName(params[k]))
 	}
 	b.WriteByte(')')
 	return b.String()
@@ -1106,15 +1109,16 @@ func quoteUpper(s, fallback string) string {
 	if s == "" {
 		s = fallback
 	}
-	return quoteString(strings.ToUpper(s))
+	return encodeMailboxName(strings.ToUpper(s))
 }
 
-// nilOrQuote quotes s, or returns NIL when s is empty (an absent header field).
+// nilOrQuote encodes a MIME nstring, using a counted literal for octets that
+// cannot appear in a quoted string, or NIL when the header value is empty.
 func nilOrQuote(s string) string {
 	if s == "" {
 		return "NIL"
 	}
-	return quoteString(s)
+	return encodeMailboxName(s)
 }
 
 // countLines returns the number of text lines in body — the count RFC 3501's
