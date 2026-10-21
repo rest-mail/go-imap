@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `STORE` and `UID STORE` now answer `NO` when the backend refuses a flag
+  write, and restore the message's session flags, instead of reporting `OK`
+  with flags the mailbox never stored.
 - SELECT/EXAMINE's `UNSEEN` response now identifies the first unseen message's
   sequence number, rather than the unread count. Empty or fully seen mailboxes
   omit the code instead of emitting the invalid sequence number zero.
@@ -16,6 +19,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Checked STORE/UID STORE rows and public-session wire tests, including the
+  RFC 3501 §6.4.6 example, .SILENT, UID reporting and backend refusal. Keyword
+  storage is recorded as unsupported.
 - Checked SELECT/EXAMINE selection-state rows and public-session wire tests,
   including the RFC 3501 examples, failed/replacement selection and read-only
   write prevention. Recent, persistent UID metadata and permission gaps are

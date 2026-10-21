@@ -1464,7 +1464,10 @@ func (s *Session) handleStore(tag, args string) {
 		if seq < 1 || seq > len(s.messages) {
 			continue
 		}
-		s.applyStore(seq, mode, flags, silent, false)
+		if err := s.applyStore(seq, mode, flags, silent, false); err != nil {
+			s.tagged(tag, "NO", "STORE failed")
+			return
+		}
 	}
 
 	s.tagged(tag, "OK", "STORE completed")
@@ -1504,23 +1507,31 @@ func parseStoreAction(action string) (mode storeMode, silent bool, ok bool) {
 
 // applyStore mutates the message at the given sequence number per RFC 3501
 // §6.4.6 and, unless silent, emits the untagged FETCH carrying the resulting
-// flags. When withUID is true the FETCH also reports the UID (UID STORE).
-func (s *Session) applyStore(seq int, mode storeMode, flags []string, silent, withUID bool) {
+// flags. When withUID is true the FETCH also reports the UID (UID STORE). If
+// the backend refuses the write, the message's session state is restored and
+// the error returned, so the caller can answer NO (RFC 3501 §6.4.6).
+func (s *Session) applyStore(seq int, mode storeMode, flags []string, silent, withUID bool) error {
 	msg := &s.messages[seq-1]
+	before, wasDeleted := *msg, s.deleted[msg.UID]
 	update := s.applyStoreFlags(msg, mode, flags)
 
 	if update.Seen != nil || update.Answered != nil || update.Flagged != nil || update.Draft != nil {
-		_ = s.mailbox.Store(msg.UID, update)
+		if err := s.mailbox.Store(msg.UID, update); err != nil {
+			*msg = before
+			s.applyDeleted(msg.UID, storeReplace, wasDeleted)
+			return err
+		}
 	}
 
 	if silent {
-		return
+		return nil
 	}
 	if withUID {
 		s.send("* %d FETCH (UID %d FLAGS (%s))", seq, msg.UID, s.flagString(*msg))
 	} else {
 		s.send("* %d FETCH (FLAGS (%s))", seq, s.flagString(*msg))
 	}
+	return nil
 }
 
 // applyStoreFlags applies the flag change to msg (and the session's \Deleted
@@ -2315,7 +2326,10 @@ func (s *Session) handleUIDStore(tag, args string) {
 		if seq < 1 || seq > len(s.messages) {
 			continue
 		}
-		s.applyStore(seq, mode, flags, silent, true)
+		if err := s.applyStore(seq, mode, flags, silent, true); err != nil {
+			s.tagged(tag, "NO", "UID STORE failed")
+			return
+		}
 	}
 
 	s.tagged(tag, "OK", "UID STORE completed")
