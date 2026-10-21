@@ -2,11 +2,11 @@
 
 This is an explicitly **PARTIAL** checklist: the first RFC 3501 rows for the
 connection greeting, the any-state commands (CAPABILITY, NOOP, LOGOUT), LOGIN,
-tagged completion, and a selection-state slice (SELECT/EXAMINE). It is not an
-inventory of all applicable RFC requirements, a full conformance claim, or a
-coverage badge. A mapped row means
-its named wire test in `internal/rfctest` asserts the stated behavior through
-the public `Session`; it does not prove the entire referenced section.
+tagged completion, a selection-state slice (SELECT/EXAMINE) and a STORE
+slice. It is not an inventory of all applicable RFC requirements, a full
+conformance claim, or a coverage badge. A mapped row means its named wire test
+in `internal/rfctest` asserts the stated behavior through the public
+`Session`; it does not prove the entire referenced section.
 
 Requirements below paraphrase [RFC 3501](https://www.rfc-editor.org/rfc/rfc3501.txt).
 `Normative` denotes protocol text without an explicit RFC 2119 keyword.
@@ -51,3 +51,23 @@ with the examples; they do not prove independent Recent tracking.
 Other selection requirements remain unaudited, including syntax validation,
 permanent keyword support, UID exhaustion, backend error/fallback behavior and
 concurrent sessions. These rows do not claim full §§6.3.1/6.3.2 conformance.
+
+## RFC 3501: STORE and UID STORE — partial flag-update slice
+
+`TestStoreExample` replays the §6.4.6 `A003 STORE 2:4 +FLAGS (\Deleted)`
+example. Flag lists are sets; this engine orders system flags as \Seen,
+\Answered, \Flagged, \Draft, then \Deleted.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-STORE-01 | RFC 3501 §6.4.6 | Normative | Without .SILENT, answer each changed message with an untagged FETCH carrying its full resulting flag list before the tagged OK. | TestStoreExample |
+| IMAP-STORE-02 | RFC 3501 §6.4.6 | Normative | FLAGS replaces the flag list, +FLAGS adds to it and -FLAGS removes from it; system flags persist through the backend and \Deleted stays visible to later FETCH. | TestStoreExample |
+| IMAP-STORE-03 | RFC 3501 §6.4.6 | SHOULD | With .SILENT, apply the change but send no untagged FETCH, for STORE and UID STORE. | TestStoreSilent |
+| IMAP-STORE-04 | RFC 3501 §6.4.8 | MUST | An untagged FETCH caused by UID STORE includes the UID data item. | TestUIDStoreReportsUID |
+| IMAP-STORE-05 | RFC 3501 §6.4.6 | Normative | A refused backend write answers NO (§6.4.6 "store error") and leaves the session's flags for that message unchanged, for STORE and UID STORE. | TestStoreBackendFailure |
+| IMAP-STORE-06 | RFC 3501 §§2.3.2, 6.4.6, 7.1 | Normative | Keywords a client may create (PERMANENTFLAGS lists `\*`) are stored and reported back by FETCH FLAGS. | n/a: not supported yet; FlagUpdate and Message model only system flags, so keywords are accepted and dropped. Tracked in rest-mail/rest-mail-server#374. |
+
+A NO from a multi-message set reports the first refused write; earlier
+messages in the set keep their applied changes, which RFC 3501 permits. Flag-list
+syntax validation, sequence-set edge cases and STORE under concurrent sessions
+remain unaudited.

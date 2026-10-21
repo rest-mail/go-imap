@@ -169,7 +169,8 @@ accepted and, having no enable-able extension yet, is a no-op.
 [CHECKLIST.md](CHECKLIST.md) is a **partial**, CI-checked list of RFC 3501
 requirements, each mapped to a wire test in `internal/rfctest` that drives a
 public `Session`. The selection-state slice includes the RFC SELECT/EXAMINE
-examples and records Recent, persistent UID metadata and permission gaps.
+examples and records Recent, persistent UID metadata and permission gaps; the
+STORE slice includes the RFC 3501 §6.4.6 example and records the keyword gap.
 It is growing; it is not yet a full conformance claim.
 
 ## Documentation
