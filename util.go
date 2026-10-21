@@ -892,7 +892,11 @@ func buildBodyStructure(raw string, extension bool) string {
 // (RFC 2045 §5.2), or message/rfc822 inside multipart/digest (RFC 2046 §5.1.5).
 func partStructure(header textproto.MIMEHeader, body []byte, extension bool, defaultType string) string {
 	mediatype, params, err := mime.ParseMediaType(header.Get("Content-Type"))
-	if err != nil || mediatype == "" {
+	// ParseMediaType also accepts a bare token (for Content-Disposition).
+	// Content-Type requires type/subtype, with no default subtype (RFC 2045
+	// §5.1). Treat a missing subtype like other invalid Content-Type fields
+	// instead of inventing, for example, application/plain.
+	if err != nil || !strings.Contains(mediatype, "/") {
 		mediatype, params = defaultType, map[string]string{}
 	}
 	maintype, subtype := mediatype, ""

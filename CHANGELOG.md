@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- BODY/BODYSTRUCTURE no longer invent a PLAIN subtype for a bare Content-Type
+  token such as `application`. Missing subtypes now use the existing invalid-type
+  fallback. Adds checked RFC 2045/2046/3501 wire tests for ordinary MIME defaults,
+  explicit types/charsets, and invalid type recovery through multipart children
+  and encapsulated messages, preserving unrelated headers and encoded sizes.
+
 - BODYSTRUCTURE now reports Content-Language in the language extension slot
   instead of always returning NIL: one tag as a string, several as a list,
   comments dropped. Adds checked RFC 3501/RFC 3282 wire tests, including
