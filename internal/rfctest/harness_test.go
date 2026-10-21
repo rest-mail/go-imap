@@ -5,6 +5,7 @@ package rfctest
 
 import (
 	"bufio"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -84,12 +85,18 @@ func dialMailbox(t *testing.T, box imap.Mailbox) *client {
 // dialConn optionally wraps the session's transport to inject read failures.
 func dialConn(t *testing.T, box imap.Mailbox, wrap func(net.Conn) net.Conn) *client {
 	t.Helper()
+	return dialTLS(t, box, wrap, nil)
+}
+
+// dialTLS starts the session with a TLS config, enabling STARTTLS.
+func dialTLS(t *testing.T, box imap.Mailbox, wrap func(net.Conn) net.Conn, cfg *tls.Config) *client {
+	t.Helper()
 	clientConn, serverConn := net.Pipe()
 	if wrap != nil {
 		serverConn = wrap(serverConn)
 	}
 	b := &backend{box: box}
-	sess := imap.NewSession(serverConn, b, "imap.test", nil, imap.NopLimiter{})
+	sess := imap.NewSession(serverConn, b, "imap.test", cfg, imap.NopLimiter{})
 	done := make(chan struct{})
 	go func() {
 		defer close(done)

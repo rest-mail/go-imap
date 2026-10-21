@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- STARTTLS with arguments now returns BAD instead of starting a TLS negotiation
+  (RFC 3501 §6.2.1). Adds partial RFC 3501/RFC 2595 STARTTLS checklist rows and
+  public-Session wire tests over a real TLS handshake.
 - MOVE and UID MOVE now stop at the first backend failure and return NO, still
   sending EXPUNGE (and COPYUID) for the messages already moved, instead of
   ignoring failures and reporting successful completion.
