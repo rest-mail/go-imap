@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- BODYSTRUCTURE now ignores Content-Disposition comments between lexical
+  tokens (RFC 2183 §2) instead of reporting NIL for valid comment-bearing
+  fields, sharing the Content-Type comment lexer. A type/subtype pair is no
+  longer accepted as a disposition type. Adds checked RFC 2183/822 wire tests
+  for nested/folded comments, quoted parameter data, per-entity scope and
+  malformed-token recovery.
+
 - BODY/BODYSTRUCTURE now remove surrounding lexical whitespace and comments
   from valid Content-Transfer-Encoding tokens rather than advertising them as
   part of the encoding name. Adds checked RFC 2045/822 wire tests for nested

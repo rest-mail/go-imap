@@ -238,8 +238,11 @@ Content-Type comments and whitespace between tokens are checked against the RFC
 2045 charset example, including nested/escaped comments and quoted parameter
 data through multipart boundaries and encapsulated messages. A differential fuzz
 target compares comment-bearing types with Go MIME parsing of equivalent
-comment-free fields. Unparseable header blocks, comments in other MIME fields,
-malformed/empty multiparts and NUL/binary policy remain gaps.
+comment-free fields. Content-Disposition shares that comment lexer: comments
+between the disposition type and parameters are ignored per RFC 2183, split
+tokens and type/subtype pairs yield NIL. Unparseable header blocks, comments in
+Content-ID/Description, malformed/empty multiparts and NUL/binary policy remain
+gaps.
 The top-level ENVELOPE slice checks the RFC 3501 §8 example, ten-field order,
 header values over cached summaries, missing/empty headers, Sender/Reply-To
 defaults, read-only metadata, and quoted/literal scalar framing. Groups, source
