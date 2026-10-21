@@ -82,7 +82,8 @@ type Message struct {
 	// ascends with arrival order within the mailbox. The Server also passes it to
 	// the Backend to name this message.
 	UID uint32
-	// Size is RFC822.SIZE, the octet count reported in FETCH responses.
+	// Size is the nonnegative RFC822.SIZE octet count of the complete message,
+	// including headers. It backs FETCH RFC822.SIZE and SEARCH LARGER/SMALLER.
 	Size int
 	// Seen, Answered, Flagged and Draft are the persistent flags IMAP reports as
 	// \Seen, \Answered, \Flagged and \Draft.

@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- SEARCH and UID SEARCH now support LARGER and SMALLER using the complete
+  host-supplied RFC822.SIZE octet count. Comparisons are strict; zero, leading
+  zeroes and the unsigned 32-bit operand boundary follow RFC 3501. Malformed
+  operands receive BAD before evaluation, including inside Boolean/group keys
+  and empty mailboxes. SEARCH no longer strips trailing non-SP whitespace
+  before numeric validation. Checked wire tests cover IMAP-SEARCH-17/18.
+
 - SEARCH and UID SEARCH now support ANSWERED, UNANSWERED, DRAFT and UNDRAFT
   using current selected-session system flags, including after STORE updates.
   Checked RFC 3501 wire tests cover Boolean combinations, sparse UIDs, empty
