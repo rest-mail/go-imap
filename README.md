@@ -171,6 +171,9 @@ requirements, each mapped to a wire test in `internal/rfctest` that drives a
 public `Session`. The selection-state slice includes the RFC SELECT/EXAMINE
 examples and records Recent, persistent UID metadata and permission gaps; the
 STORE slice includes the RFC 3501 §6.4.6 example and records the keyword gap.
+The SEARCH slice checks Boolean/UID criteria, calendar dates, charsets and
+errors against wire responses, including the first two §6.4.4 examples. Missing
+standard keys, MIME decoding and independent Recent search remain explicit gaps.
 It is growing; it is not yet a full conformance claim.
 
 ## Documentation

@@ -1092,6 +1092,10 @@ func (s *Session) parseSearchCriteria(args string) ([]searchCriterion, *searchEr
 		tokens = tokens[2:]
 	}
 
+	if len(tokens) == 0 {
+		return nil, badSearch("SEARCH requires at least one search key")
+	}
+
 	maxUID := s.maxUID()
 	var criteria []searchCriterion
 	idx := 0
@@ -1294,6 +1298,9 @@ func parseSearchGroup(tokens []string, idx int, maxUID uint32) (searchCriterion,
 	if j >= len(tokens) {
 		return searchCriterion{}, idx, badSearch("unbalanced parentheses in SEARCH")
 	}
+	if len(group) == 0 {
+		return searchCriterion{}, idx, badSearch("SEARCH group requires at least one search key")
+	}
 	return searchCriterion{kind: "and", sub: group}, j + 1, nil
 }
 
@@ -1398,14 +1405,20 @@ func (s *Session) matchOne(msg Message, c searchCriterion, loadRaw func() (strin
 			return false
 		}
 		return strings.Contains(strings.ToLower(raw), strings.ToLower(c.value))
-	case "since":
-		return !msg.Date.Before(c.date)
-	case "before":
-		return msg.Date.Before(c.date)
-	case "on":
-		y1, m1, d1 := msg.Date.Date()
-		y2, m2, d2 := c.date.Date()
-		return y1 == y2 && m1 == m2 && d1 == d2
+	case "since", "before", "on":
+		// RFC 3501 §6.4.4 compares the internal calendar date, ignoring
+		// both the time of day and timezone. Converting the instant to UTC
+		// first would move messages near midnight onto the wrong day.
+		year, month, day := msg.Date.Date()
+		date := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+		switch c.kind {
+		case "since":
+			return !date.Before(c.date)
+		case "before":
+			return date.Before(c.date)
+		default: // on
+			return date.Equal(c.date)
+		}
 	case "uid", "seqset":
 		// Test membership against the pre-parsed ranges (built once in
 		// parseSearchCriteria; a seqset is resolved to its messages' UIDs). Never
