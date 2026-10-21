@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- BODY/BODYSTRUCTURE now describe a multipart/digest child without
+  Content-Type as MESSAGE/RFC822 (RFC 2046 §5.1.5) instead of TEXT/PLAIN,
+  including its encapsulated envelope, body structure and line count. Adds an
+  RFC 3501 checklist row and public-Session tests for the default and its scope.
+
 - MESSAGE/RFC822 nested envelopes now retain original Date text, distinguish
   empty scalar headers from missing headers, and use counted literals for
   scalar octets that cannot appear in quoted strings. Adds partial RFC 3501

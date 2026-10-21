@@ -229,8 +229,8 @@ explicit gaps. The MESSAGE/RFC822 slice checks encapsulated envelope/body/line
 ordering, raw Date and empty scalar headers, quoted/literal scalar framing,
 recursive messages and multipart bodies, and metadata side effects. Nested
 envelopes share the top-level scalar encoder. Malformed encapsulated headers,
-prohibited transfer encodings, recursion limits and multipart/digest defaults
-remain explicit gaps.
+prohibited transfer encodings and recursion limits remain explicit gaps.
+Untyped multipart/digest children are described as MESSAGE/RFC822.
 It is growing; it is not yet a full conformance claim.
 
 ## Documentation
