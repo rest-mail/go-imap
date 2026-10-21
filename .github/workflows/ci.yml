@@ -58,5 +58,8 @@ jobs:
       - name: Fuzz FETCH header lists
         run: go test -run='^$' -fuzz='^FuzzHeaderFields$' -fuzztime=30s .
 
+      - name: Fuzz SEARCH date tokens
+        run: go test -run='^$' -fuzz='^FuzzSearchDate$' -fuzztime=30s .
+
       - name: Fuzz SEARCH quote framing
         run: go test -run='^$' -fuzz='^FuzzSearchQuotes$' -fuzztime=30s .

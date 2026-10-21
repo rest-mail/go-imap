@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- SEARCH and UID SEARCH validate all six date-key operands as RFC 3501 §9
+  date tokens before calendar parsing, instead of trimming malformed padding
+  or decoding quoted escapes. Invalid dates receive BAD before content reads
+  or results, including Boolean/groups and empty mailboxes. Checked wire
+  proofs and a grammar/calendar oracle fuzz target cover valid bare/quoted
+  forms, leap years and strict day/month/year shapes. General SEARCH literal
+  and separator grammar remain separate gaps.
+
 - SEARCH and UID SEARCH retain escaped quotes and backslashes inside string
   operands rather than splitting at an escaped quote. Unterminated quotes,
   invalid escapes, NUL, quotes embedded in bare tokens and text adjoining a
