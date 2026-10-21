@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- STATUS now validates its complete mailbox/item-list syntax before reading
+  metadata. Trailing arguments, malformed astrings and doubled, leading,
+  trailing or non-SP separators receive BAD instead of being ignored or
+  accepted. Checked RFC 3501 wire tests cover the STATUS example, requested
+  items, quoted/literal names, recovery and preserved SELECT/EXAMINE state.
+  Recent tracking and persistent UIDNEXT remain documented gaps.
+
 - SEARCH and UID SEARCH now support ANSWERED, UNANSWERED, DRAFT and UNDRAFT
   using current selected-session system flags, including after STORE updates.
   Checked RFC 3501 wire tests cover Boolean combinations, sparse UIDs, empty

@@ -88,19 +88,25 @@ func parseIMAPArgs(args string) []string {
 	return result
 }
 
-// parseStatusItems parses the parenthesized status-item list of a STATUS command
-// (RFC 3501 §6.3.10), e.g. "(MESSAGES UIDNEXT UIDVALIDITY)", returning the item
-// names upper-cased (status data items are atoms, so case-insensitive). ok is
-// false when tok is not a parenthesized list — a bare "MESSAGES" or a missing
-// list — which the caller rejects as a BAD syntax error. An empty list "()"
-// yields ok true with no items; the caller likewise rejects that, since the
-// ABNF requires at least one item.
+// parseStatusItems parses RFC 3501 §9's nonempty, SP-separated status-att
+// list. Do not use Fields: tabs, doubled SP and leading/trailing SP are not
+// separators in this grammar. Unknown names are rejected by the handler.
 func parseStatusItems(tok string) (items []string, ok bool) {
-	if len(tok) < 2 || tok[0] != '(' || tok[len(tok)-1] != ')' {
+	if len(tok) < 3 || tok[0] != '(' || tok[len(tok)-1] != ')' {
 		return nil, false
 	}
-	for _, f := range strings.Fields(tok[1 : len(tok)-1]) {
-		items = append(items, strings.ToUpper(f))
+	for _, item := range strings.Split(tok[1:len(tok)-1], " ") {
+		if item == "" {
+			return nil, false
+		}
+		// ABNF terminals are ASCII: Unicode case conversion must not turn
+		// a lookalike such as long s into a valid status item name.
+		for i := 0; i < len(item); i++ {
+			if item[i] >= 0x80 {
+				return nil, false
+			}
+		}
+		items = append(items, strings.ToUpper(item))
 	}
 	return items, true
 }

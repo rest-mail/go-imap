@@ -2,7 +2,7 @@
 
 This is an explicitly **PARTIAL** checklist: the first RFC 3501 rows for the
 connection greeting, the any-state commands (CAPABILITY, NOOP, LOGOUT), LOGIN,
-tagged completion, STARTTLS, selection-state (SELECT/EXAMINE), STORE, SEARCH, FETCH/ENVELOPE,
+tagged completion, STARTTLS, selection-state (SELECT/EXAMINE), STATUS, STORE, SEARCH, FETCH/ENVELOPE,
 EXPUNGE, CLOSE, APPEND, COPY and encoded BODYSTRUCTURE slices, plus partial
 RFC 4315 UID EXPUNGE/COPYUID,
 RFC 6851 MOVE and RFC 7888 non-synchronizing APPEND and command-argument refusal slices. It is not
@@ -72,6 +72,31 @@ with the examples; they do not prove independent Recent tracking.
 Other selection requirements remain unaudited, including syntax validation,
 permanent keyword support, UID exhaustion, backend error/fallback behavior and
 concurrent sessions. These rows do not claim full §§6.3.1/6.3.2 conformance.
+
+## RFC 3501: STATUS — partial metadata and argument slice
+
+`TestStatusExample` uses §6.3.10's A042 request, 231 messages and UIDNEXT
+44292. The engine quotes the mailbox and returns items in request order, both
+permitted by the response grammar. Other fixtures distinguish unseen counts
+from selected-folder metadata and use mailbox-specific UIDVALIDITY values.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-STATUS-01 | RFC 3501 §§6.3.10, 7.2.4 | Normative | Return one untagged STATUS with the queried mailbox and requested MESSAGES/UNSEEN/UIDNEXT items before tagged OK, including the RFC example and empty mailboxes; item names are case-insensitive and no unrequested items are added. | TestStatusExample, TestStatusRequestedItems |
+| IMAP-STATUS-02 | RFC 3501 §§5.1, 6.3.10, 7.2.4 | Normative | STATUS canonicalizes any-case INBOX and returns the queried mailbox's UIDVALIDITY when UIDPlusMailbox supplies it, rather than selected-folder values. | TestStatusRequestedItems |
+| IMAP-STATUS-03 | RFC 3501 §§6.3.10, 9 | Normative | Reject malformed mailbox astrings, missing/unknown/quoted/non-ASCII items, non-SP or doubled/leading/trailing separators, unbalanced/nested lists and trailing arguments with BAD before metadata/content reads or flag changes; keep the session reusable. | TestStatusInvalidArguments |
+| IMAP-STATUS-04 | RFC 3501 §6.3.10 | Normative | Successful and failed STATUS leave the selected mailbox, cached flags and SELECT/EXAMINE access mode unchanged; in the authenticated state STATUS does not select a mailbox or read message content. | TestStatusInvalidArguments, TestStatusPreservesSelection |
+| IMAP-STATUS-05 | RFC 3501 §§3, 6.3.10 | Normative | Refuse STATUS before authentication without metadata access; backend lookup failure returns NO without an untagged STATUS, and a later valid query succeeds. | TestStatusPreservesSelection |
+| IMAP-STATUS-06 | RFC 3501 §§4.3, 6.3.10, 7.2.4, 9 | Normative | Decode quoted and counted-literal mailbox astrings, echo names with escaped quotes/backslashes or exact counted literals, treat quoted wildcard characters as part of a name, and reject NUL without dispatching literal payload as commands. | TestStatusMailboxStrings |
+| IMAP-STATUS-07 | RFC 3501 §§2.3.2, 6.3.10 | Normative | RECENT reports independent Recent state and STATUS preserves it. | n/a: not supported yet; Message has no Recent field and STATUS approximates RECENT as unseen, as in IMAP-SELECT-08. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-STATUS-08 | RFC 3501 §§2.3.1.1, 6.3.10 | MUST | UIDNEXT tracks past UID assignments and UIDVALIDITY reflects persistent mailbox identity. | n/a: not supported yet for the base Mailbox interface; UIDNEXT is current maximum plus one and UIDVALIDITY defaults to 1 without UIDPlusMailbox, as in IMAP-SELECT-09. UID exhaustion and UIDValidity backend-error fallback remain unaudited. Tracked in rest-mail/rest-mail-server#374. |
+
+This is not a complete STATUS or mailbox-name audit. Literal arguments are
+materialized as quoted strings before parsing, so raw quoted 8-bit/control
+octets cannot be distinguished from literal contents here; strict wire-form
+validation, modified UTF-7 mailbox semantics, concurrent updates and UID
+exhaustion remain outside this slice. RECENT syntax remains accepted without a
+claim that its current unread approximation conforms.
 
 ## RFC 3501: STORE and UID STORE — partial flag-update slice
 
