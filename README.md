@@ -176,15 +176,17 @@ errors against wire responses, including the first two §6.4.4 examples. Missing
 standard keys, MIME decoding and independent Recent search remain explicit gaps.
 The FETCH slice checks literal octets, header subsets, partial ranges, RFC822
 aliases, metadata/macros, UID replies, backend refusal and read-only Seen flags,
-including the §§6.4.5/6.4.8 examples. Numeric MIME sections and strict FETCH
-argument validation remain unsupported.
+including the §§6.4.5/6.4.8 examples. FETCH and UID FETCH reject malformed
+sequence sets with BAD before reading content or changing Seen, while accepting
+reversed ranges, star and 32-bit bounds. Numeric MIME sections and strict
+data-item validation remain unsupported.
 The EXPUNGE/CLOSE slice checks removal, sequence renumbering, retry after backend
 refusal, arguments and selection state, including the RFC 3501 examples. A
 partial RFC 4315 UID EXPUNGE slice checks UID filtering, preserved non-target
 marks, backend refusal, read-only operation and RFC 3501 §9 UID-set syntax
 (malformed sets receive BAD before deletion). CLOSE deletion failures and
 persistent Deleted flags remain explicit gaps; strict UID-set validation for
-the other UID commands is not yet audited.
+UID STORE, UID COPY, UID MOVE and UID SEARCH is not yet audited.
 The APPEND slice checks the §6.3.11 example, exact message octets, supported
 flags/dates, selected-mailbox notifications, backend refusal and terminal literal
 framing, including the accepted non-synchronizing form. Early refusal of a

@@ -926,6 +926,10 @@ func (s *Session) handleFetch(tag, args string) {
 	}
 
 	seqStr := parts[0]
+	if !validSequenceSet(seqStr) {
+		s.tagged(tag, "BAD", "Invalid sequence set")
+		return
+	}
 	tokens := fetchItemTokens(parts[1])
 
 	// Parse sequence numbers
@@ -2403,6 +2407,10 @@ func (s *Session) handleUIDFetch(tag, args string) {
 	}
 
 	uidSetStr := parts[0]
+	if !validSequenceSet(uidSetStr) {
+		s.tagged(tag, "BAD", "Invalid uid set")
+		return
+	}
 	tokens := fetchItemTokens(parts[1])
 
 	seqNums := s.parseUIDSet(uidSetStr)

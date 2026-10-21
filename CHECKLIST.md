@@ -148,12 +148,15 @@ UID/sequence-number example. This does not inventory all MIME or grammar rules.
 | IMAP-FETCH-13 | RFC 3501 §§3, 6.4 | Normative | FETCH and UID FETCH require a selected mailbox, including after UNSELECT. | TestFetchRequiresSelection |
 | IMAP-FETCH-14 | RFC 3501 §6.4.5 | MUST | Numeric MIME part paths retrieve the designated part, with nested MESSAGE/RFC822 and MIME section rules. | n/a: not supported yet; bodySection falls back to the whole raw message for numeric/unsupported sections. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-FETCH-15 | RFC 3501 §§6.4.5, 9 | Normative | Invalid or unknown data items, malformed section/partial syntax and illegal macro combinations receive BAD. | n/a: not supported yet; unknown/malformed items are ignored, macros in singleton lists are expanded, and lenient partial forms are accepted. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-FETCH-16 | RFC 3501 §§6.4.5, 6.4.8, 9 | Normative | FETCH and UID FETCH reject malformed sequence sets with BAD before loading message data, changing Seen or sending FETCH responses, including in empty mailboxes; the connection and selection remain usable. | TestFetchInvalidSequenceSet |
+| IMAP-FETCH-17 | RFC 3501 §§6.4.5, 6.4.8, 9 | Normative | FETCH and UID FETCH accept reversed ranges, star and nonzero unsigned-32-bit bounds; sparse/nonexistent UIDs select only existing messages, with sequence-number response prefixes and UID attributes. | TestFetchValidSequenceSet |
 
 This slice does not prove full ENVELOPE/BODYSTRUCTURE semantics, static attribute
 immutability across sessions, absent-part NIL handling, header-only messages
-without a delimiting blank line, sequence-set grammar/overlap behavior, UID
-exhaustion or concurrent EXPUNGE suppression. Hosts must provide correct raw
-message bytes, octet size, internal date and persistent UID/flag metadata.
+without a delimiting blank line, sequence-set overlap behavior, rejection of
+out-of-range message sequence numbers, UID exhaustion or concurrent EXPUNGE
+suppression. Hosts must provide correct raw message bytes, octet size, internal
+date and persistent UID/flag metadata.
 Backend data-load failure now refuses ENVELOPE instead of falling back to partial
 Message metadata. A failure stops a multi-message command without undoing earlier
 successful messages. Network write errors remain best-effort; an accepted Seen
