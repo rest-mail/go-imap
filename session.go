@@ -1543,6 +1543,11 @@ func (s *Session) handleStore(tag, args string) {
 		return
 	}
 
+	if !validSequenceSet(parts[0]) {
+		s.tagged(tag, "BAD", "Invalid sequence set")
+		return
+	}
+
 	mode, silent, ok := parseStoreAction(parts[1])
 	if !ok {
 		s.tagged(tag, "BAD", "STORE requires FLAGS, +FLAGS or -FLAGS")
@@ -2431,6 +2436,11 @@ func (s *Session) handleUIDStore(tag, args string) {
 	parts := strings.SplitN(args, " ", 2)
 	if len(parts) < 2 {
 		s.tagged(tag, "BAD", "UID STORE requires uid set and flags")
+		return
+	}
+
+	if !validSequenceSet(parts[0]) {
+		s.tagged(tag, "BAD", "Invalid uid set")
 		return
 	}
 
