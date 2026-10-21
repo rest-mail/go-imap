@@ -2057,7 +2057,15 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 		folder, rest = string(name), cont
 	} else {
 		folder, rest, ok = parseAstring(args)
-		if !ok || folder == "" || (strings.HasPrefix(args, `"`) && !validAppendQuotedMailbox(args[:len(args)-len(rest)])) {
+		token := args[:len(args)-len(rest)]
+		// An unquoted mailbox uses ASTRING-CHAR, not arbitrary non-space
+		// octets. In particular, controls, wildcards and quoted-specials
+		// require a string; ']' remains legal in an unquoted astring.
+		mailboxOK := validAstring(token)
+		if strings.HasPrefix(token, `"`) {
+			mailboxOK = validAppendQuotedMailbox(token)
+		}
+		if !ok || folder == "" || !mailboxOK {
 			s.tagged(tag, "BAD", "Invalid mailbox name")
 			return
 		}
