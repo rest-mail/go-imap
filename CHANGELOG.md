@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- BODYSTRUCTURE now reports supplied Content-MD5 and Content-Location in their
+  extension slots instead of always returning NIL, including multipart locations
+  and encapsulated bodies. BODY still omits extensions. Adds checked RFC 3501
+  wire tests for field order, per-entity values, quoted/literal framing and
+  metadata side effects. Digests are not generated or verified; language remains
+  unsupported.
+
 - ENVELOPE address personal names, mailboxes and hosts now use counted
   literals for 8-bit octets and CR/LF decoded from RFC 2047 encoded words,
   instead of placing them in quoted strings where a decoded CRLF could inject
