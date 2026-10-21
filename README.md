@@ -190,8 +190,11 @@ valid `{n+}` APPEND sends BYE and closes without dispatching unread payload;
 backend refusal after consuming the command keeps the session usable. Backend
 atomicity, nonexistent destinations/TRYCREATE, Recent/Deleted/keywords, default dates,
 literal mailbox names and full grammar validation remain explicit gaps.
-Refusal handling for general command literals and overlong lines remains
-unaudited. LITERAL+ is not advertised.
+The command-argument literal slice checks individual/aggregate size refusal,
+assembled-command limits, overlong continuation lines and accepted LOGIN framing.
+Ambiguous refusals send BYE and end the session; synchronizing refusals and
+fully consumed commands preserve the connection. Initial overlong command lines
+and malformed markers remain unaudited. LITERAL+ is not advertised.
 It is growing; it is not yet a full conformance claim.
 
 ## Documentation
