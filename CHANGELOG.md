@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- FETCH BODY[section] and BODY.PEEK[section] resolve numeric MIME part
+  paths (RFC 3501 §6.4.5) instead of returning the whole message: multipart
+  parts, part 1 of a non-multipart message, MESSAGE/RFC822 encapsulation
+  (N.HEADER, N.TEXT, N.HEADER.FIELDS and nested part numbers) and N.MIME
+  headers. Absent parts and message-text specifiers on non-message parts
+  return an empty string. Malformed section-specs (zero or leading-zero part
+  numbers, overflow, empty components, MIME without a part, unknown names)
+  receive BAD before any message is read. Checked wire tests fetch every
+  section of the RFC 3501 §6.4.5 example; CI fuzzes the section-spec grammar.
+
 - SEARCH and UID SEARCH validate all six date-key operands as RFC 3501 §9
   date tokens before calendar parsing, instead of trimming malformed padding
   or decoding quoted escapes. Invalid dates receive BAD before content reads

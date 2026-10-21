@@ -1069,9 +1069,15 @@ func bodySection(item string, loadRaw func() (string, bool)) (name, payload stri
 		name = "BODY[" + label + " (" + strings.Join(wire, " ") + ")]"
 		payload = selectHeaders(raw, fields, exclude)
 	default:
-		// Unsupported section spec (e.g. a MIME part number) — fall back to the
-		// full message rather than nothing, preserving prior lenient behavior.
-		name, payload = "BODY["+section+"]", raw
+		path, text, valid := splitSectionPart(item[lb+1 : rb])
+		if !valid || len(path) == 0 {
+			return "", "", peek, false
+		}
+		label, part, valid := numericSection(raw, path, text)
+		if !valid {
+			return "", "", peek, false
+		}
+		name, payload = "BODY["+label+"]", part
 	}
 
 	// A partial fetch returns only the requested octets and labels the response
@@ -1085,11 +1091,10 @@ func bodySection(item string, loadRaw func() (string, bool)) (name, payload stri
 	return name, payload, peek, true
 }
 
-// validFetchSections checks BODY partial suffixes and HEADER.FIELDS lists before
-// any message is
-// read or changed. In particular an invalid later item cannot follow an earlier
-// BODY[] read/Seen update, and an empty UID result cannot hide invalid syntax.
-// Other section grammar remains incomplete.
+// validFetchSections checks BODY section-specs (RFC 3501 §9) and partial
+// suffixes before any message is read or changed. In particular an invalid
+// later item cannot follow an earlier BODY[] read/Seen update, and an empty UID
+// result cannot hide invalid syntax.
 func validFetchSections(tokens []string) bool {
 	for _, item := range tokens {
 		up := strings.ToUpper(item)
@@ -1101,11 +1106,8 @@ func validFetchSections(tokens []string) bool {
 			return false
 		}
 		lb := strings.IndexByte(item, '[')
-		section := item[lb+1 : rb]
-		if strings.HasPrefix(strings.ToUpper(section), "HEADER.FIELDS") {
-			if _, _, _, ok := parseHeaderFields(section); !ok {
-				return false
-			}
+		if !validSectionSpec(item[lb+1 : rb]) {
+			return false
 		}
 		if _, ok := parseBodyPartial(item[rb+1:]); !ok {
 			return false
