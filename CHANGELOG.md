@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Five previously unmapped RFC checklist rows now have public-Session wire
+  proofs (APPEND-23, FETCH-15, ENV-10/12 and MSG-08): 210 of 237 rows mapped.
+  APPEND accepts empty quoted and literal mailbox names without substituting
+  INBOX; backend naming policy still applies. ENVELOPE preserves address-group
+  boundaries and empty groups, including inside MESSAGE/RFC822. Malformed raw
+  headers no longer fabricate fields from cached summaries, and malformed
+  encapsulated headers retain the required ten-field envelope structure.
+  FETCH refuses raw or decoded NUL before response bytes or Seen writes.
+  Composed grammar tests cover mixed MIME sections/header names/partials and
+  all APPEND optional-argument layouts, mailbox forms and literal modes.
+
 - SELECT and EXAMINE require exactly one valid mailbox astring. Missing names
   no longer select INBOX implicitly; malformed or extra arguments receive BAD
   before backend access. Explicit empty strings reach the backend unchanged.
