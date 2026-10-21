@@ -794,55 +794,6 @@ func TestParseFlags_EmptyString(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// extractHeaderFieldNames
-// ---------------------------------------------------------------------------
-
-func TestExtractHeaderFieldNames_Standard(t *testing.T) {
-	result := extractHeaderFieldNames("BODY[HEADER.FIELDS (From Subject Date)]")
-	if len(result) != 3 {
-		t.Fatalf("got %v, want 3 fields", result)
-	}
-	if result[0] != "From" || result[1] != "Subject" || result[2] != "Date" {
-		t.Errorf("got %v, want [From Subject Date]", result)
-	}
-}
-
-func TestExtractHeaderFieldNames_CaseInsensitive(t *testing.T) {
-	result := extractHeaderFieldNames("body[header.fields (From To)]")
-	if len(result) != 2 {
-		t.Fatalf("got %v, want 2 fields", result)
-	}
-	if result[0] != "From" || result[1] != "To" {
-		t.Errorf("got %v, want [From To]", result)
-	}
-}
-
-func TestExtractHeaderFieldNames_NoHeaderFields(t *testing.T) {
-	if result := extractHeaderFieldNames("BODY[]"); result != nil {
-		t.Errorf("got %v, want nil", result)
-	}
-}
-
-func TestExtractHeaderFieldNames_NoParens(t *testing.T) {
-	if result := extractHeaderFieldNames("BODY[HEADER.FIELDS]"); result != nil {
-		t.Errorf("got %v, want nil", result)
-	}
-}
-
-func TestExtractHeaderFieldNames_SingleField(t *testing.T) {
-	result := extractHeaderFieldNames("BODY[HEADER.FIELDS (Subject)]")
-	if len(result) != 1 || result[0] != "Subject" {
-		t.Errorf("got %v, want [Subject]", result)
-	}
-}
-
-func TestExtractHeaderFieldNames_EmptyParens(t *testing.T) {
-	if result := extractHeaderFieldNames("BODY[HEADER.FIELDS ()]"); len(result) != 0 {
-		t.Errorf("got %v, want empty", result)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // filterHeaders
 // ---------------------------------------------------------------------------
 

@@ -54,3 +54,6 @@ jobs:
 
       - name: Fuzz FETCH data-item lists
         run: go test -run='^$' -fuzz='^FuzzFetchItems$' -fuzztime=30s .
+
+      - name: Fuzz FETCH header lists
+        run: go test -run='^$' -fuzz='^FuzzHeaderFields$' -fuzztime=30s .
