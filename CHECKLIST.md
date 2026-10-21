@@ -248,11 +248,15 @@ any next literal marker are lost; this path closes conservatively as well.
 | IMAP-LITERAL-07 | RFC 3501 §§2.2.1, 4.3 | Normative | A read error before all argument octets or the continuation line arrive ends the session without dispatching the incomplete command or unread suffix. | TestCommandLiteralReadFailureEnds |
 | IMAP-LITERAL-08 | RFC 7888 §§3–4 | MUST | An overlong initial command line ending in `+}` (a possible non-synchronizing marker) is refused with BAD, then BYE, and the session ends without dispatching in-flight octets, however the marker and terminator split across reads. | TestCommandLineOverflowLiteralCloses |
 | IMAP-LITERAL-09 | RFC 3501 §§2.2.1, 4.3 | Normative | An overlong initial command line with no marker, or a synchronizing marker whose continuation was never sent, is refused with BAD and the next command still runs. | TestCommandLineOverflowSafeRefusal |
+| IMAP-LITERAL-10 | RFC 3501 §§6.2.2, 9; RFC 4959 | Normative | An overlong AUTHENTICATE response is refused with tagged BAD before any credential check and the next command still runs, whatever the line ends in: a base64 response is not a literal position, so a trailing `{n}` or `{n+}` leaves nothing in flight. | TestAuthenticateResponseOverflow |
+| IMAP-LITERAL-11 | RFC 2177 §3 | Normative | An overlong line while idling is ignored without ending IDLE, whatever it ends in: only DONE is legal input there, so no literal can be pending. A later command-shaped line is still not run, DONE ends IDLE, and the next command runs. | TestIdleLineOverflow |
 
 The initial overlong line is discarded in constant memory, so only its last
 octets are kept: any line ending in `+}` closes, even when the discarded text
 would not parse as a valid marker. Malformed markers, complete quoting/separator
 and CHAR8 validation, binary literals, literal mailbox names in APPEND, and
 other extension interactions remain unaudited or unsupported. Overlong
-AUTHENTICATE responses and IDLE lines are not part of this slice.
+AUTHENTICATE responses and IDLE lines keep the session because neither position
+admits a literal (IMAP-LITERAL-10/11); a client that sends literal octets there
+anyway is outside the grammar, the same as for a short line.
 The accepted non-synchronizing form remains unadvertised compatibility behavior.

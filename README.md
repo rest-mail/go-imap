@@ -195,7 +195,9 @@ assembled-command limits, overlong continuation lines and accepted LOGIN framing
 Ambiguous refusals send BYE and end the session; synchronizing refusals and
 fully consumed commands preserve the connection. An overlong initial command
 line ending in a `{n+}` marker sends BYE and closes; other overlong lines keep
-the session. Malformed markers remain unaudited. LITERAL+ is not advertised.
+the session. Overlong AUTHENTICATE responses and IDLE lines are refused or
+ignored without closing, since neither admits a literal. Malformed markers
+remain unaudited. LITERAL+ is not advertised.
 It is growing; it is not yet a full conformance claim.
 
 ## Documentation

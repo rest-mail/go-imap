@@ -244,3 +244,78 @@ func TestCommandLineOverflowSafeRefusal(t *testing.T) {
 		}
 	}
 }
+
+// overlongSuffixes are line endings an overlong discarded line may carry:
+// none, a synchronizing marker, and a LITERAL+ marker.
+var overlongSuffixes = []struct{ name, suffix string }{
+	{"no marker", " pass"},
+	{"synchronizing", " {5}"},
+	{"non-synchronizing", " {5+}"},
+}
+
+// overlongResponse pads a line of base64-alphabet octets to length octets,
+// CRLF included, ending in suffix.
+func overlongResponse(length int, suffix string) string {
+	return strings.Repeat("A", length-len(suffix)-2) + suffix + "\r\n"
+}
+
+// TestAuthenticateResponseOverflow proves an overlong AUTHENTICATE response is
+// refused with a tagged BAD before any credential check, and the session stays
+// usable. A SASL response is base64 only (RFC 3501 §9 "authenticate"), so a
+// trailing "+}" is not a literal marker there and leaves nothing in flight.
+//
+// checklist: IMAP-LITERAL-10
+func TestAuthenticateResponseOverflow(t *testing.T) {
+	for _, tc := range overlongSuffixes {
+		for _, extra := range []int{1, 2, 3} {
+			t.Run(fmt.Sprintf("%s/extra=%d", tc.name, extra), func(t *testing.T) {
+				c := dial(t)
+				c.line()
+				if _, err := io.WriteString(c.conn, "A1 AUTHENTICATE PLAIN\r\n"); err != nil {
+					t.Fatal(err)
+				}
+				if line := c.line(); line != "+ " {
+					t.Fatalf("continuation: %q", line)
+				}
+				writeLiteralWire(t, c, overlongResponse(2*4096+extra, tc.suffix)+"N1 NOOP\r\n")
+				if line := c.line(); !strings.HasPrefix(line, "A1 BAD ") {
+					t.Fatalf("refusal: %q", line)
+				}
+				requireOK(t, c.line(), "N1")
+				if c.backend.calls != 0 {
+					t.Fatalf("overlong response reached the backend %d times", c.backend.calls)
+				}
+				c.login()
+			})
+		}
+	}
+}
+
+// TestIdleLineOverflow proves an overlong line while idling is ignored without
+// ending IDLE: a following command-shaped line is still not run, DONE
+// terminates IDLE and the next command runs. Only DONE is legal input during
+// IDLE (RFC 2177 §3), so no line there can carry a literal.
+//
+// checklist: IMAP-LITERAL-11
+func TestIdleLineOverflow(t *testing.T) {
+	for _, tc := range overlongSuffixes {
+		for _, extra := range []int{1, 2, 3} {
+			t.Run(fmt.Sprintf("%s/extra=%d", tc.name, extra), func(t *testing.T) {
+				c := dial(t)
+				c.line()
+				c.login()
+				_, tagged := c.command("S1", "SELECT INBOX")
+				requireOK(t, tagged, "S1")
+				if _, err := io.WriteString(c.conn, "I1 IDLE\r\n"); err != nil {
+					t.Fatal(err)
+				}
+				if line := c.line(); line != "+ idling" {
+					t.Fatalf("continuation: %q", line)
+				}
+				writeLiteralWire(t, c, overlongResponse(2*4096+extra, tc.suffix)+"N0 NOOP\r\nDONE\r\nN1 NOOP\r\n")
+				requireOK(t, c.line(), "I1")
+				requireOK(t, c.line(), "N1")
+			})
+		}
+	}
+}
