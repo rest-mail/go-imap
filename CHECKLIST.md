@@ -361,7 +361,7 @@ CRLF and nested binary attachments guard against accidental decoding.
 | IMAP-BS-06 | RFC 3501 §§6.4.5, 6.4.8 | Normative | BODY and BODYSTRUCTURE metadata do not set Seen, work under EXAMINE, and describe the same message through UID FETCH; requesting both shares one raw-message load. | TestBodyStructureRFCExample, TestBodyStructureTransferEncoding, TestBodyStructureNestedEncoding, TestBodyStructureRFCMultipartExample |
 | IMAP-BS-07 | RFC 3501 §7.4.2 | Normative | Preserve Content-ID, Content-Description and MIME parameters; render attachment and multipart disposition types with their parameters in the extension slot. | TestBodyStructureNestedEncoding, TestBodyStructureRFCMultipartExample |
 | IMAP-BS-08 | RFC 3501 §7.4.2 | MAY | Return MD5, language and location extension data derived from the message. | n/a: not supported yet; these extension slots are always NIL even when source headers exist. Tracked in rest-mail/rest-mail-server#374. |
-| IMAP-BS-09 | RFC 3501 §§7.4.2, 9 | Normative | MESSAGE/RFC822 carries its encapsulated envelope, body structure and line count. | n/a: existing unit coverage only; public-Session encapsulation, nested envelope defaults and malformed-message behavior need a separate audit. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-BS-09 | RFC 3501 §§7.4.2, 9 | Normative | MESSAGE/RFC822 carries its encapsulated envelope, body structure and line count. | TestMessageStructureRFCEnvelope, TestMessageStructureHeaderDefaults, TestMessageStructureScalarStrings, TestMessageStructureRecursiveBody, TestMessageStructureNestedMessage |
 | IMAP-BS-10 | RFC 3501 §§4.3, 7.4.2, 9 | Normative | Encode every body string using valid IMAP string framing for the source octets. | n/a: not supported yet for arbitrary MIME/header values; existing quoted-string paths do not provide literal framing for every field. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-BS-11 | RFC 3501 §7.4.2 | Normative | Default omitted MIME fields according to MIME rules, including defaults that depend on the enclosing multipart subtype. | n/a: not fully audited; multipart/digest child defaults and fabricated text/plain fallback structures need independent verification. This slice checks valid multipart framing and opaque transfer-encoded bodies only. Tracked in rest-mail/rest-mail-server#374. |
 
@@ -392,7 +392,31 @@ where RFC 2822 requires a nonempty Date or From.
 | IMAP-ENV-11 | RFC 3501 §§4.3, 7.4.2, 9 | Normative | Preserve source routes and legal address syntax, with literal framing for address components that quoted strings cannot carry. | n/a: not supported yet; source routes are always NIL, net/mail rejects some obsolete syntax, and addressPart still uses quoted strings for all nonempty components. This slice only frames scalar header strings. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-ENV-12 | RFC 3501 §§4.3.1, 7.4.2 | Normative | Treat malformed header blocks and prohibited NUL octets consistently without fabricating valid header information. | n/a: malformed header parsing still falls back to the Message summary; NUL header policy is not defined and the scalar encoder can emit NUL in a literal. Full malformed-message and binary handling remain unaudited. Tracked in rest-mail/rest-mail-server#374. |
 
-This slice covers the top-level FETCH ENVELOPE only. MESSAGE/RFC822 nested
-BODYSTRUCTURE envelopes retain a separate helper and need their own audit.
+The ENVELOPE rows above cover top-level FETCH. The MESSAGE/RFC822 slice below
+checks the separate nested-envelope helper, sharing the scalar header encoder.
 The scalar literal encoder also accepts malformed raw 8-bit header text for
 compatibility; this does not advertise or implement UTF8=ACCEPT.
+
+## RFC 3501: MESSAGE/RFC822 — partial encapsulation slice
+
+These public-Session fixtures place encapsulated messages both at the top level
+and inside a multipart attachment, requesting BODY and BODYSTRUCTURE together
+through FETCH/UID FETCH under SELECT/EXAMINE. The RFC §8 ENVELOPE headers are
+reused inside a synthetic wrapper; the RFC supplies no corresponding raw
+MESSAGE/RFC822 vector. Line counts are explicitly specified per fixture.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-MSG-01 | RFC 3501 §§7.4.2, 9 | Normative | MESSAGE/RFC822 appends the encapsulated envelope, body structure and whole-message text-line count immediately after the basic fields; octet size includes the encapsulated headers and body. | TestMessageStructureRFCEnvelope, TestMessageStructureHeaderDefaults, TestMessageStructureScalarStrings, TestMessageStructureRecursiveBody, TestMessageStructureNestedMessage |
+| IMAP-MSG-02 | RFC 3501 §7.4.2 | MUST NOT | BODY omits extension data recursively; BODYSTRUCTURE keeps single-part extensions after the encapsulated envelope/body/line fields, including attachment disposition. | TestMessageStructureRFCEnvelope, TestMessageStructureHeaderDefaults, TestMessageStructureScalarStrings, TestMessageStructureRecursiveBody, TestMessageStructureNestedMessage |
+| IMAP-MSG-03 | RFC 3501 §§6.4.5, 6.4.8 | Normative | Encapsulated metadata works through FETCH and UID FETCH under SELECT and EXAMINE, shares a single raw read for both forms, and leaves Seen unchanged. | TestMessageStructureRFCEnvelope, TestMessageStructureHeaderDefaults, TestMessageStructureScalarStrings, TestMessageStructureRecursiveBody, TestMessageStructureNestedMessage |
+| IMAP-MSG-04 | RFC 3501 §§7.4.2, 8 | Normative | Nested envelopes describe the encapsulated headers in ten-field order, preserving Date spelling and unfolded Subject rather than taking outer-message summaries. | TestMessageStructureRFCEnvelope, TestMessageStructureHeaderDefaults, TestMessageStructureScalarStrings, TestMessageStructureRecursiveBody, TestMessageStructureNestedMessage |
+| IMAP-MSG-05 | RFC 3501 §7.4.2 | Normative | Missing nested scalar fields are NIL, present empty scalars are empty strings, and empty/absent Sender and Reply-To default to From. | TestMessageStructureHeaderDefaults |
+| IMAP-MSG-06 | RFC 3501 §§4.3, 7.4.2, 9 | Normative | Nested scalar strings preserve encoded words, escape quoted-specials, and frame literal-only octets with counted literals. | TestMessageStructureScalarStrings |
+| IMAP-MSG-07 | RFC 3501 §§7.4.2, 9 | Normative | Recursively describe encapsulated multipart and MESSAGE/RFC822 bodies with their own headers and encoded dimensions; other MESSAGE subtypes omit RFC822-specific fields. | TestMessageStructureRecursiveBody, TestMessageStructureNestedMessage |
+| IMAP-MSG-08 | RFC 3501 §§7.4.2, 9 | Normative | Return a valid envelope structure for malformed encapsulated header blocks. | n/a: not supported yet; parse failure returns NIL in the required envelope position and a fabricated text/plain fallback body. Malformed-message policy needs a separate audit. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-MSG-09 | RFC 3501 §§4.3.1, 7.4.2; RFC 2046 §5.2.1 | Normative | Handle invalid encodings, binary octets and excessive encapsulation consistently. | n/a: not supported yet; MESSAGE/RFC822 accepts prohibited base64/quoted-printable encodings without decoding, NUL policy is undefined, and recursive MIME traversal has no depth limit. This slice checks ordinary 7BIT encapsulation only. Tracked in rest-mail/rest-mail-server#374. |
+
+The nested address parser retains the group/source-route/address-string gaps
+listed under IMAP-ENV-10/11. Multipart/digest defaults, malformed MIME framing,
+optional extension values and numbered MIME FETCH sections remain separate gaps.

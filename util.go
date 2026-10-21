@@ -1051,22 +1051,19 @@ func buildEncapsulatedEnvelope(raw string) string {
 	}
 	hdr := m.Header
 
-	dateField := "NIL"
-	if d, err := hdr.Date(); err == nil {
-		dateField = quoteString(d.Format("Mon, 02 Jan 2006 15:04:05 -0700"))
-	} else if v := strings.TrimSpace(hdr.Get("Date")); v != "" {
-		dateField = quoteString(v)
-	}
-
-	subject := nilOrQuote(strings.TrimSpace(hdr.Get("Subject")))
+	// Encapsulated envelopes follow the same header rules as FETCH ENVELOPE:
+	// preserve the Date text, distinguish empty from absent scalar headers, and
+	// frame literal-only octets rather than writing them in quoted strings.
+	dateField := envelopeHeaderString(hdr, "Date")
+	subject := envelopeHeaderString(hdr, "Subject")
 	from := headerAddressList(hdr, "From", "NIL")
 	sender := headerAddressList(hdr, "Sender", from)
 	replyTo := headerAddressList(hdr, "Reply-To", from)
 	to := headerAddressList(hdr, "To", "NIL")
 	cc := headerAddressList(hdr, "Cc", "NIL")
 	bcc := headerAddressList(hdr, "Bcc", "NIL")
-	inReplyTo := nilOrQuote(headerValue(hdr, "In-Reply-To"))
-	messageID := nilOrQuote(headerValue(hdr, "Message-Id"))
+	inReplyTo := envelopeHeaderString(hdr, "In-Reply-To")
+	messageID := envelopeHeaderString(hdr, "Message-Id")
 
 	return fmt.Sprintf("(%s %s %s %s %s %s %s %s %s %s)",
 		dateField, subject, from, sender, replyTo, to, cc, bcc, inReplyTo, messageID)
