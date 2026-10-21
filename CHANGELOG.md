@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- COPY and UID COPY now stop at the first backend failure and return NO without
+  COPYUID, instead of ignoring failures and reporting successful completion.
+  Earlier destination copies cannot be rolled back through the current backend
+  API; that RFC gap is documented explicitly.
+- Overlapping UID COPY sets copy each source message once, preventing duplicate
+  destination messages and duplicate source UIDs in COPYUID. Adds partial RFC
+  3501/RFC 4315 checklist rows and public-Session wire tests with RFC examples.
+
 - An overlong initial command line ending in a LITERAL+ `{n+}` marker now
   sends BAD then BYE and ends the session, instead of reading the in-flight
   literal octets as new commands. Only the line's last octets are kept, so

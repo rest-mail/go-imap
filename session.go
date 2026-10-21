@@ -1721,7 +1721,12 @@ func (s *Session) handleCopy(tag, args string) {
 
 	seqNums := parseSequenceSet(seqStr, len(s.messages))
 
-	if code := s.copyMessages(seqNums, dest); code != "" {
+	code, err := s.copyMessages(seqNums, dest)
+	if err != nil {
+		s.tagged(tag, "NO", "COPY failed")
+		return
+	}
+	if code != "" {
 		s.tagged(tag, "OK", "["+code+"] COPY completed")
 		return
 	}
@@ -2459,7 +2464,12 @@ func (s *Session) handleUIDCopy(tag, args string) {
 	dest := unquote(strings.TrimSpace(parts[1]))
 
 	seqNums := s.parseUIDSet(uidSetStr)
-	if code := s.copyMessages(seqNums, dest); code != "" {
+	code, err := s.copyMessages(seqNums, dest)
+	if err != nil {
+		s.tagged(tag, "NO", "UID COPY failed")
+		return
+	}
+	if code != "" {
 		s.tagged(tag, "OK", "["+code+"] UID COPY completed")
 		return
 	}

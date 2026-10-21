@@ -198,6 +198,12 @@ line ending in a `{n+}` marker sends BYE and closes; other overlong lines keep
 the session. Overlong AUTHENTICATE responses and IDLE lines are refused or
 ignored without closing, since neither admits a literal. Malformed markers
 remain unaudited. LITERAL+ is not advertised.
+The COPY/UID COPY slice checks the RFC 3501 §6.4.7 and RFC 4315 §3 examples,
+sparse/overlapping UID sets, COPYUID correspondence, read-only sources, destination
+names, backend errors and selection state. Errors stop dispatch and return NO
+without COPYUID. Destination rollback, storage/flag/date preservation, TRYCREATE,
+strict grammar and destination permission/UID validation remain explicit gaps.
+Earlier copies may remain after failure; the per-message API cannot undo them.
 It is growing; it is not yet a full conformance claim.
 
 ## Documentation

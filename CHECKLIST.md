@@ -3,7 +3,7 @@
 This is an explicitly **PARTIAL** checklist: the first RFC 3501 rows for the
 connection greeting, the any-state commands (CAPABILITY, NOOP, LOGOUT), LOGIN,
 tagged completion, selection-state (SELECT/EXAMINE), STORE, SEARCH, FETCH,
-EXPUNGE, CLOSE and APPEND slices, plus partial RFC 4315 UID EXPUNGE and
+EXPUNGE, CLOSE, APPEND and COPY slices, plus partial RFC 4315 UID EXPUNGE/COPYUID and
 RFC 7888 non-synchronizing APPEND and command-argument refusal slices. It is not
 an inventory of all applicable RFC requirements, a full conformance claim, or
 a coverage badge. A mapped row means its named wire test
@@ -260,3 +260,36 @@ AUTHENTICATE responses and IDLE lines keep the session because neither position
 admits a literal (IMAP-LITERAL-10/11); a client that sends literal octets there
 anyway is outside the grammar, the same as for a short line.
 The accepted non-synchronizing form remains unadvertised compatibility behavior.
+
+## RFC 3501 / RFC 4315: COPY and UID COPY — partial dispatch slice
+
+`TestCopyExample` replays RFC 3501 §6.4.7's A003 command. The source UIDs and
+assigned destination UIDs in `TestCopyUIDExample` reproduce RFC 4315 §3's
+A004/A005 examples; comma lists are equivalent to ranges in COPYUID. The backend
+fixture records dispatch and refuses selected messages. It does not prove a real
+store preserves content/metadata or atomically copies a whole set.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-COPY-01 | RFC 3501 §6.4.7 | Normative | COPY passes each selected sequence number's UID and the destination to the backend, then returns tagged OK without command-specific untagged responses. Base backends omit COPYUID. | TestCopyExample |
+| IMAP-COPY-02 | RFC 3501 §6.4.7 | Normative | COPY leaves source membership and source flags unchanged in the selected session. | TestCopyExample |
+| IMAP-COPY-03 | RFC 4315 §3 | SHOULD | Successful COPY/UID COPY with destination UID metadata returns tagged OK with COPYUID containing destination UIDVALIDITY and corresponding source/destination UIDs in copy order. | TestCopyUIDExample, TestCopyUIDMapping |
+| IMAP-COPY-04 | RFC 3501 §6.4.8; RFC 4315 §3 | Normative | UID COPY uses UIDs rather than sequence numbers and ignores nonexistent UIDs; an empty match succeeds without copying or reporting COPYUID. | TestCopyUIDExample, TestCopySets |
+| IMAP-COPY-05 | RFC 3501 §§2.3.1.1, 6.4.8 | Normative | Reversed ranges denote the same members; a UID range ending in star includes the last message even if its other endpoint exceeds the greatest UID. | TestCopySets |
+| IMAP-COPY-06 | RFC 3501 §9; RFC 4315 §3 | Normative | Overlapping sequence-set members identify each message once; UID COPY must not duplicate backend calls or COPYUID members. | TestCopySets, TestCopyUIDMapping |
+| IMAP-COPY-07 | RFC 3501 §§6.4.7, 6.4.8 | Normative | A backend copy failure returns tagged NO without COPYUID and stops further dispatch; the session accepts a later retry. This does not establish rollback of earlier copies. | TestCopyBackendFailure |
+| IMAP-COPY-08 | RFC 3501 §§5.1, 6.3.2, 6.4.7 | Normative | COPY/UID COPY may copy from an EXAMINE selection; quoted destination names retain spaces and INBOX is case-insensitive. | TestCopyReadOnlyAndNames |
+| IMAP-COPY-09 | RFC 3501 §§3, 6.4 | Normative | COPY/UID COPY require a selected mailbox and dispatch no backend copy before selection. | TestCopyRequiresSelection |
+| IMAP-COPY-10 | RFC 4315 §3 | Normative | Omit COPYUID when the destination UIDVALIDITY is unavailable rather than reporting guessed metadata; the completed copy still succeeds. | TestCopyUIDValidityFallback |
+| IMAP-COPY-11 | RFC 3501 §6.4.7 | MUST | An unsuccessful COPY restores the destination to its state before the attempt. | n/a: not supported yet; per-message Copy/CopyUID cannot roll back earlier successful copies or a failed backend mutation. A batch transaction/rollback backend API is needed. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-COPY-12 | RFC 3501 §6.4.7 | SHOULD | Preserve flags and internal date and set Recent in the destination copy. | n/a: backend storage responsibility, not verified by these dispatch fixtures; session-local Deleted and keywords cannot be supplied through Copy. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-COPY-13 | RFC 3501 §6.4.7 | MUST | Refuse nonexistent destinations without auto-creation and prefix NO with TRYCREATE unless creation is known impossible. | n/a: not supported yet; backend errors expose neither missing destinations nor creation permissions, so COPY returns generic NO. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-COPY-14 | RFC 3501 §§6.4.7, 9 | Normative | Reject invalid sequence sets and mailbox argument syntax with BAD. | n/a: not supported yet; shared parsers accept malformed sequence sets and destination argument text. Full grammar, quoted escapes and NUL handling remain unaudited. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-COPY-15 | RFC 4315 §§3, 5 | SHOULD NOT | Suppress COPYUID for a destination the user cannot SELECT/EXAMINE and for UIDNOTSTICKY stores. | n/a: not supported yet; backend API exposes no destination readability or UIDNOTSTICKY marker. Hosts can suppress metadata by returning zero/error UIDValidity, but that policy is not independently checked here. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-COPY-16 | RFC 4315 §§3, 4 | Normative | COPYUID contains only valid nonzero destination UIDs, with no extraneous or repeated UIDs. | n/a: not supported yet for invalid backend results; CopyUID return values are trusted, including zero/repeated UIDs. Tracked in rest-mail/rest-mail-server#374. |
+
+This slice stops at the first backend failure and suppresses COPYUID on NO;
+earlier destination writes can remain and a retry may duplicate them. This is an
+explicit RFC rollback gap, not atomic COPY conformance. Concurrent updates,
+copy-to-self notifications and the remaining UIDPLUS requirements remain for
+later slices. No batch backend interface or public capability changes are made.
