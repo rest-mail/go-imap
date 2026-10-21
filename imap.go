@@ -32,9 +32,10 @@
 // UID EXPUNGE — and one that implements [Mover] turns the baseline MOVE
 // ([RFC 6851]) into a single atomic backend operation. A Mailbox that implements
 // [DateAppender] additionally receives the client-supplied INTERNALDATE on
-// APPEND. The advertised CAPABILITY list reflects only the optional interfaces
-// the concrete Mailbox satisfies, so a backend implementing just [Mailbox] is
-// unaffected and the list never over-promises.
+// APPEND, and one that implements [UTF8Mailbox] turns on UTF8=ACCEPT
+// ([RFC 6855]) through ENABLE. The advertised CAPABILITY list reflects only the
+// optional interfaces the concrete Mailbox satisfies, so a backend implementing
+// just [Mailbox] is unaffected and the list never over-promises.
 //
 // # TLS and authentication
 //
@@ -63,6 +64,7 @@
 // [RFC 4315]: https://www.rfc-editor.org/rfc/rfc4315
 // [RFC 5161]: https://www.rfc-editor.org/rfc/rfc5161
 // [RFC 6851]: https://www.rfc-editor.org/rfc/rfc6851
+// [RFC 6855]: https://www.rfc-editor.org/rfc/rfc6855
 package imap
 
 import "time"
@@ -177,6 +179,25 @@ type UIDPlusMailbox interface {
 	// [Mailbox.Copy] and returns the UID assigned to the copy, for COPYUID.
 	// COPYUID is omitted when any returned UID is zero or repeats in the command.
 	CopyUID(srcUID uint32, dest string) (uid uint32, err error)
+}
+
+// UTF8Mailbox is the optional interface a [Mailbox] may also implement to
+// support internationalized email in IMAP ([RFC 6855] UTF8=ACCEPT). When the
+// authenticated Mailbox satisfies it, the [Server] advertises UTF8=ACCEPT and
+// honours "ENABLE UTF8=ACCEPT" in the authenticated state by calling
+// EnableUTF8 once and answering "* ENABLED UTF8=ACCEPT". A Mailbox that does
+// not implement it keeps exact existing behaviour: the capability is not
+// advertised and ENABLE ignores UTF8=ACCEPT like any unknown extension.
+//
+// After EnableUTF8 returns nil the client accepts raw UTF-8 header fields
+// ([RFC 6532]), so the backend should stop downgrading them for this session.
+//
+// [RFC 6855]: https://www.rfc-editor.org/rfc/rfc6855
+// [RFC 6532]: https://www.rfc-editor.org/rfc/rfc6532
+type UTF8Mailbox interface {
+	// EnableUTF8 switches this session's Mailbox to UTF-8 mode. An error
+	// leaves the mode off and fails the ENABLE command with NO.
+	EnableUTF8() error
 }
 
 // Mover is the optional interface a [Mailbox] may also implement to perform an

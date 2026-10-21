@@ -44,6 +44,9 @@ what your type actually implements, so it never over-promises.
 - Optional `UIDPLUS` (RFC 4315) via `UIDPlusMailbox` and atomic server-side
   `MOVE` (RFC 6851) via `Mover` — advertised only when your `Mailbox`
   implements them.
+- Optional `UTF8=ACCEPT` (RFC 6855) via `UTF8Mailbox`: advertised after
+  login and switched on with `ENABLE UTF8=ACCEPT`, so the backend can serve
+  raw UTF-8 headers (RFC 6532) instead of a downgraded form.
 - Pluggable per-IP `Limiter` for connection caps and auth-failure bans
   (`NopLimiter` for none).
 - Zero external dependencies.
