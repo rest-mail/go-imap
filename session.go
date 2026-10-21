@@ -1914,9 +1914,19 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 	// mailbox is an astring: an atom (unquoted), a quoted-string, or a literal.
 	// Parse it as an astring so an unquoted name is honoured rather than ignored,
 	// which previously left folder at "INBOX" and misdelivered the message.
+	// Arguments are separated by exactly one SP (RFC 3501 §9): a doubled, missing
+	// or leading separator is BAD before the continuation, not skipped.
+	if strings.HasPrefix(args, " ") {
+		s.tagged(tag, "BAD", "Invalid argument separator")
+		return
+	}
 	folder, rest, ok := parseAstring(args)
 	if !ok || folder == "" {
 		s.tagged(tag, "BAD", "Missing mailbox name")
+		return
+	}
+	if rest, ok = cutSingleSP(rest); !ok {
+		s.tagged(tag, "BAD", "Invalid argument separator")
 		return
 	}
 	// "INBOX" is case-insensitive (RFC 3501 §5.1): fold to canonical so an any-case
@@ -1927,7 +1937,6 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 	// it positionally — rather than scanning for the first '(' — avoids matching a
 	// parenthesis inside a quoted mailbox name.
 	var appendFlags []string
-	rest = strings.TrimLeft(rest, " ")
 	if strings.HasPrefix(rest, "(") {
 		// No flag contains ')', so the first one closes the list. The list must be
 		// well formed and followed by SP (RFC 3501 §9); a malformed list is BAD,
@@ -1938,7 +1947,10 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 			return
 		}
 		appendFlags = parseFlags(rest[:end+1])
-		rest = rest[end+1:]
+		if rest, ok = cutSingleSP(rest[end+1:]); !ok {
+			s.tagged(tag, "BAD", "Invalid argument separator")
+			return
+		}
 	}
 
 	// Translate the flags into a neutral FlagUpdate, rejecting any flag the store
@@ -1971,7 +1983,6 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 	// message's INTERNALDATE. Parsed and validated here; it is stored only if the
 	// backend implements DateAppender (otherwise it is dropped, best-effort).
 	var internalDate time.Time
-	rest = strings.TrimLeft(rest, " ")
 	if strings.HasPrefix(rest, `"`) {
 		dateStr, after, dok := parseAstring(rest)
 		if !dok {
@@ -1984,13 +1995,15 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 			return
 		}
 		internalDate = t
-		rest = after
+		if rest, ok = cutSingleSP(after); !ok {
+			s.tagged(tag, "BAD", "Invalid argument separator")
+			return
+		}
 	}
 
 	// The terminal argument must be exactly one literal marker, with no
 	// ignored arguments before it or suffix after it. Reuse the unsigned
 	// literal grammar used by ordinary command arguments.
-	rest = strings.TrimLeft(rest, " ")
 	prefix, size, sync, isLiteral := splitTrailingLiteral(rest)
 	if !isLiteral || prefix != "" {
 		s.tagged(tag, "BAD", "Invalid message literal")

@@ -607,6 +607,16 @@ func parseAstring(s string) (val, rest string, ok bool) {
 	return s, "", true
 }
 
+// cutSingleSP removes the one SP that separates two command arguments (RFC 3501
+// §9). It reports false when the separator is missing or doubled.
+func cutSingleSP(s string) (string, bool) {
+	rest, ok := strings.CutPrefix(s, " ")
+	if !ok || strings.HasPrefix(rest, " ") {
+		return s, false
+	}
+	return rest, true
+}
+
 // splitTrailingLiteral inspects the tail of a command line for a literal-length
 // marker: a synchronizing literal "{n}" or a LITERAL+ non-synchronizing literal
 // "{n+}" (RFC 3501 §4.3, RFC 2088). A literal marker is only ever the final token
