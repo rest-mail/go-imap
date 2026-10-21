@@ -714,9 +714,13 @@ func (s *Session) handleSelect(tag, args string, readOnly bool) {
 	s.messages = messages
 	total := int64(len(s.messages))
 	var unread int64
-	for _, m := range s.messages {
+	var firstUnseen int
+	for i, m := range s.messages {
 		if !m.Seen {
 			unread++
+			if firstUnseen == 0 {
+				firstUnseen = i + 1
+			}
 		}
 	}
 
@@ -728,7 +732,12 @@ func (s *Session) handleSelect(tag, args string, readOnly bool) {
 
 	s.send("* %d EXISTS", total)
 	s.send("* %d RECENT", unread)
-	s.send("* OK [UNSEEN %d]", unread)
+	// SELECT/EXAMINE UNSEEN is the first unseen sequence number, unlike
+	// STATUS UNSEEN's count (RFC 3501 §§6.3.1, 6.3.10). Omit it when none
+	// exists: zero is not a valid message sequence number.
+	if firstUnseen != 0 {
+		s.send("* OK [UNSEEN %d]", firstUnseen)
+	}
 	s.send("* OK [UIDVALIDITY %d]", s.resolveUIDValidity(folder))
 	// UIDNEXT (RFC 3501 §2.3.1.1) is the UID that will be assigned to the next
 	// message: it must be strictly greater than every existing UID, i.e.
@@ -857,7 +866,7 @@ func (s *Session) handleFetch(tag, args string) {
 		}
 		msg := s.messages[seq-1]
 
-		if s.fetchResponse(seq, msg, tokens) && !msg.Seen {
+		if s.fetchResponse(seq, msg, tokens) && !msg.Seen && !s.readOnly {
 			_ = s.mailbox.Store(msg.UID, FlagUpdate{Seen: boolPtr(true)})
 			s.messages[seq-1].Seen = true
 		}
@@ -2269,7 +2278,7 @@ func (s *Session) handleUIDFetch(tag, args string) {
 		}
 		msg := s.messages[seq-1]
 
-		if s.fetchResponse(seq, msg, tokens) && !msg.Seen {
+		if s.fetchResponse(seq, msg, tokens) && !msg.Seen && !s.readOnly {
 			_ = s.mailbox.Store(msg.UID, FlagUpdate{Seen: boolPtr(true)})
 			s.messages[seq-1].Seen = true
 		}

@@ -6,7 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- SELECT/EXAMINE's `UNSEEN` response now identifies the first unseen message's
+  sequence number, rather than the unread count. Empty or fully seen mailboxes
+  omit the code instead of emitting the invalid sequence number zero.
+- Non-peek `FETCH` and `UID FETCH` no longer set `\Seen` in a mailbox opened
+  by `EXAMINE`, preserving both backend and session flags in read-only mode.
+
 ### Added
+
+- Checked SELECT/EXAMINE selection-state rows and public-session wire tests,
+  including the RFC 3501 examples, failed/replacement selection and read-only
+  write prevention. Recent, persistent UID metadata and permission gaps are
+  explicitly recorded; the checklist remains partial.
 
 - **A partial, checked RFC 3501 checklist** (`CHECKLIST.md`). Its first seven
   rows cover the greeting, CAPABILITY, NOOP, LOGOUT, LOGIN and tagged

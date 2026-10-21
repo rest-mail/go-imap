@@ -168,7 +168,9 @@ accepted and, having no enable-able extension yet, is a no-op.
 
 [CHECKLIST.md](CHECKLIST.md) is a **partial**, CI-checked list of RFC 3501
 requirements, each mapped to a wire test in `internal/rfctest` that drives a
-public `Session`. It is growing; it is not yet a full conformance claim.
+public `Session`. The selection-state slice includes the RFC SELECT/EXAMINE
+examples and records Recent, persistent UID metadata and permission gaps.
+It is growing; it is not yet a full conformance claim.
 
 ## Documentation
 
