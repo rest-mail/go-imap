@@ -219,13 +219,18 @@ The BODY/BODYSTRUCTURE slice reproduces both RFC 3501 §7.4.2 example
 structures and checks transfer-encoded sizes/line counts through nested MIME
 parts. Quoted-printable parts retain their encoding, octets and soft-break lines.
 BODY omits extensions; BODYSTRUCTURE reports disposition in the defined order.
-Both are metadata and leave Seen unchanged. Encapsulated messages, MIME defaults,
-arbitrary string framing and missing MD5/language/location remain explicit gaps.
+Both are metadata and leave Seen unchanged. MIME defaults, arbitrary string
+framing and missing MD5/language/location remain explicit gaps.
 The top-level ENVELOPE slice checks the RFC 3501 §8 example, ten-field order,
 header values over cached summaries, missing/empty headers, Sender/Reply-To
 defaults, read-only metadata, and quoted/literal scalar framing. Groups, source
-routes, literal address components, malformed/binary header policy and nested
-MESSAGE/RFC822 envelopes remain explicit gaps.
+routes, literal address components and malformed/binary header policy remain
+explicit gaps. The MESSAGE/RFC822 slice checks encapsulated envelope/body/line
+ordering, raw Date and empty scalar headers, quoted/literal scalar framing,
+recursive messages and multipart bodies, and metadata side effects. Nested
+envelopes share the top-level scalar encoder. Malformed encapsulated headers,
+prohibited transfer encodings, recursion limits and multipart/digest defaults
+remain explicit gaps.
 It is growing; it is not yet a full conformance claim.
 
 ## Documentation

@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- MESSAGE/RFC822 nested envelopes now retain original Date text, distinguish
+  empty scalar headers from missing headers, and use counted literals for
+  scalar octets that cannot appear in quoted strings. Adds partial RFC 3501
+  checklist rows and public-Session tests for encapsulated envelope/body/line
+  ordering, recursive structures, extension ordering and metadata side effects.
+
 - Multipart BODY/BODYSTRUCTURE now retain quoted-printable transfer encoding,
   encoded octet sizes and physical line counts instead of silently decoding
   parts and reporting them as 7BIT. Adds partial RFC 3501 §7.4.2 checklist rows,
@@ -18,7 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Scalar header strings escape quoted-specials and use counted literals for
   8-bit octets. Adds partial RFC 3501 ENVELOPE checklist rows and public-Session
   wire tests, including the §8 example. Address groups, source routes, address
-  literal framing and nested BODYSTRUCTURE envelopes remain unaudited gaps.
+  literal framing and malformed nested BODYSTRUCTURE headers remain gaps.
 
 - STARTTLS with arguments now returns BAD instead of starting a TLS negotiation
   (RFC 3501 §6.2.1). Adds partial RFC 3501/RFC 2595 STARTTLS checklist rows and

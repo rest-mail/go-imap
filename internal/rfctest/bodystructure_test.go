@@ -2,13 +2,14 @@ package rfctest
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
 
 // structureResponse checks the complete wire response, including metadata's lack
 // of Seen writes and the shared raw-message load when both forms are requested.
-func structureResponse(t *testing.T, raw, body, extended string) {
+func structureResponse(t *testing.T, raw, body, extended string, literals ...string) {
 	t.Helper()
 	for _, selection := range []string{"SELECT", "EXAMINE"} {
 		for _, prefix := range []string{"FETCH 1", "UID FETCH 10"} {
@@ -19,7 +20,7 @@ func structureResponse(t *testing.T, raw, body, extended string) {
 				replies, tagged := fetchCommand(t, c, prefix+" (BODY BODYSTRUCTURE)")
 				requireOK(t, tagged, "F1")
 				want := "* 1 FETCH (UID 10 FLAGS () BODY " + body + " BODYSTRUCTURE " + extended + ")"
-				if len(replies) != 1 || replies[0].framing != want || len(replies[0].literals) != 0 {
+				if len(replies) != 1 || replies[0].framing != want || !slices.Equal(replies[0].literals, literals) {
 					t.Fatalf("FETCH = %#v, want %q", replies, want)
 				}
 				if len(box.fetches) != 1 || box.fetches[0] != 10 || len(box.updates) != 0 {
