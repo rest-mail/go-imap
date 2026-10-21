@@ -68,6 +68,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Checklist rows IMAP-LITERAL-10/11 with public-Session wire tests: an
+  overlong AUTHENTICATE response is refused with tagged BAD before any
+  credential check, and an overlong line while idling is ignored without
+  ending IDLE. Both keep the session whatever the line ends in, since neither
+  position admits a literal (RFC 3501 §9, RFC 2177 §3). No behavior change.
+
 - Partial APPEND checklist and public-Session wire proofs for the RFC 3501
   example, message octets, flags/dates, selected-state notifications, backend
   refusal, literal grammar, non-synchronizing continuation behavior and
