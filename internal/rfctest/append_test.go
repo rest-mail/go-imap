@@ -448,7 +448,7 @@ func TestAppendRequiresAuthentication(t *testing.T) {
 // an in-flight message (or a later command) into a new command. Header-only
 // cases also prove that refusal does not wait to drain an attacker-sized body.
 //
-// checklist: IMAP-APPEND-22 IMAP-APPEND-24 IMAP-APPEND-26
+// checklist: IMAP-APPEND-22 IMAP-APPEND-24 IMAP-APPEND-26 IMAP-APPEND-30
 func TestAppendRejectedNonSynchronizing(t *testing.T) {
 	for _, tc := range []struct {
 		name, args, status string
@@ -456,6 +456,9 @@ func TestAppendRejectedNonSynchronizing(t *testing.T) {
 	}{
 		{"authentication", "INBOX", "NO", true},
 		{"empty mailbox", `""`, "BAD", false},
+		{"mailbox wildcard", "a%b", "BAD", false},
+		{"mailbox control", "a\x01b", "BAD", false},
+		{"mailbox high octet", "a\x80b", "BAD", false},
 		{"malformed flags", `INBOX (\Seen`, "BAD", false},
 		{"flag separators", `INBOX (\Seen  \Draft)`, "BAD", false},
 		{"argument separators", "INBOX ", "BAD", false},

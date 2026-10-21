@@ -15,6 +15,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   reach DateAppender instead of being mistaken for an omitted argument. Adds
   checked wire proofs for acceptance, refusal, recovery and LITERAL+ framing.
 
+- APPEND rejects invalid unquoted mailbox-name octets before inviting message
+  data or calling the backend (RFC 3501 §9). Controls, non-ASCII octets,
+  wildcards and quoted-specials require a string rather than an unquoted name;
+  valid astring punctuation remains accepted. Checked by IMAP-APPEND-30, with
+  octet-by-octet wire tests and non-synchronizing payload refusal tests.
+
 - APPEND accepts a mailbox name sent as a synchronizing or LITERAL+ literal
   before the message literal (RFC 3501 §§4.3, 9), instead of misreading the
   name's octets. An empty, oversized or NUL-containing name receives BAD, and a
