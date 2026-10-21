@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- BODY/BODYSTRUCTURE MIME strings now use counted literals for 8-bit and
+  decoded CRLF values instead of placing those octets in quoted strings.
+  Empty content-type and disposition parameter values remain empty strings
+  instead of NIL. Adds checked RFC 3501 public-Session wire tests for header
+  fields, RFC 2231 parameters, dispositions and recursive MIME structures.
+
 - BODY/BODYSTRUCTURE now describe a multipart/digest child without
   Content-Type as MESSAGE/RFC822 (RFC 2046 §5.1.5) instead of TEXT/PLAIN,
   including its encapsulated envelope, body structure and line count. Adds an
