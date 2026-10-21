@@ -215,6 +215,12 @@ LOGINDISABLED until TLS, changed capabilities afterwards, no implicit
 authentication, BAD for arguments or a repeated STARTTLS, discarded pipelined
 cleartext and a closed session after a failed negotiation. Cleartext LOGIN with
 no TLS config and SASL EXTERNAL remain explicit gaps.
+The BODY/BODYSTRUCTURE slice reproduces both RFC 3501 §7.4.2 example
+structures and checks transfer-encoded sizes/line counts through nested MIME
+parts. Quoted-printable parts retain their encoding, octets and soft-break lines.
+BODY omits extensions; BODYSTRUCTURE reports disposition in the defined order.
+Both are metadata and leave Seen unchanged. Encapsulated messages, MIME defaults,
+arbitrary string framing and missing MD5/language/location remain explicit gaps.
 The top-level ENVELOPE slice checks the RFC 3501 §8 example, ten-field order,
 header values over cached summaries, missing/empty headers, Sender/Reply-To
 defaults, read-only metadata, and quoted/literal scalar framing. Groups, source
