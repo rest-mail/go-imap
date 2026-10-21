@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- CI now measures race-test statement coverage across all packages, including
+  the external RFC wire proofs, and fails below 95%. Offline fixtures exercise
+  the gate's boundary, malformed reports and failed coverage pipelines.
+  `COVERAGE.md` records the measurement policy and remaining baseline work.
+
 ### Fixed
 
 - SELECT and EXAMINE require exactly one valid mailbox astring. Missing names
