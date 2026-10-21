@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- SEARCH and UID SEARCH now support HEADER, CC, BCC, SENTBEFORE, SENTON and
+  SENTSINCE, previously rejected as unknown keys. They read the message's raw
+  header block: header strings match the unfolded field text after the colon,
+  and the SENT keys compare the Date: header's calendar date. Malformed
+  operands receive BAD before evaluation. Checked wire tests cover
+  IMAP-SEARCH-19/20/21. KEYWORD/UNKEYWORD remain a documented gap.
+
 - STATUS now validates its complete mailbox/item-list syntax before reading
   metadata. Trailing arguments, malformed astrings and doubled, leading,
   trailing or non-SP separators receive BAD instead of being ignored or

@@ -827,6 +827,26 @@ func selectHeaders(raw string, fields []string, exclude bool) string {
 	return result.String()
 }
 
+// headerFieldValues returns the unfolded text after the colon of every header
+// field in raw's header block whose name matches name case-insensitively, in
+// order. Unfolding removes only the CRLF before a continuation line, keeping its
+// leading whitespace (RFC 5322 §2.2.3).
+func headerFieldValues(raw, name string) []string {
+	var values []string
+	for _, line := range strings.Split(selectHeaders(raw, []string{name}, false), "\r\n") {
+		switch {
+		case line == "":
+		case line[0] == ' ' || line[0] == '\t':
+			if len(values) > 0 {
+				values[len(values)-1] += line
+			}
+		default:
+			values = append(values, line[strings.Index(line, ":")+1:])
+		}
+	}
+	return values
+}
+
 // fetchItemTokens splits a FETCH data-item argument into individual item tokens,
 // respecting bracketed sections and nested parenthesized lists so that, e.g.,
 // "(FLAGS RFC822.SIZE BODY.PEEK[HEADER.FIELDS (DATE FROM)])" yields

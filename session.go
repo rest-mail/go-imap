@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/mail"
 	"os"
 	"runtime/debug"
 	"strconv"
@@ -1079,8 +1080,10 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) error {
 type searchCriterion struct {
 	kind string // "all", "seen", "unseen", "recent", "flagged", "unflagged", "deleted", "undeleted",
 	// "answered", "unanswered", "draft", "undraft", "larger", "smaller",
-	// "from", "to", "subject", "body", "text", "since", "before", "on", "uid", "seqset", "not", "or", "and"
+	// "from", "to", "subject", "body", "text", "header", "since", "before", "on",
+	// "sentsince", "sentbefore", "senton", "uid", "seqset", "not", "or", "and"
 	size   uint64            // unsigned 32-bit SEARCH number, compared without narrowing to int
+	field  string            // header: the header field name to search
 	value  string            // for string/date/uid/seqset criteria
 	date   time.Time         // parsed date for since/before/on
 	sub    []searchCriterion // for NOT (1 element), OR (2 elements) or AND (a "(...)" group)
@@ -1324,6 +1327,22 @@ func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriter
 			return searchCriterion{}, idx, badSearch(keyword + " requires a string argument")
 		}
 		return searchCriterion{kind: strings.ToLower(keyword), value: unquote(tokens[idx+1])}, idx + 2, nil
+	case "CC", "BCC":
+		// CC/BCC search the message's own Cc/Bcc header fields, the source of
+		// the envelope's cc and bcc members (RFC 3501 §§6.4.4, 7.4.2).
+		if idx+1 >= len(tokens) {
+			return searchCriterion{}, idx, badSearch(keyword + " requires a string argument")
+		}
+		return searchCriterion{kind: "header", field: keyword, value: unquote(tokens[idx+1])}, idx + 2, nil
+	case "HEADER":
+		if idx+2 >= len(tokens) {
+			return searchCriterion{}, idx, badSearch("HEADER requires a field name and a string")
+		}
+		field := unquote(tokens[idx+1])
+		if field == "" || field == "(" || field == ")" {
+			return searchCriterion{}, idx, badSearch("HEADER requires a field name")
+		}
+		return searchCriterion{kind: "header", field: field, value: unquote(tokens[idx+2])}, idx + 3, nil
 	case "LARGER", "SMALLER":
 		if idx+1 >= len(tokens) {
 			return searchCriterion{}, idx, badSearch(keyword + " requires a number")
@@ -1335,7 +1354,7 @@ func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriter
 			return searchCriterion{}, idx, badSearch("invalid " + keyword + " number")
 		}
 		return searchCriterion{kind: strings.ToLower(keyword), size: n}, idx + 2, nil
-	case "SINCE", "BEFORE", "ON":
+	case "SINCE", "BEFORE", "ON", "SENTSINCE", "SENTBEFORE", "SENTON":
 		if idx+1 >= len(tokens) {
 			return searchCriterion{}, idx, badSearch(keyword + " requires a date")
 		}
@@ -1428,6 +1447,22 @@ func parseSearchDate(s string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
+// compareSearchDate applies a SINCE, BEFORE or ON comparison (kind is
+// "since", "before" or "on") of t's calendar date, as written in t's own
+// location, against the SEARCH date d.
+func compareSearchDate(kind string, t, d time.Time) bool {
+	year, month, day := t.Date()
+	date := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	switch kind {
+	case "since":
+		return !date.Before(d)
+	case "before":
+		return date.Before(d)
+	default: // on
+		return date.Equal(d)
+	}
+}
+
 // matchesCriteria reports whether msg satisfies every criterion (the criteria are
 // ANDed). loadRaw lazily supplies msg's raw RFC 5322 bytes for the body/text keys;
 // it is called at most once per message and only when such a key is present, so a
@@ -1498,20 +1533,44 @@ func (s *Session) matchOne(msg Message, c searchCriterion, loadRaw func() (strin
 			return false
 		}
 		return strings.Contains(strings.ToLower(raw), strings.ToLower(c.value))
+	case "header":
+		// HEADER <field-name> <string> (and CC/BCC): a header with that field
+		// name whose text after the colon contains the string, case-insensitive;
+		// an empty string matches any message that has the field (RFC 3501
+		// §6.4.4). Missing raw ⇒ no match.
+		raw, ok := loadRaw()
+		if !ok {
+			return false
+		}
+		needle := strings.ToLower(c.value)
+		for _, v := range headerFieldValues(raw, c.field) {
+			if strings.Contains(strings.ToLower(v), needle) {
+				return true
+			}
+		}
+		return false
 	case "since", "before", "on":
 		// RFC 3501 §6.4.4 compares the internal calendar date, ignoring
 		// both the time of day and timezone. Converting the instant to UTC
 		// first would move messages near midnight onto the wrong day.
-		year, month, day := msg.Date.Date()
-		date := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
-		switch c.kind {
-		case "since":
-			return !date.Before(c.date)
-		case "before":
-			return date.Before(c.date)
-		default: // on
-			return date.Equal(c.date)
+		return compareSearchDate(c.kind, msg.Date, c.date)
+	case "sentsince", "sentbefore", "senton":
+		// The SENT keys compare the Date: header's calendar date, again
+		// disregarding time and timezone (RFC 3501 §6.4.4). A message with no
+		// parseable Date: header has no sent date and matches none of them.
+		raw, ok := loadRaw()
+		if !ok {
+			return false
 		}
+		values := headerFieldValues(raw, "Date")
+		if len(values) == 0 {
+			return false
+		}
+		sent, err := mail.ParseDate(strings.TrimSpace(values[0]))
+		if err != nil {
+			return false
+		}
+		return compareSearchDate(strings.TrimPrefix(c.kind, "sent"), sent, c.date)
 	case "uid", "seqset":
 		// Test membership against the pre-parsed ranges (built once in
 		// parseSearchCriteria; a seqset is resolved to its messages' UIDs). Never
