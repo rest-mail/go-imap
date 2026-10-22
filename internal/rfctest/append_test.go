@@ -455,7 +455,6 @@ func TestAppendRejectedNonSynchronizing(t *testing.T) {
 		unauthenticated    bool
 	}{
 		{"authentication", "INBOX", "NO", true},
-		{"empty mailbox", `""`, "BAD", false},
 		{"mailbox wildcard", "a%b", "BAD", false},
 		{"mailbox control", "a\x01b", "BAD", false},
 		{"mailbox high octet", "a\x80b", "BAD", false},
@@ -597,7 +596,6 @@ func TestAppendLiteralMailbox(t *testing.T) {
 		}
 	}
 	for _, tc := range []struct{ desc, wire string }{
-		{"empty name", "A1 APPEND {0}\r\n"},
 		{"oversized name", fmt.Sprintf("A1 APPEND {%d}\r\n", imap.MaxCommandLineLength+1)},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {

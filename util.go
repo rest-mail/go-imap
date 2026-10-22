@@ -191,6 +191,8 @@ func buildFlags(msg Message) string {
 func buildEnvelope(msg Message, raw string, rawOK bool) string {
 	var hdr mail.Header
 	if rawOK {
+		// A malformed raw header block has no trustworthy envelope fields.
+		hdr = mail.Header{}
 		if m, err := mail.ReadMessage(strings.NewReader(raw)); err == nil {
 			hdr = m.Header
 		}
@@ -289,17 +291,114 @@ func buildAddressList(list string) string {
 	if list == "" {
 		return "NIL"
 	}
+	// net/mail validates the complete grammar but flattens groups, including
+	// empty ones. Scan only structural delimiters here; keep address and phrase
+	// decoding with net/mail instead of implementing a second address parser.
 	addrs, err := mail.ParseAddressList(list)
-	if err != nil || len(addrs) == 0 {
+	if err != nil {
 		return "NIL"
 	}
 	var b strings.Builder
 	b.WriteByte('(')
-	for _, a := range addrs {
-		b.WriteString(addressPart(a.Name, a.Address))
+	if !strings.Contains(list, ":") {
+		for _, a := range addrs {
+			b.WriteString(addressPart(a.Name, a.Address))
+		}
+	} else if !appendAddressGroups(&b, list) {
+		return "NIL"
+	}
+	if b.Len() == 1 {
+		return "NIL"
 	}
 	b.WriteByte(')')
 	return b.String()
+}
+
+// appendAddressGroups preserves RFC 3501 §7.4.2 group-start/group-end
+// structures. list has already passed mail.ParseAddressList. Delimiters inside
+// quoted strings, nested comments, angle addresses and domain literals are data.
+func appendAddressGroups(b *strings.Builder, list string) bool {
+	appendMembers := func(value string) bool {
+		if strings.TrimSpace(stripComments(value)) == "" {
+			return true
+		}
+		members, err := mail.ParseAddressList(value)
+		if err != nil {
+			return false
+		}
+		for _, a := range members {
+			b.WriteString(addressPart(a.Name, a.Address))
+		}
+		return true
+	}
+	start, comments := 0, 0
+	quoted, angle, domain, escaped := false, false, false, false
+	for i := 0; i < len(list); i++ {
+		c := list[i]
+		if escaped {
+			escaped = false
+			continue
+		}
+		if c == '\\' && (quoted || comments > 0 || domain) {
+			escaped = true
+			continue
+		}
+		if comments > 0 {
+			switch c {
+			case '(':
+				comments++
+			case ')':
+				comments--
+			}
+			continue
+		}
+		if quoted {
+			if c == '"' {
+				quoted = false
+			}
+			continue
+		}
+		if domain {
+			if c == ']' {
+				domain = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			quoted = true
+		case '(':
+			comments++
+		case '[':
+			domain = true
+		case '<':
+			angle = true
+		case '>':
+			angle = false
+		case ':', ',', ';':
+			if angle {
+				continue
+			}
+			if c == ':' {
+				// Parse the group's display-name as a mailbox display-name so
+				// comments, quoted-pairs and encoded words share one decoder.
+				name, err := mail.ParseAddress(list[start:i] + " <group@invalid>")
+				if err != nil {
+					return false
+				}
+				fmt.Fprintf(b, "(NIL NIL %s NIL)", encodeMailboxName(name.Name))
+			} else {
+				if !appendMembers(list[start:i]) {
+					return false
+				}
+				if c == ';' {
+					b.WriteString("(NIL NIL NIL NIL)")
+				}
+			}
+			start = i + 1
+		}
+	}
+	return appendMembers(list[start:])
 }
 
 // quoteString encodes an IMAP nstring (RFC 3501 §9): NIL for empty, otherwise
@@ -1460,12 +1559,12 @@ func stripComments(s string) string {
 // sender and reply-to defaulting to from. It differs from buildEnvelope, which
 // uses the stored Message model only when headers cannot be read; an
 // encapsulated message has no such model, so every field comes from the raw header
-// block. A header that cannot be parsed yields NIL, keeping the structure
-// well-formed.
+// block. A header that cannot be parsed yields ten NIL fields, keeping the
+// required envelope structure well-formed.
 func buildEncapsulatedEnvelope(raw string) string {
 	m, err := mail.ReadMessage(strings.NewReader(raw))
 	if err != nil {
-		return "NIL"
+		return "(NIL NIL NIL NIL NIL NIL NIL NIL NIL NIL)"
 	}
 	hdr := m.Header
 
