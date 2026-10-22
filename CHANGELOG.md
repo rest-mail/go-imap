@@ -39,6 +39,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `ErrNoSuchMailbox`: a backend returns it, possibly wrapped, from Append, Copy
+  or Move (or their UIDPLUS, Mover and DateAppender forms) when the destination
+  does not exist and will not be created implicitly. APPEND, COPY, UID COPY,
+  MOVE and UID MOVE then answer `NO [TRYCREATE]` (RFC 3501 §§6.3.11, 6.4.7;
+  RFC 6851 §3.3); other backend errors keep a plain NO. IMAP-APPEND-18,
+  IMAP-COPY-13, IMAP-MOVE-11 and IMAP-RESP-09 are now mapped; partial
+  checklist is 281/331.
+- IMAP-GREET-02 (RFC 3501 §§7.1.5, 9): a wire test through the public `Server`
+  proves a `Limiter`-refused connection gets a BYE greeting. Partial checklist
+  is 277/331 mapped.
 - Twenty RFC 3501 §6.5/§7 checklist rows from a dated line-by-line audit of
   server responses: ten mapped (four new wire tests), ten explicit gaps or
   client-only duties. Combined partial checklist is 276/330 mapped.
@@ -79,6 +89,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A connection the `Limiter` refuses is greeted with `* BYE` before the
+  server closes it (RFC 3501 §7.1.5), instead of being dropped with no
+  greeting. The write runs off the accept loop under a 5-second deadline.
 - ENABLE always sends an ENABLED response on success, even when empty, and
   rejects missing or malformed capability atoms before enabling any mode.
 - UNSELECT returns BAD without a selected mailbox, as RFC 3691 requires.

@@ -67,7 +67,10 @@
 // [RFC 6855]: https://www.rfc-editor.org/rfc/rfc6855
 package imap
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 // Address is a parsed mail address for ENVELOPE and SEARCH.
 type Address struct {
@@ -152,6 +155,17 @@ type Mailbox interface {
 	// Quota returns storage use and limit in bytes (GETQUOTA/GETQUOTAROOT).
 	Quota() (used, limit int64, err error)
 }
+
+// ErrNoSuchMailbox is the error a [Mailbox] returns, possibly wrapped, from
+// Append, Copy or Move (and their [UIDPlusMailbox], [Mover] and [DateAppender]
+// forms) when the destination folder does not exist and the store will not
+// create it implicitly. The [Server] then answers the APPEND, COPY or MOVE with
+// "NO [TRYCREATE]" so the client can CREATE the folder and retry ([RFC 3501]
+// §§6.3.11, 6.4.7; [RFC 6851] §3.3). Return another error when creating the
+// folder is known to be impossible; any other error gets a plain NO.
+//
+// [RFC 6851]: https://www.rfc-editor.org/rfc/rfc6851
+var ErrNoSuchMailbox = errors.New("imap: no such mailbox")
 
 // UIDPlusMailbox is the optional interface a [Mailbox] may also implement to
 // enable the UIDPLUS extension ([RFC 4315]). When the authenticated Mailbox
