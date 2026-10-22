@@ -973,7 +973,7 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) error {
 	loadRaw := func() (string, bool) {
 		if !rawLoaded {
 			rawLoaded = true
-			if b, err := s.mailbox.Fetch(msg.UID); err == nil {
+			if b, err := s.mailbox.Fetch(msg.UID); err == nil && bytes.IndexByte(b, 0) < 0 {
 				raw, rawOK = string(b), true
 			}
 		}
@@ -1050,6 +1050,16 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) error {
 
 	if rawLoaded && !rawOK {
 		return errors.New("cannot load message data")
+	}
+
+	// RFC 3501 CHAR8 excludes NUL. MIME/encoded-word decoders can produce
+	// one even when the raw message has none. Validate decoded metadata
+	// before any Seen write or response bytes, including nested envelopes.
+	// Body literals retain raw source octets, already checked in loadRaw.
+	for _, field := range plain {
+		if strings.IndexByte(field, 0) >= 0 {
+			return errors.New("NUL in message metadata")
+		}
 	}
 
 	// Only advertise a new \Seen after the backend accepted it. Earlier
@@ -2104,7 +2114,7 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 		// A line that is only a literal marker carries the mailbox name as a
 		// literal astring (RFC 3501 §§4.3, 9); the rest of the command, ending
 		// in the message literal, follows its octets.
-		if size == 0 || size > MaxCommandLineLength {
+		if size > MaxCommandLineLength {
 			s.tagged(tag, "BAD", "Invalid mailbox name")
 			return
 		}
@@ -2146,7 +2156,7 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 		if strings.HasPrefix(token, `"`) {
 			mailboxOK = validAppendQuotedMailbox(token)
 		}
-		if !ok || folder == "" || !mailboxOK {
+		if !ok || !mailboxOK {
 			s.tagged(tag, "BAD", "Invalid mailbox name")
 			return
 		}

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 209/237 mapped](https://img.shields.io/badge/partial%20checklist-209%2F237%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 214/237 mapped](https://img.shields.io/badge/partial%20checklist-214%2F237%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -171,6 +171,12 @@ accepted and, having no enable-able extension yet, is a no-op.
 
 ## RFC conformance
 
+The current checklist has 237 requirements: 214 mapped to wire tests and 23
+explicit gaps or backend/deployment responsibilities. Five formerly unmapped
+rows now cover composed APPEND/FETCH grammar, address groups, malformed headers
+and malformed nested envelopes. APPEND accepts empty quoted and counted mailbox
+strings as syntax and passes them unchanged to the backend for naming policy.
+
 [CHECKLIST.md](CHECKLIST.md) is a **partial**, CI-checked list of RFC 3501
 requirements, each mapped to a wire test in `internal/rfctest` that drives a
 public `Session`. The selection-state slice includes the RFC SELECT/EXAMINE
@@ -226,9 +232,9 @@ and a separate fuzz target checks the flat-item grammar and section framing.
 HEADER.FIELDS[.NOT] now requires a nonempty, exactly SP-separated astring list.
 Quoted and literal names are decoded for exact case-insensitive matching, and
 response labels preserve valid wire tokens. Checked tests cover escaped names,
-folded fields, partial-after-subset ranges and Seen rules. Numeric MIME sections
-and other section-name validation remain unsupported; literal names retain the
-existing command parser's ASCII/NUL/line-break restrictions.
+folded fields, partial-after-subset ranges and Seen rules. Numeric MIME paths,
+quoted header names and partials are also checked together in mixed item lists; a malformed item anywhere is refused before reads or Seen
+writes. Literal names retain the command parser's ASCII/NUL/line-break restrictions.
 SEARCH's six calendar-date keys require RFC 3501 date tokens: one/two day digits,
 an ASCII month and four year digits, bare or enclosed in DQUOTEs. Invalid dates,
 padding and quoted escapes receive BAD before content evaluation. Checked wire
@@ -313,17 +319,21 @@ target compares comment-bearing types with Go MIME parsing of equivalent
 comment-free fields. Content-Disposition shares that comment lexer: comments
 between the disposition type and parameters are ignored per RFC 2183, split
 tokens and type/subtype pairs yield NIL. Unparseable header blocks, comments in
-Content-ID/Description, malformed/empty multiparts and NUL/binary policy remain
-gaps.
+Content-ID/Description and malformed/empty multiparts remain gaps. FETCH refuses
+raw message NUL and NUL decoded into envelope/MIME strings before response bytes
+or Seen writes; BINARY is not implemented.
 The top-level ENVELOPE slice checks the RFC 3501 §8 example, ten-field order,
 header values over cached summaries, missing/empty headers, Sender/Reply-To
-defaults, read-only metadata, and quoted/literal scalar framing. Groups, source
-routes, literal address components and malformed/binary header policy remain
-explicit gaps. The MESSAGE/RFC822 slice checks encapsulated envelope/body/line
-ordering, raw Date and empty scalar headers, quoted/literal scalar framing,
+defaults, read-only metadata, and quoted/literal scalar and address framing.
+Address groups preserve start/end markers, empty groups and member order, with
+quoted punctuation, nested comments and encoded names. Source routes and legal
+address syntax rejected by net/mail remain gaps. Malformed header blocks produce
+ten NIL envelope fields rather than cached summaries. The MESSAGE/RFC822 slice
+checks encapsulated envelope/body/line ordering, raw Date and empty scalar headers, quoted/literal scalar framing,
 recursive messages and multipart bodies, and metadata side effects. Nested
-envelopes share the top-level scalar encoder. Malformed encapsulated headers,
-prohibited transfer encodings and recursion limits remain explicit gaps.
+envelopes share the top-level address and scalar encoders. Malformed encapsulated
+headers retain a ten-field envelope and the existing opaque TEXT/PLAIN body
+recovery. Prohibited transfer encodings and recursion limits remain explicit gaps.
 Untyped multipart/digest children are described as MESSAGE/RFC822.
 It is growing; it is not yet a full conformance claim.
 
