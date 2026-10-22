@@ -176,7 +176,7 @@ func appendCompletion(t *testing.T, c *client) ([]string, string) {
 // TestAppendExample uses RFC 3501 §6.3.11's A003 message and envelope. The RFC's
 // final blank client line supplies the command terminator after 310 octets.
 //
-// checklist: IMAP-APPEND-01 IMAP-APPEND-02
+// checklist: IMAP-APPEND-01 IMAP-APPEND-02 IMAP-RESP-17
 func TestAppendExample(t *testing.T) {
 	raw := "Date: Mon, 7 Feb 1994 21:52:25 -0800 (PST)\r\n" +
 		"From: Fred Foobar <foobar@Blurdybloop.COM>\r\n" +
@@ -211,7 +211,7 @@ func TestAppendExample(t *testing.T) {
 	}
 }
 
-// checklist: IMAP-APPEND-03 IMAP-APPEND-04
+// checklist: IMAP-APPEND-03 IMAP-APPEND-04 IMAP-APPEND-31
 func TestAppendLiteralOctets(t *testing.T) {
 	for _, raw := range []string{"", "Subject: draft\r\n\r\n", "Subject: 8bit\r\n\r\ncaf\xc3\xa9\xff\r\n.hello\r\nZ1 LOGOUT\r\n", "no final newline"} {
 		t.Run(fmt.Sprintf("%d", len(raw)), func(t *testing.T) {

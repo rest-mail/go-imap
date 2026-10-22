@@ -93,7 +93,7 @@ func requireCaps(t *testing.T, caps []string, have, lack []string) {
 }
 
 // TestStartTLSExample follows the RFC 3501 §6.2.1 example transcript.
-// checklist: IMAP-STARTTLS-01 IMAP-STARTTLS-02 IMAP-STARTTLS-03
+// checklist: IMAP-STARTTLS-01 IMAP-STARTTLS-02 IMAP-STARTTLS-03 IMAP-CAP-02 IMAP-LOGIN-02
 func TestStartTLSExample(t *testing.T) {
 	c := tlsClient(t)
 	requireCaps(t, c.capabilities("a001"), []string{"IMAP4rev1", "STARTTLS", "LOGINDISABLED"}, []string{"AUTH=PLAIN"})
@@ -135,7 +135,7 @@ func TestStartTLSNonAuthenticated(t *testing.T) {
 // reaches the backend, and the session stays not authenticated. A session
 // built without a TLS config is a development deployment and is out of scope.
 //
-// checklist: IMAP-STARTTLS-08
+// checklist: IMAP-STARTTLS-08 IMAP-AUTHENTICATE-09 IMAP-LOGIN-02
 func TestStartTLSCleartextCredentialsRefused(t *testing.T) {
 	plain := base64.StdEncoding.EncodeToString([]byte("\x00" + testUser + "\x00" + testPass))
 	c := tlsClient(t)

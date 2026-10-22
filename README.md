@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 241/266 mapped](https://img.shields.io/badge/partial%20checklist-241%2F266%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 281/331 mapped](https://img.shields.io/badge/partial%20checklist-281%2F331%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -175,10 +175,19 @@ extra arguments while preserving the selection.
 
 ## RFC conformance
 
-The current checklist has 266 requirements: 241 mapped to wire tests and 25
+The current checklist has 331 requirements: 281 mapped to wire tests and 50
 explicit gaps or backend/deployment responsibilities. A backend that returns
 `ErrNoSuchMailbox` for a missing destination makes APPEND, COPY and MOVE answer
-`NO [TRYCREATE]`; other backend errors stay a plain NO. Sixteen new rows cover
+`NO [TRYCREATE]`; other backend errors stay a plain NO. A connection the `Limiter`
+refuses is greeted with an untagged BYE (RFC 3501 §7.1.5) before it closes. Twenty rows come from a
+line-by-line pass over RFC 3501 §6.5 and §7 server responses (status responses
+and codes, BYE, continuation, the EXPUNGE timing rule). Twenty-two rows come from a
+line-by-line pass over RFC 3501 §§6.1, 6.2 (AUTHENTICATE has its own rows),
+6.3.1, 6.3.2, 6.3.10, 6.3.11 and 6.4.1–6.4.3, 6.4.7–6.4.8; LIST now honours its
+reference argument. Twenty-two earlier rows come from §§6.3.3–6.3.9 (CREATE,
+DELETE, RENAME, SUBSCRIBE, UNSUBSCRIBE, LIST, LSUB). Folders are implicit, so
+permanent DELETE, subscription storage and RENAME INBOX are
+recorded gaps. Sixteen earlier rows cover
 APPENDUID and ordinary LIST special-use attributes, including explicit boundaries
 for unsupported extended LIST and role assignment. Sent, Drafts, Trash and Junk
 roles are inferred from those exact folder names; the host owns their contents.

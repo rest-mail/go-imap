@@ -78,7 +78,7 @@ func TestNoop(t *testing.T) {
 // TestLogout checks LOGOUT sends an untagged BYE before the tagged OK and then
 // closes the connection, both before and after authentication.
 //
-// checklist: IMAP-LOGOUT-01
+// checklist: IMAP-LOGOUT-01 IMAP-RESP-13
 func TestLogout(t *testing.T) {
 	for _, authenticated := range []bool{false, true} {
 		c := dial(t)
@@ -127,7 +127,7 @@ func TestLogin(t *testing.T) {
 // TestTaggedCompletion checks each completion result carries the tag of the
 // command it completes, in command order, and an unknown command is BAD.
 //
-// checklist: IMAP-TAG-01 IMAP-BAD-01
+// checklist: IMAP-TAG-01 IMAP-BAD-01 IMAP-RESP-01
 func TestTaggedCompletion(t *testing.T) {
 	c := dial(t)
 	c.line()

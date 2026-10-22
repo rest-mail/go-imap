@@ -376,6 +376,10 @@ func (s *Session) Handle() {
 		// IMAP commands are: <tag> <command> [<args>]
 		tag, cmd, args := parseIMAPCommand(line)
 		if tag == "" {
+			// No tag and command pair: the command cannot be determined, so
+			// answer with an untagged BAD (RFC 3501 §7.1.3) instead of dropping
+			// the line and leaving the client waiting for a completion.
+			s.send("* BAD Missing tag or command")
 			continue
 		}
 
@@ -412,9 +416,11 @@ func (s *Session) Handle() {
 		case "AUTHENTICATE":
 			s.handleAuthenticate(tag, args)
 		case "LIST":
-			s.handleList(tag, args)
+			s.handleList(tag, args, "LIST")
 		case "LSUB":
-			s.handleList(tag, args) // treat LSUB same as LIST
+			// Every existing folder counts as subscribed, so LSUB lists the same
+			// names, but each reply is an untagged LSUB (RFC 3501 §7.2.3).
+			s.handleList(tag, args, "LSUB")
 		case "SUBSCRIBE":
 			s.handleSubscribe(tag, args)
 		case "UNSUBSCRIBE":
@@ -453,6 +459,10 @@ func (s *Session) Handle() {
 			// state, since a mailbox can only be selected after authentication.
 			if s.selected == nil {
 				s.tagged(tag, "BAD", "CHECK valid only in selected state")
+				break
+			}
+			if args != "" {
+				s.tagged(tag, "BAD", "CHECK takes no arguments")
 				break
 			}
 			s.tagged(tag, "OK", "CHECK completed")
@@ -561,6 +571,9 @@ func (s *Session) handleSTARTTLS(tag, args string) bool {
 }
 
 func (s *Session) handleLogin(tag, args string) {
+	if s.refuseReauthentication(tag, "LOGIN") {
+		return
+	}
 	// Enforce the same policy the greeting advertises via LOGINDISABLED: refuse
 	// plaintext LOGIN until TLS is established (RFC 3501 §7.1.1, RFC 2595).
 	if s.loginDisabled() {
@@ -580,7 +593,29 @@ func (s *Session) handleLogin(tag, args string) {
 	s.authenticate(tag, username, password, "LOGIN completed")
 }
 
+// refuseReauthentication answers BAD to LOGIN or AUTHENTICATE once the session
+// is authenticated: both are valid only in the not authenticated state, and a
+// session cannot return to it or switch user (RFC 3501 §6.2). The rejected
+// command changes no state and checks no credentials.
+func (s *Session) refuseReauthentication(tag, cmd string) bool {
+	if !s.auth.authenticated {
+		return false
+	}
+	s.tagged(tag, "BAD", cmd+" not permitted: already authenticated")
+	return true
+}
+
 func (s *Session) handleAuthenticate(tag, args string) {
+	if s.refuseReauthentication(tag, "AUTHENTICATE") {
+		return
+	}
+	// A missing mechanism name is an invalid argument: BAD, not the NO an
+	// unsupported mechanism gets (RFC 3501 §6.2.2).
+	if strings.TrimSpace(args) == "" {
+		s.tagged(tag, "BAD", "AUTHENTICATE requires a mechanism name")
+		return
+	}
+
 	// Gate cleartext SASL the same way LOGIN is gated: when TLS is configured
 	// but not yet active, refuse before soliciting any credential so the base64
 	// PLAIN response is never sent over the wire (RFC 3501 / RFC 2595).
@@ -622,6 +657,15 @@ func (s *Session) handleAuthenticate(tag, args string) {
 	parts := strings.SplitN(string(decoded), "\x00", 3)
 	if len(parts) != 3 {
 		s.tagged(tag, "NO", "Invalid PLAIN data")
+		return
+	}
+
+	// The authorization identity names the user whose privileges the client
+	// requests (RFC 3501 §6.2.2). Acting as another user is not supported, so
+	// an authzid other than the authentication identity is refused rather
+	// than silently ignored (RFC 4616 §2).
+	if parts[0] != "" && parts[0] != parts[1] {
+		s.tagged(tag, "NO", "Authorization identity not permitted")
 		return
 	}
 
@@ -672,7 +716,7 @@ func (s *Session) authenticate(tag, username, password, okMsg string) {
 	s.tagged(tag, "OK", "[CAPABILITY "+s.capabilities()+"] "+okMsg)
 }
 
-func (s *Session) handleList(tag, args string) {
+func (s *Session) handleList(tag, args, cmd string) {
 	if !s.auth.authenticated {
 		s.tagged(tag, "NO", "Not authenticated")
 		return
@@ -680,18 +724,30 @@ func (s *Session) handleList(tag, args string) {
 
 	// Parse reference and mailbox pattern
 	parts := parseIMAPArgs(args)
-	pattern := "*"
+	reference, pattern := "", "*"
 	if len(parts) >= 2 {
-		pattern = unquote(parts[1])
+		reference, pattern = unquote(parts[0]), unquote(parts[1])
 	} else if len(parts) == 1 {
 		pattern = unquote(parts[0])
 	}
 
-	// Empty pattern = return hierarchy delimiter only
+	// Empty pattern = return the hierarchy delimiter and the root name of the
+	// reference (RFC 3501 §6.3.8): the reference up to and including its
+	// first delimiter, or the empty root when it has none.
 	if pattern == "" {
-		s.send(`* LIST (\Noselect) "/" ""`)
-		s.tagged(tag, "OK", "LIST completed")
+		root := ""
+		if i := strings.Index(reference, "/"); i >= 0 {
+			root = reference[:i+1]
+		}
+		s.send(`* %s (\Noselect) "/" %s`, cmd, encodeMailboxName(root))
+		s.tagged(tag, "OK", cmd+" completed")
 		return
+	}
+
+	// A non-empty reference is prefixed to the pattern, unless the pattern
+	// already starts at the hierarchy root (RFC 3501 §6.3.8 examples).
+	if reference != "" && !strings.HasPrefix(pattern, "/") {
+		pattern = reference + pattern
 	}
 
 	folders, err := s.mailbox.Folders()
@@ -717,9 +773,9 @@ func (s *Session) handleList(tag, args string) {
 		case "Junk":
 			attrs = `\Junk`
 		}
-		s.send(`* LIST (%s) "/" %s`, attrs, encodeMailboxName(f.Name))
+		s.send(`* %s (%s) "/" %s`, cmd, attrs, encodeMailboxName(f.Name))
 	}
-	s.tagged(tag, "OK", "LIST completed")
+	s.tagged(tag, "OK", cmd+" completed")
 }
 
 // handleSubscribe implements SUBSCRIBE (RFC 3501 §6.3.6) and handleUnsubscribe
@@ -2077,10 +2133,21 @@ func (s *Session) handleRename(tag, args string) {
 		return
 	}
 
-	// Move all messages from old folder to new folder.
-	if messages, err := s.mailbox.Messages(oldName); err == nil {
-		for _, msg := range messages {
-			_ = s.mailbox.Move(msg.UID, newName)
+	// Move all messages from old folder to new folder. Inferior hierarchical
+	// names are renamed with it (RFC 3501 §6.3.5): "old/x" becomes "new/x".
+	renames := map[string]string{oldName: newName}
+	if folders, err := s.mailbox.Folders(); err == nil {
+		for _, f := range folders {
+			if rest, ok := strings.CutPrefix(f.Name, oldName+"/"); ok {
+				renames[f.Name] = newName + "/" + rest
+			}
+		}
+	}
+	for from, to := range renames {
+		if messages, err := s.mailbox.Messages(from); err == nil {
+			for _, msg := range messages {
+				_ = s.mailbox.Move(msg.UID, to)
+			}
 		}
 	}
 
