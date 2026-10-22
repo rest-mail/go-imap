@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A MESSAGE/RFC822 entity with a Content-Transfer-Encoding other than 7bit,
+  8bit or binary, which RFC 2046 §5.2.1 prohibits, is now one opaque
+  APPLICATION/OCTET-STREAM leaf in BODY, BODYSTRUCTURE and numeric FETCH
+  sections, and SEARCH BODY matches its decoded text. Its encoded octets used
+  to be parsed as if they were the encapsulated message (RFC 3501 §7.4.2).
 - MIME nesting is now bounded at depth 64 for BODY, BODYSTRUCTURE, numeric
   FETCH sections and SEARCH alike. A multipart or MESSAGE/RFC822 entity at that
   depth is one opaque APPLICATION/OCTET-STREAM leaf. BODYSTRUCTURE and section
