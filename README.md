@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 283/332 mapped](https://img.shields.io/badge/partial%20checklist-283%2F332%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 284/332 mapped](https://img.shields.io/badge/partial%20checklist-284%2F332%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -175,7 +175,7 @@ extra arguments while preserving the selection.
 
 ## RFC conformance
 
-The current checklist has 332 requirements: 283 mapped to wire tests and 49
+The current checklist has 332 requirements: 284 mapped to wire tests and 48
 explicit gaps or backend/deployment responsibilities. A backend that returns
 `ErrNoSuchMailbox` for a missing destination makes APPEND, COPY and MOVE answer
 `NO [TRYCREATE]`; other backend errors stay a plain NO. A connection the `Limiter`

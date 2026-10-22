@@ -78,13 +78,26 @@ func messageNode(raw string, depth int) mimeNode {
 func (n mimeNode) mediaType() (string, map[string]string) {
 	h, _ := textproto.NewReader(bufio.NewReader(strings.NewReader(n.header))).ReadMIMEHeader()
 	mt, params, err := parseContentType(h.Get("Content-Type"))
-	if err != nil || !strings.Contains(mt, "/") {
+	if !usableContentType(mt, params, err) {
 		mt, params = n.defaultType, map[string]string{}
 	}
 	if opaqueEntity(mt, params, h.Get("Content-Transfer-Encoding"), n.depth) {
 		return "application/octet-stream", map[string]string{}
 	}
 	return mt, params
+}
+
+// usableContentType reports whether a parsed Content-Type field describes the
+// entity. RFC 2045 §5.1 requires type/subtype (ParseMediaType also accepts a
+// bare token), and RFC 2046 §5.1.1 makes the boundary parameter mandatory for
+// multipart, so a multipart without one cannot be split into parts. RFC 2045
+// §5.2 gives unusable fields the default type instead of inventing, for example,
+// application/plain or a leaf "MULTIPART" body.
+func usableContentType(mt string, params map[string]string, err error) bool {
+	if err != nil || !strings.Contains(mt, "/") {
+		return false
+	}
+	return !strings.HasPrefix(mt, "multipart/") || params["boundary"] != ""
 }
 
 // opaqueEntity reports whether an entity with lower-case media type mt is
