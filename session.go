@@ -457,6 +457,10 @@ func (s *Session) Handle() {
 				s.tagged(tag, "BAD", "CHECK valid only in selected state")
 				break
 			}
+			if args != "" {
+				s.tagged(tag, "BAD", "CHECK takes no arguments")
+				break
+			}
 			s.tagged(tag, "OK", "CHECK completed")
 		case "CLOSE":
 			if args != "" {
@@ -563,6 +567,9 @@ func (s *Session) handleSTARTTLS(tag, args string) bool {
 }
 
 func (s *Session) handleLogin(tag, args string) {
+	if s.refuseReauthentication(tag, "LOGIN") {
+		return
+	}
 	// Enforce the same policy the greeting advertises via LOGINDISABLED: refuse
 	// plaintext LOGIN until TLS is established (RFC 3501 §7.1.1, RFC 2595).
 	if s.loginDisabled() {
@@ -582,7 +589,29 @@ func (s *Session) handleLogin(tag, args string) {
 	s.authenticate(tag, username, password, "LOGIN completed")
 }
 
+// refuseReauthentication answers BAD to LOGIN or AUTHENTICATE once the session
+// is authenticated: both are valid only in the not authenticated state, and a
+// session cannot return to it or switch user (RFC 3501 §6.2). The rejected
+// command changes no state and checks no credentials.
+func (s *Session) refuseReauthentication(tag, cmd string) bool {
+	if !s.auth.authenticated {
+		return false
+	}
+	s.tagged(tag, "BAD", cmd+" not permitted: already authenticated")
+	return true
+}
+
 func (s *Session) handleAuthenticate(tag, args string) {
+	if s.refuseReauthentication(tag, "AUTHENTICATE") {
+		return
+	}
+	// A missing mechanism name is an invalid argument: BAD, not the NO an
+	// unsupported mechanism gets (RFC 3501 §6.2.2).
+	if strings.TrimSpace(args) == "" {
+		s.tagged(tag, "BAD", "AUTHENTICATE requires a mechanism name")
+		return
+	}
+
 	// Gate cleartext SASL the same way LOGIN is gated: when TLS is configured
 	// but not yet active, refuse before soliciting any credential so the base64
 	// PLAIN response is never sent over the wire (RFC 3501 / RFC 2595).
@@ -624,6 +653,15 @@ func (s *Session) handleAuthenticate(tag, args string) {
 	parts := strings.SplitN(string(decoded), "\x00", 3)
 	if len(parts) != 3 {
 		s.tagged(tag, "NO", "Invalid PLAIN data")
+		return
+	}
+
+	// The authorization identity names the user whose privileges the client
+	// requests (RFC 3501 §6.2.2). Acting as another user is not supported, so
+	// an authzid other than the authentication identity is refused rather
+	// than silently ignored (RFC 4616 §2).
+	if parts[0] != "" && parts[0] != parts[1] {
+		s.tagged(tag, "NO", "Authorization identity not permitted")
 		return
 	}
 
@@ -682,18 +720,30 @@ func (s *Session) handleList(tag, args, cmd string) {
 
 	// Parse reference and mailbox pattern
 	parts := parseIMAPArgs(args)
-	pattern := "*"
+	reference, pattern := "", "*"
 	if len(parts) >= 2 {
-		pattern = unquote(parts[1])
+		reference, pattern = unquote(parts[0]), unquote(parts[1])
 	} else if len(parts) == 1 {
 		pattern = unquote(parts[0])
 	}
 
-	// Empty pattern = return hierarchy delimiter only
+	// Empty pattern = return the hierarchy delimiter and the root name of the
+	// reference (RFC 3501 §6.3.8): the reference up to and including its
+	// first delimiter, or the empty root when it has none.
 	if pattern == "" {
-		s.send(`* %s (\Noselect) "/" ""`, cmd)
+		root := ""
+		if i := strings.Index(reference, "/"); i >= 0 {
+			root = reference[:i+1]
+		}
+		s.send(`* %s (\Noselect) "/" %s`, cmd, encodeMailboxName(root))
 		s.tagged(tag, "OK", cmd+" completed")
 		return
+	}
+
+	// A non-empty reference is prefixed to the pattern, unless the pattern
+	// already starts at the hierarchy root (RFC 3501 §6.3.8 examples).
+	if reference != "" && !strings.HasPrefix(pattern, "/") {
+		pattern = reference + pattern
 	}
 
 	folders, err := s.mailbox.Folders()
