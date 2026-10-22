@@ -4,7 +4,7 @@ This is an explicitly **PARTIAL** checklist: the first RFC 3501 rows for the
 connection greeting, the any-state commands (CAPABILITY, NOOP, LOGOUT), LOGIN,
 tagged completion, STARTTLS, selection-state (SELECT/EXAMINE), STATUS, STORE, SEARCH, FETCH/ENVELOPE,
 EXPUNGE, CLOSE, APPEND, COPY and encoded BODYSTRUCTURE slices, plus partial
-RFC 4315 UID EXPUNGE/COPYUID,
+RFC 4315 UID EXPUNGE/COPYUID/APPENDUID, RFC 6154 ordinary LIST attributes,
 RFC 6851 MOVE, RFC 3691 UNSELECT, RFC 5161 ENABLE, RFC 2177 IDLE command exchanges
 and RFC 7888 non-synchronizing APPEND and command-argument refusal slices. It is not
 an inventory of all applicable RFC requirements, a full conformance claim, or
@@ -581,3 +581,38 @@ The supported UTF8 mode belongs to the session's backend; this proof observes
 its enable callback, not a complete RFC 6855 audit. IDLE polling notifications,
 concurrent mailbox changes, timeout policy, RFC 9051 IMAP4rev2 differences and
 the remaining core/extension requirements still need a complete inventory.
+
+## RFC 4315: APPENDUID — partial response-metadata slice
+
+[RFC 4315](https://www.rfc-editor.org/rfc/rfc4315) §3 supplies the
+38505/3955 pair and saved-messages destination; the message is synthetic.
+Tests also distinguish the DateAppender result from AppendUID's result.
+Persistent UID assignment remains the backend's responsibility.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-UIDPLUS-CAP-01 | RFC 4315 §1 | Normative | Advertise UIDPLUS when the authenticated backend implements it; preserve advertisement after selection. | TestUIDPlusAdvertisement |
+| IMAP-APPENDUID-01 | RFC 4315 §3 | SHOULD | Return destination UIDVALIDITY and assigned UID in tagged APPEND OK, including date-aware appends. | TestAppendUIDResponse |
+| IMAP-APPENDUID-02 | RFC 4315 §§3–4 | MUST NOT | A single-message APPENDUID contains one UID, never a range or set. | TestAppendUIDResponse |
+| IMAP-APPENDUID-03 | RFC 4315 §§3–4 | Normative | Omit unavailable UID metadata; never fabricate zero values. Accept maximum nonzero uint32 values. | TestAppendUIDUnavailable |
+| IMAP-APPENDUID-04 | RFC 4315 §3 | Normative | APPENDUID describes success only: backend failure returns NO without it; a retry can succeed. | TestAppendUIDFailureAndRetry |
+| IMAP-APPENDUID-05 | RFC 4315 §§3, 5 | SHOULD NOT | Disclose APPENDUID for append-only destinations. | n/a: not supported yet; no destination-readability API, as in IMAP-COPY-15. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-APPENDUID-06 | RFC 4315 §3 | Normative | Suppress APPENDUID for UIDNOTSTICKY destinations. | n/a: not supported yet; backend exposes no UIDNOTSTICKY status. Tracked in rest-mail/rest-mail-server#374. |
+
+## RFC 6154: ordinary LIST attributes — partial slice
+
+[RFC 6154](https://www.rfc-editor.org/rfc/rfc6154) §2 permits these
+attributes on ordinary LIST. The engine infers roles from exact folder names;
+hosts own their contents. This is not extended LIST support.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-SPECIALUSE-01 | RFC 6154 §2 | MAY | Identify sent-message storage with `\Sent`; engine maps Sent. | TestSpecialUseOrdinaryList |
+| IMAP-SPECIALUSE-02 | RFC 6154 §2 | MAY | Identify draft storage with `\Drafts`; engine maps Drafts. | TestSpecialUseOrdinaryList |
+| IMAP-SPECIALUSE-03 | RFC 6154 §2 | MAY | Identify discarded-message storage with `\Trash`; engine maps Trash. | TestSpecialUseOrdinaryList |
+| IMAP-SPECIALUSE-04 | RFC 6154 §2 | MAY | Identify junk-message storage with `\Junk`; engine maps Junk. | TestSpecialUseOrdinaryList |
+| IMAP-SPECIALUSE-05 | RFC 6154 §§2–3 | Normative | Ordinary LIST attributes require no capability; omit unsupported SPECIAL-USE and CREATE-SPECIAL-USE capabilities. | TestSpecialUseCapabilityBoundary |
+| IMAP-SPECIALUSE-06 | RFC 6154 §2 | MAY | Mailboxes may have no role; do not invent role folders or infer roles from near matches. | TestSpecialUseDoesNotInventFolders |
+| IMAP-SPECIALUSE-07 | RFC 6154 §2 | MUST | Extended LIST selection filters special-use mailboxes; return option reports attributes. | n/a: not supported yet; extended LIST options are unimplemented. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-SPECIALUSE-08 | RFC 6154 §3 | MAY | CREATE assigns requested special-use attributes. | n/a: optional and unsupported; no role-assignment backend API. |
+| IMAP-SPECIALUSE-09 | RFC 6154 §4 | MAY | METADATA changes special-use assignments. | n/a: optional and unsupported; no METADATA command or backend API. |

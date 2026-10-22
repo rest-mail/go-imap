@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Sixteen RFC 4315/6154 checklist rows for APPENDUID and ordinary LIST
+  special-use attributes: eleven mapped to seven new public-Session wire tests,
+  five explicit API/extension gaps. Partial checklist is 238/266 mapped.
 - Thirteen new checked RFC 2177/3691/5161 requirements with public-Session
   wire proofs for IDLE, UNSELECT and ENABLE; partial checklist is 227/250 mapped.
 - README badges for the 95% coverage gate and the partial checklist's mapped

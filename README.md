@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 227/250 mapped](https://img.shields.io/badge/partial%20checklist-227%2F250%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 238/266 mapped](https://img.shields.io/badge/partial%20checklist-238%2F266%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -175,8 +175,12 @@ extra arguments while preserving the selection.
 
 ## RFC conformance
 
-The current checklist has 250 requirements: 227 mapped to wire tests and 23
-explicit gaps or backend/deployment responsibilities. Thirteen new rows prove
+The current checklist has 266 requirements: 238 mapped to wire tests and 28
+explicit gaps or backend/deployment responsibilities. Sixteen new rows cover
+APPENDUID and ordinary LIST special-use attributes, including explicit boundaries
+for unsupported extended LIST and role assignment. Sent, Drafts, Trash and Junk
+roles are inferred from those exact folder names; the host owns their contents.
+NAMESPACE and ID are not implemented. Thirteen earlier rows prove
 ENABLE, UNSELECT and IDLE command exchanges, syntax refusal and state recovery.
 Five formerly unmapped rows now cover composed APPEND/FETCH grammar, address groups, malformed headers
 and malformed nested envelopes. APPEND accepts empty quoted and counted mailbox
