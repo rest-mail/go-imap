@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `ErrNoSuchMailbox`: a backend returns it, possibly wrapped, from Append, Copy
+  or Move (or their UIDPLUS, Mover and DateAppender forms) when the destination
+  does not exist and will not be created implicitly. APPEND, COPY, UID COPY,
+  MOVE and UID MOVE then answer `NO [TRYCREATE]` (RFC 3501 §§6.3.11, 6.4.7;
+  RFC 6851 §3.3); other backend errors keep a plain NO. IMAP-APPEND-18,
+  IMAP-COPY-13 and IMAP-MOVE-11 are now mapped; partial checklist is 241/266.
 - Sixteen RFC 4315/6154 checklist rows for APPENDUID and ordinary LIST
   special-use attributes: eleven mapped to seven new public-Session wire tests,
   five explicit API/extension gaps. Partial checklist is 238/266 mapped.

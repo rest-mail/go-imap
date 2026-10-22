@@ -1881,7 +1881,7 @@ func (s *Session) handleCopy(tag, args string) {
 
 	code, err := s.copyMessages(seqNums, dest)
 	if err != nil {
-		s.tagged(tag, "NO", "COPY failed")
+		s.tagged(tag, "NO", failText(err, "COPY failed"))
 		return
 	}
 	if code != "" {
@@ -2316,7 +2316,7 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 	}
 	if err != nil {
 		slog.Warn("imap: append failed", "error", err)
-		s.tagged(tag, "NO", "APPEND failed")
+		s.tagged(tag, "NO", failText(err, "APPEND failed"))
 		return
 	}
 
@@ -2745,7 +2745,7 @@ func (s *Session) handleUIDCopy(tag, args string) {
 	seqNums := s.parseUIDSet(uidSetStr)
 	code, err := s.copyMessages(seqNums, dest)
 	if err != nil {
-		s.tagged(tag, "NO", "UID COPY failed")
+		s.tagged(tag, "NO", failText(err, "UID COPY failed"))
 		return
 	}
 	if code != "" {
