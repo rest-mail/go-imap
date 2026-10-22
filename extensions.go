@@ -1,6 +1,7 @@
 package imap
 
 import (
+	"errors"
 	"log/slog"
 	"sort"
 	"strconv"
@@ -107,6 +108,16 @@ func (s *Session) copyMessages(seqNums []int, dest string) (string, error) {
 	return "", nil
 }
 
+// failText is the tagged NO text for a failed APPEND, COPY or MOVE. A backend
+// reporting [ErrNoSuchMailbox] gets the TRYCREATE response code, which tells the
+// client to CREATE the destination and retry (RFC 3501 §§6.3.11, 6.4.7).
+func failText(err error, text string) string {
+	if errors.Is(err, ErrNoSuchMailbox) {
+		return "[TRYCREATE] " + text
+	}
+	return text
+}
+
 // validCopyUIDs reports whether the destination UIDs a backend returned can be
 // quoted in a COPYUID response code: each must be a nonzero UID and none may
 // repeat (RFC 4315 §§3, 4). [Mover.MoveUID] may return 0 when the backend cannot
@@ -191,7 +202,7 @@ func (s *Session) moveMessages(tag, cmdName string, seqNums []int, dest string) 
 		s.selected.total = int64(len(s.messages))
 	}
 	if moveErr != nil {
-		s.tagged(tag, "NO", cmdName+" failed")
+		s.tagged(tag, "NO", failText(moveErr, cmdName+" failed"))
 		return
 	}
 	s.tagged(tag, "OK", cmdName+" completed")
