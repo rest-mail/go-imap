@@ -104,6 +104,16 @@ func TestCommandLiteralAccepted(t *testing.T) {
 		t.Run(fmt.Sprintf("synchronizing=%t", sync), func(t *testing.T) {
 			c := dial(t)
 			c.line()
+			// Empty literals must reach credential validation before LOGIN
+			// succeeds: authenticated sessions reject any further LOGIN.
+			writeLiteralWire(t, c, "A0 LOGIN {0+}\r\n {0+}\r\n\r\nN0 NOOP\r\n")
+			if line := c.line(); !strings.HasPrefix(line, "A0 NO ") {
+				t.Fatalf("empty credentials: %q", line)
+			}
+			requireOK(t, c.line(), "N0")
+			if c.backend.calls != 1 {
+				t.Fatalf("Authenticate called %d times for empty credentials, want 1", c.backend.calls)
+			}
 			if sync {
 				writeLiteralWire(t, c, fmt.Sprintf("A1 LOGIN {%d}\r\n", len(testUser)))
 				if line := c.line(); !strings.HasPrefix(line, "+ ") {
@@ -119,11 +129,6 @@ func TestCommandLiteralAccepted(t *testing.T) {
 			}
 			requireOK(t, c.line(), "A1")
 			requireOK(t, c.line(), "N1")
-			writeLiteralWire(t, c, "A2 LOGIN {0+}\r\n {0+}\r\n\r\nN2 NOOP\r\n")
-			if line := c.line(); !strings.HasPrefix(line, "A2 NO ") {
-				t.Fatalf("empty credentials: %q", line)
-			}
-			requireOK(t, c.line(), "N2")
 			if c.backend.calls != 2 {
 				t.Fatalf("Authenticate called %d times, want 2", c.backend.calls)
 			}
