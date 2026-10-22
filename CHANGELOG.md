@@ -20,8 +20,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   validation and moves, state refusals, malformed FETCH/STORE/UID requests and
   authentication syntax recovery. Sequential package coverage reaches 96.1%
   on Go 1.25.10, up from the initial CI baseline of 93.0%.
+- SEARCH supports KEYWORD and UNKEYWORD (RFC 3501 §6.4.4). No keyword is
+  stored, so KEYWORD matches nothing and UNKEYWORD matches every message; a
+  missing or non-atom operand is BAD.
+- SEARCH BODY, TEXT, HEADER, CC, BCC and SUBJECT match decoded text: base64 and
+  quoted-printable parts (including inside MESSAGE/RFC822), ISO-8859-1 content
+  and RFC 2047 encoded words are decoded to UTF-8 first (RFC 3501 §6.4.4).
+- Wire proofs map IMAP-STARTTLS-08, IMAP-STORE-06, IMAP-SEARCH-10 and
+  IMAP-SEARCH-11; the checklist reaches 214/237 mapped rows.
 
 ### Fixed
+
+- SELECT no longer lists `\*` in PERMANENTFLAGS. Keywords were accepted and
+  dropped, so advertising that clients may create them was false
+  (RFC 3501 §7.1).
 
 - Five previously unmapped RFC checklist rows now have public-Session wire
   proofs (APPEND-23, FETCH-15, ENV-10/12 and MSG-08): 210 of 237 rows mapped.

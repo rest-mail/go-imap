@@ -8,6 +8,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
+	"fmt"
 	"io"
 	"math/big"
 	"slices"
@@ -125,6 +127,49 @@ func TestStartTLSNonAuthenticated(t *testing.T) {
 	c.login()
 	_, tagged := c.command("a3", "SELECT INBOX")
 	requireOK(t, tagged, "a3")
+}
+
+// TestStartTLSCleartextCredentialsRefused proves a TLS-capable session never
+// permits LOGIN or AUTHENTICATE before TLS is active: every credential form
+// gets NO [PRIVACYREQUIRED] without a continuation request, no credential
+// reaches the backend, and the session stays not authenticated. A session
+// built without a TLS config is a development deployment and is out of scope.
+//
+// checklist: IMAP-STARTTLS-08
+func TestStartTLSCleartextCredentialsRefused(t *testing.T) {
+	plain := base64.StdEncoding.EncodeToString([]byte("\x00" + testUser + "\x00" + testPass))
+	c := tlsClient(t)
+	for i, cmd := range []string{
+		fmt.Sprintf("LOGIN %s %s", testUser, testPass),
+		fmt.Sprintf("login %q %q", testUser, testPass),
+		fmt.Sprintf("LOGIN {%d+}\r\n%s {%d+}\r\n%s", len(testUser), testUser, len(testPass), testPass),
+		fmt.Sprintf("LOGIN %s wrong", testUser),
+		"LOGIN",
+		"AUTHENTICATE PLAIN",
+		"authenticate plain",
+		"AUTHENTICATE PLAIN " + plain,
+		"AUTHENTICATE PLAIN =",
+		"AUTHENTICATE EXTERNAL",
+	} {
+		tag := fmt.Sprintf("c%d", i)
+		lines, tagged := c.command(tag, "%s", cmd)
+		if tagged != tag+" NO [PRIVACYREQUIRED] STARTTLS required" {
+			t.Fatalf("cleartext %q: %q, want NO [PRIVACYREQUIRED]", cmd, tagged)
+		}
+		requireExactly(t, lines)
+		if _, tagged := c.command(tag+"s", "SELECT INBOX"); strings.HasPrefix(tagged, tag+"s OK") {
+			t.Fatalf("SELECT after cleartext %q: %q", cmd, tagged)
+		}
+	}
+	if c.backend.calls != 0 {
+		t.Fatalf("backend saw %d cleartext credential checks", c.backend.calls)
+	}
+	requireCaps(t, c.capabilities("cc"), []string{"STARTTLS", "LOGINDISABLED"}, []string{"AUTH=PLAIN"})
+	c.startTLS("c10")
+	c.login()
+	if c.backend.calls != 1 {
+		t.Fatalf("backend saw %d credential checks, want only the protected LOGIN", c.backend.calls)
+	}
 }
 
 // TestStartTLSRefusals covers the BAD results: no TLS configured, arguments

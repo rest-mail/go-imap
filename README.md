@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 210/237 mapped](https://img.shields.io/badge/partial%20checklist-210%2F237%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 214/237 mapped](https://img.shields.io/badge/partial%20checklist-214%2F237%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -171,7 +171,7 @@ accepted and, having no enable-able extension yet, is a no-op.
 
 ## RFC conformance
 
-The current checklist has 237 requirements: 210 mapped to wire tests and 27
+The current checklist has 237 requirements: 214 mapped to wire tests and 23
 explicit gaps or backend/deployment responsibilities. Five formerly unmapped
 rows now cover composed APPEND/FETCH grammar, address groups, malformed headers
 and malformed nested envelopes. APPEND accepts empty quoted and counted mailbox
