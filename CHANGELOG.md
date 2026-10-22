@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- An unknown MIME Content-Transfer-Encoding now overrides Content-Type as
+  application/octet-stream in BODY/BODYSTRUCTURE, numeric FETCH sections and
+  SEARCH (RFC 2045 §6.4). Previously a declared text charset could transform
+  undecodable octets, and declared multipart/message types could expose
+  fabricated nested structures and decoded search matches. Raw FETCH and the
+  original encoding string are preserved.
+
 - MIME nesting is now bounded at depth 64 for BODY, BODYSTRUCTURE, numeric
   FETCH sections and SEARCH alike. A multipart or MESSAGE/RFC822 entity at that
   depth is one opaque APPLICATION/OCTET-STREAM leaf. BODYSTRUCTURE and section

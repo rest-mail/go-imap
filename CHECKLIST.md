@@ -484,18 +484,24 @@ This slice preserves quoted-printable source data via raw MIME part traversal.
 It does not validate or decode transfer encodings, expose numbered MIME FETCH
 sections, or claim complete BODYSTRUCTURE/MIME conformance.
 
-## MIME transfer-encoding token — partial lexical slice
+## MIME transfer-encoding token and unknown-encoding handling — partial slice
 
 RFC 2045 §§1/6.1 apply RFC 822 §§3.4.2–3.4.3 comments and lexical
 whitespace to a single encoding token. Fixtures are synthetic grammar cases,
 not borrowed message vectors. Malformed values retain the prior opaque-string
-behavior; this is not a full MIME validity or transfer-decoding check.
+behavior for the encoding string, with an opaque application/octet-stream type.
+Unknown encodings override the declared or default Content-Type in
+BODY/BODYSTRUCTURE, numeric sections and SEARCH (RFC 2045 §6.4). Raw FETCH
+retains the stored headers and body. This is not a full MIME validity or
+transfer-decoding check; prohibited known encodings on composite entities
+remain unaudited (IMAP-MSG-09).
 
 | ID | Section | Level | Requirement | Tests |
 |----|---------|-------|-------------|-------|
-| IMAP-CTE-01 | RFC 2045 §§1, 6.1; RFC 822 §§3.4.2–3.4.3 | Normative | BODY/BODYSTRUCTURE derive the case-insensitive encoding token without surrounding whitespace or nested/escaped comments; retain extension tokens and encoded body octets/line counts. | TestBodyStructureEncodingComments, TestBodyStructureEncodingCommentScope |
+| IMAP-CTE-01 | RFC 2045 §§1, 6.1; RFC 822 §§3.4.2–3.4.3 | Normative | BODY/BODYSTRUCTURE derive the case-insensitive encoding token without surrounding whitespace or nested/escaped comments; retain extension tokens and encoded body octets/line counts (unknown encodings use the opaque type of IMAP-CTE-04). | TestBodyStructureEncodingComments, TestBodyStructureEncodingCommentScope |
 | IMAP-CTE-02 | RFC 3501 §§6.4.5, 7.4.2; RFC 2045 §6.1 | Normative | Parse each multipart or encapsulated entity's own encoding, default absent fields to 7BIT without inheritance, and preserve metadata-only behavior under SELECT/EXAMINE and FETCH/UID FETCH. | TestBodyStructureEncodingCommentScope |
-| IMAP-CTE-03 | RFC 2045 §6.1; RFC 822 §3.4.2 | Normative | A single encoding token cannot be manufactured by joining token pieces across comments or whitespace; malformed values retain the existing safely framed opaque-string policy. | TestBodyStructureMalformedEncodingComments |
+| IMAP-CTE-03 | RFC 2045 §6.1; RFC 822 §3.4.2 | Normative | A single encoding token cannot be manufactured by joining token pieces across comments or whitespace; malformed values retain a safely framed encoding string and use the opaque type of IMAP-CTE-04. | TestBodyStructureMalformedEncodingComments |
+| IMAP-CTE-04 | RFC 2045 §6.4; RFC 3501 §§6.4.4, 6.4.5, 7.4.2 | MUST | Treat an entity with an unrecognized Content-Transfer-Encoding as application/octet-stream regardless of its declared or default Content-Type; preserve stored octets without recursive MIME interpretation or charset conversion, and scope the override to that entity. | TestUnknownTransferEncoding, TestUnknownTransferEncodingScope |
 
 ## MIME Content-Disposition comments — partial lexical slice
 

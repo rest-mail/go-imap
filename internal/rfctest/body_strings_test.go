@@ -49,6 +49,9 @@ func TestBodyStructureHeaderStrings(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			base := `("TEXT" "PLAIN" ("CHARSET" "US-ASCII") ` + tc.fields + " 1 1"
+			if tc.name == "extension-encoding" {
+				base = `("APPLICATION" "OCTET-STREAM" NIL ` + tc.fields + " 1"
+			}
 			literals := append(append([]string{}, tc.literals...), tc.literals...)
 			structureResponse(t, tc.headers+"\r\nx", base+")", base+" NIL NIL NIL NIL)", literals...)
 		})

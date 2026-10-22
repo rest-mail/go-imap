@@ -1371,6 +1371,9 @@ func uncommentMIME(value string) (string, error) {
 // message/rfc822 entity is described as an opaque application/octet-stream
 // leaf, as mimeNode.mediaType does for sections and SEARCH.
 func partStructure(header textproto.MIMEHeader, body []byte, extension bool, defaultType string, depth int) string {
+	if !knownTransferEncoding(header.Get("Content-Transfer-Encoding")) {
+		return singlePartStructure("application", "octet-stream", nil, header, body, extension, depth)
+	}
 	mediatype, params, err := parseContentType(header.Get("Content-Type"))
 	// ParseMediaType also accepts a bare token (for Content-Disposition).
 	// Content-Type requires type/subtype, with no default subtype (RFC 2045
