@@ -1367,9 +1367,10 @@ func uncommentMIME(value string) (string, error) {
 // and (transfer-encoded) body octets, recursing into multipart entities.
 // defaultType applies when Content-Type is absent or malformed: text/plain
 // (RFC 2045 §5.2), or message/rfc822 inside multipart/digest (RFC 2046 §5.1.5).
-// depth is the entity's MIME nesting depth; at maxMIMEDepth a multipart or
-// message/rfc822 entity is described as an opaque application/octet-stream
-// leaf, as mimeNode.mediaType does for sections and SEARCH.
+// depth is the entity's MIME nesting depth. An entity opaqueEntity reports,
+// such as a multipart at maxMIMEDepth or a base64 message/rfc822, is described
+// as an application/octet-stream leaf, as mimeNode.mediaType does for sections
+// and SEARCH.
 func partStructure(header textproto.MIMEHeader, body []byte, extension bool, defaultType string, depth int) string {
 	mediatype, params, err := parseContentType(header.Get("Content-Type"))
 	// ParseMediaType also accepts a bare token (for Content-Disposition).
@@ -1384,8 +1385,7 @@ func partStructure(header textproto.MIMEHeader, body []byte, extension bool, def
 		maintype, subtype = mediatype[:slash], mediatype[slash+1:]
 	}
 
-	nests := (maintype == "multipart" && params["boundary"] != "") || mediatype == "message/rfc822"
-	if nests && depth >= maxMIMEDepth {
+	if opaqueEntity(mediatype, params, header.Get("Content-Transfer-Encoding"), depth) {
 		return singlePartStructure("application", "octet-stream", nil, header, body, extension, depth)
 	}
 	if maintype == "multipart" && params["boundary"] != "" {
