@@ -5,7 +5,8 @@ connection greeting, the any-state commands (CAPABILITY, NOOP, LOGOUT), LOGIN,
 tagged completion, STARTTLS, selection-state (SELECT/EXAMINE), STATUS, STORE, SEARCH, FETCH/ENVELOPE,
 EXPUNGE, CLOSE, APPEND, COPY and encoded BODYSTRUCTURE slices, plus partial
 RFC 4315 UID EXPUNGE/COPYUID,
-RFC 6851 MOVE and RFC 7888 non-synchronizing APPEND and command-argument refusal slices. It is not
+RFC 6851 MOVE, RFC 3691 UNSELECT, RFC 5161 ENABLE, RFC 2177 IDLE command exchanges
+and RFC 7888 non-synchronizing APPEND and command-argument refusal slices. It is not
 an inventory of all applicable RFC requirements, a full conformance claim, or
 a coverage badge. A mapped row means its named wire test
 in `internal/rfctest` asserts the stated behavior through the public
@@ -547,3 +548,36 @@ MESSAGE/RFC822 vector. Line counts are explicitly specified per fixture.
 The nested address parser preserves groups (IMAP-ENV-10); source routes and
 other legal address syntax rejected by net/mail remain IMAP-ENV-11 gaps.
 Malformed MIME framing and complete extension-field semantics remain unaudited.
+
+## RFC 3691 / RFC 5161 / RFC 2177: extension command exchanges
+
+These rows cover command syntax, responses and session transitions, not a full
+extension inventory. [RFC 3691](https://www.rfc-editor.org/rfc/rfc3691),
+[RFC 5161](https://www.rfc-editor.org/rfc/rfc5161) and
+[RFC 2177](https://www.rfc-editor.org/rfc/rfc2177) define the exchanges below.
+The UNSELECT test uses §2's A341 tag; the ENABLE fixture uses
+§3.1's CONDSTORE/X-GOOD-IDEA names, both unsupported by this server.
+The IDLE test follows §3's A002/DONE sequence and pipelines a following NOOP.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-EXT-CAP-01 | RFC 3691 §1; RFC 5161 §1; RFC 2177 §3 | Normative | Advertise UNSELECT, ENABLE and IDLE in CAPABILITY, before and after authentication and selection. | TestExtensionCapabilities |
+| IMAP-UNSELECT-01 | RFC 3691 §§2, 4 | Normative | UNSELECT (case-insensitive) returns tagged OK without expunging messages, including after marking messages Deleted or opening read-only. | TestUnselectWithoutExpunge |
+| IMAP-UNSELECT-02 | RFC 3691 §2 | Normative | Successful UNSELECT leaves authentication intact and releases selection state; FETCH is refused until reselecting and old deletion marks/read-only mode do not affect a later writable selection. | TestUnselectWithoutExpunge |
+| IMAP-UNSELECT-03 | RFC 3691 §2 | Normative | With no selected mailbox UNSELECT returns BAD and the connection remains usable. | TestUnselectRequiresSelection |
+| IMAP-UNSELECT-04 | RFC 3691 §§2, 4 | Normative | Extra UNSELECT arguments receive BAD without dropping the selection or its deletion marks. | TestUnselectInvalidArgumentsPreserveSelection |
+| IMAP-ENABLE-01 | RFC 5161 §3.1 | MUST | Ignore unknown names and known extensions not enabled through ENABLE, without enabling UTF8 as a side effect. | TestEnableUnknownAndCapabilityStability |
+| IMAP-ENABLE-02 | RFC 5161 §§3.1–3.2 | MUST | Every successful ENABLE sends ENABLED before tagged OK, listing only newly enabled capabilities; send an empty list when none are new. | TestEnableUnknownAndCapabilityStability, TestEnableAdditiveAndPersistent |
+| IMAP-ENABLE-03 | RFC 5161 §3.1 | MUST NOT | Enabling extensions leaves CAPABILITY unchanged, including empty and successful UTF8 enablement. | TestEnableUnknownAndCapabilityStability, TestEnableAdditiveAndPersistent |
+| IMAP-ENABLE-04 | RFC 5161 §§3.1, 4 | MUST | Enable supported names case-insensitively; repeated/additive ENABLE retains mode across selection and UNSELECT without invoking EnableUTF8 twice. | TestEnableAdditiveAndPersistent |
+| IMAP-ENABLE-05 | RFC 5161 §§3.1, 4 | Normative | Missing names or malformed capability atoms/separators receive BAD before any enablement; a valid retry succeeds. | TestEnableInvalidArguments |
+| IMAP-ENABLE-06 | RFC 5161 §3.1; RFC 6855 §3 | Normative | Refuse ENABLE before authentication; a backend enablement failure returns NO without ENABLED or enabling mode, allowing a later retry. | TestEnableStateAndFailure |
+| IMAP-IDLE-01 | RFC 2177 §§3–4 | Normative | IDLE takes no arguments: extra input receives BAD before any continuation and leaves the selection usable. | TestIdleInvalidArguments |
+| IMAP-IDLE-02 | RFC 2177 §3 | MUST | Request a continuation, consume DONE, then immediately complete the original IDLE tag and process the following command; repeated IDLE exchanges preserve framing. | TestIdleDoneAndNextCommand |
+
+The ENABLED list's newly-enabled-only behavior is a SHOULD in RFC 5161 §3.1;
+its presence on success is a MUST. ENABLE does not implement CONDSTORE.
+The supported UTF8 mode belongs to the session's backend; this proof observes
+its enable callback, not a complete RFC 6855 audit. IDLE polling notifications,
+concurrent mailbox changes, timeout policy, RFC 9051 IMAP4rev2 differences and
+the remaining core/extension requirements still need a complete inventory.

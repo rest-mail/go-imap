@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 214/237 mapped](https://img.shields.io/badge/partial%20checklist-214%2F237%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 227/250 mapped](https://img.shields.io/badge/partial%20checklist-227%2F250%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -149,8 +149,12 @@ func (a *account) CopyUID(srcUID uint32, dest string) (uint32, error)           
 func (a *account) MoveUID(srcUID uint32, dest string) (uint32, error)                   { /* atomic move, return new UID */ return 0, nil }
 ```
 
-`CONDSTORE`/`QRESYNC` (RFC 7162) are not implemented; the `ENABLE` command is
-accepted and, having no enable-able extension yet, is a no-op.
+`CONDSTORE`/`QRESYNC` (RFC 7162) are not implemented. `ENABLE` ignores unknown
+or non-enable-able capabilities and enables `UTF8=ACCEPT` when the backend
+implements `UTF8Mailbox`. Every successful ENABLE sends an `ENABLED` response,
+even if its list is empty. Malformed lists receive BAD before any mode change.
+`UNSELECT` returns BAD if no mailbox is selected; UNSELECT and IDLE reject
+extra arguments while preserving the selection.
 
 ## API highlights
 
@@ -171,14 +175,15 @@ accepted and, having no enable-able extension yet, is a no-op.
 
 ## RFC conformance
 
-The current checklist has 237 requirements: 214 mapped to wire tests and 23
-explicit gaps or backend/deployment responsibilities. Five formerly unmapped
-rows now cover composed APPEND/FETCH grammar, address groups, malformed headers
+The current checklist has 250 requirements: 227 mapped to wire tests and 23
+explicit gaps or backend/deployment responsibilities. Thirteen new rows prove
+ENABLE, UNSELECT and IDLE command exchanges, syntax refusal and state recovery.
+Five formerly unmapped rows now cover composed APPEND/FETCH grammar, address groups, malformed headers
 and malformed nested envelopes. APPEND accepts empty quoted and counted mailbox
 strings as syntax and passes them unchanged to the backend for naming policy.
 
 [CHECKLIST.md](CHECKLIST.md) is a **partial**, CI-checked list of RFC 3501
-requirements, each mapped to a wire test in `internal/rfctest` that drives a
+and supported-extension requirements, each mapped to a wire test in `internal/rfctest` that drives a
 public `Session`. The selection-state slice includes the RFC SELECT/EXAMINE
 examples and records Recent, persistent UID metadata and permission gaps.
 SELECT/EXAMINE require one mailbox astring; malformed or extra arguments get BAD

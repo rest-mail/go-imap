@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Thirteen new checked RFC 2177/3691/5161 requirements with public-Session
+  wire proofs for IDLE, UNSELECT and ENABLE; partial checklist is 227/250 mapped.
 - README badges for the 95% coverage gate and the partial checklist's mapped
   count. `TestReadmeCoverageBadge` reads the minimum from
   `.github/scripts/check_coverage.py`; `TestReadmeChecklistBadge` runs the real
@@ -30,6 +32,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   IMAP-SEARCH-11; the checklist reaches 214/237 mapped rows.
 
 ### Fixed
+
+- ENABLE always sends an ENABLED response on success, even when empty, and
+  rejects missing or malformed capability atoms before enabling any mode.
+- UNSELECT returns BAD without a selected mailbox, as RFC 3691 requires.
+  UNSELECT and IDLE reject extra arguments without changing selection state.
 
 - SELECT no longer lists `\*` in PERMANENTFLAGS. Keywords were accepted and
   dropped, so advertising that clients may create them was false

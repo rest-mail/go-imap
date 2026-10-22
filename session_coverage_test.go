@@ -16,7 +16,11 @@ func TestCoverageUnauthenticatedCommands(t *testing.T) {
 	for i, cmd := range []string{"CREATE Archive", "DELETE Archive", "RENAME Archive Old", `GETQUOTA ""`, "GETQUOTAROOT INBOX", "IDLE", "ENABLE UTF8=ACCEPT", "UNSELECT"} {
 		tag := fmt.Sprintf("r%d", i)
 		lines, st := h.command(tag, "%s", cmd)
-		if len(lines) != 0 || !strings.HasPrefix(st, tag+" NO ") {
+		wantStatus := " NO "
+		if cmd == "UNSELECT" {
+			wantStatus = " BAD "
+		}
+		if len(lines) != 0 || !strings.HasPrefix(st, tag+wantStatus) {
 			t.Fatalf("%s: %v / %s", cmd, lines, st)
 		}
 	}

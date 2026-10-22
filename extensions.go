@@ -231,7 +231,7 @@ func (s *Session) handleUIDExpunge(tag, args string) {
 // authenticated state like CLOSE, but does not expunge \Deleted messages.
 func (s *Session) handleUnselect(tag string) {
 	if s.selected == nil {
-		s.tagged(tag, "NO", "No mailbox selected")
+		s.tagged(tag, "BAD", "No mailbox selected")
 		return
 	}
 	s.selected = nil
@@ -247,13 +247,23 @@ func (s *Session) handleUnselect(tag string) {
 // is ignored once a mailbox is selected. Every other requested capability is
 // unknown and silently ignored per §3.1. Newly enabled names are echoed in an
 // untagged "* ENABLED" response; one already enabled is not repeated.
+// A successful command always sends ENABLED, even when the list is empty.
 func (s *Session) handleEnable(tag, args string) {
 	if !s.auth.authenticated {
 		s.tagged(tag, "NO", "Not authenticated")
 		return
 	}
+	// Capability names are atoms, not strings. Validate the whole list before
+	// enabling anything so a later syntax error cannot partially change mode.
+	names := strings.Split(args, " ")
+	for _, name := range names {
+		if !validFlagKeyword(name) { // capability and flag-keyword both use atom
+			s.tagged(tag, "BAD", "ENABLE requires capability atoms separated by SP")
+			return
+		}
+	}
 	var enabled []string
-	for _, name := range strings.Fields(args) {
+	for _, name := range names {
 		if !strings.EqualFold(name, "UTF8=ACCEPT") || s.utf8 || s.selected != nil {
 			continue
 		}
@@ -271,6 +281,8 @@ func (s *Session) handleEnable(tag, args string) {
 	}
 	if len(enabled) > 0 {
 		s.send("* ENABLED %s", strings.Join(enabled, " "))
+	} else {
+		s.send("* ENABLED")
 	}
 	s.tagged(tag, "OK", "ENABLE completed")
 }
