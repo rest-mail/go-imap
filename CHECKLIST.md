@@ -672,7 +672,37 @@ name the gap rather than claiming it.
 | IMAP-LSUB-01 | RFC 3501 §§6.3.9, 7.2.3 | Normative | LSUB answers with untagged LSUB replies, not LIST replies, and completes with `OK LSUB completed`. | TestListLsubResponses, TestSubscriptionCommands |
 | IMAP-LSUB-02 | RFC 3501 §6.3.9 | Normative | Under `%`, a non-subscribed superior of a subscribed inferior is returned with `\Noselect`. | n/a: every existing folder counts as subscribed, so there is no unsubscribed superior to report; depends on IMAP-SUB-02. |
 
-### Audit record
+## RFC 3501 §§6.5, 7: X-commands and server responses — partial slice
+
+§7 mostly describes response forms that command rows above already prove;
+those are referenced in the audit record below, not repeated here. Rows here
+cover the remaining server duties, and the client duties §7 states so the
+inventory is complete.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-RESP-01 | RFC 3501 §§7, 7.1 | Normative | Server data and status responses are untagged lines starting `* `; a completion carries the command's own tag. | TestTaggedCompletion, TestUntaggedBadForUndeterminedCommand |
+| IMAP-RESP-02 | RFC 3501 §§7.1, 7.1.1 | MAY | The greeting's CAPABILITY response code lists IMAP4rev1 and matches the list a CAPABILITY command then returns. | TestGreetingCapabilityCode |
+| IMAP-RESP-03 | RFC 3501 §7.1.3 | Normative | A line from which no tag and command can be read gets an untagged BAD, and the session goes on to the next command. | TestUntaggedBadForUndeterminedCommand |
+| IMAP-RESP-04 | RFC 3501 §7.1 | SHOULD | Response codes an implementation defines for itself carry an `X` prefix. | n/a: the engine defines none. Every code it sends is registered: CAPABILITY, PERMANENTFLAGS, READ-ONLY, READ-WRITE, UIDNEXT, UIDVALIDITY, UNSEEN and BADCHARSET (RFC 3501), APPENDUID and COPYUID (RFC 4315), AUTHENTICATIONFAILED and PRIVACYREQUIRED (RFC 5530); checked against session.go and extensions.go on 2026-10-22. |
+| IMAP-RESP-05 | RFC 3501 §7.1 | Normative | ALERT text is a special alert for the user. | n/a: the engine sends no ALERT; presenting one is a client duty (IMAP-RESP-CLIENT-01). |
+| IMAP-RESP-06 | RFC 3501 §§6.4.4, 7.1 | Normative | A SEARCH in an unsupported charset fails with NO and a BADCHARSET code listing the supported charsets. | TestSearchCharsets |
+| IMAP-RESP-07 | RFC 3501 §7.1 | Normative | PARSE reports a failure to parse a message's RFC 2822 or MIME headers. | n/a: optional and unsupported; malformed headers are answered as IMAP-ENV-12 and IMAP-MSG-08 describe, without a PARSE warning. |
+| IMAP-RESP-08 | RFC 3501 §§6.3.1, 6.3.2, 7.1 | Normative | SELECT and EXAMINE carry PERMANENTFLAGS, UIDNEXT, UIDVALIDITY and UNSEEN codes on untagged OK, and READ-WRITE or READ-ONLY on the tagged OK. | TestSelectionExamples, TestSelectionUnseen |
+| IMAP-RESP-09 | RFC 3501 §7.1 | Normative | TRYCREATE marks an APPEND or COPY that failed because the target mailbox does not exist. | n/a: not supported yet; see IMAP-APPEND-18 and IMAP-COPY-13. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-RESP-10 | RFC 3501 §7.1.2 | Normative | A tagged NO reports that the command failed, and the session goes on. | TestExpungeBackendFailure, TestFetchBackendFailure |
+| IMAP-RESP-11 | RFC 3501 §7.1.4 | Normative | PREAUTH greets a connection that is already authenticated. | n/a: the engine never pre-authenticates; every greeting is OK (TestGreeting). |
+| IMAP-RESP-12 | RFC 3501 §7.4.1 | MUST NOT | Send no EXPUNGE when no command is in progress, or while answering FETCH, STORE or SEARCH (UID forms included), even after another session removed a message. | TestNoExpungeDuringFetchStoreSearch |
+| IMAP-RESP-13 | RFC 3501 §§6.1.3, 7.1.5 | Normative | BYE is always untagged. On LOGOUT it comes before the tagged OK; on a failure the connection closes straight after it. | TestLogout, TestCommandLiteralRefusalCloses |
+| IMAP-RESP-14 | RFC 3501 §7.1.5 | Normative | BYE announces a panic shutdown, an inactivity autologout, or a greeting that refuses the connection. | n/a: not fully supported yet. Autologout and panic BYE are proven in the root package (session_autologout_test.go, session_panic_test.go), not on this harness; a connection the Limiter refuses is closed without a BYE greeting. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-RESP-15 | RFC 3501 §7.3.2 | Normative | RECENT reports the number of messages with the `\Recent` flag. | n/a: not supported yet; the engine keeps no `\Recent` state and reports the unseen count (see TestSelectionExamples). Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-RESP-16 | RFC 3501 §7.4.2 | MUST | Header data is 7-bit, and non-textual body data is transfer-encoded to text before it is sent. | n/a: not supported yet; the engine returns stored octets as they are and does not re-encode 8-bit headers or binary bodies. NUL is refused (IMAP-ENV-12). Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-RESP-17 | RFC 3501 §§4.3, 7.5 | Normative | A `+` continuation request asks for the rest of a command: before synchronizing literal octets and during IDLE. | TestCommandLiteralAccepted, TestAppendExample, TestIdleDoneAndNextCommand |
+| IMAP-RESP-CLIENT-01 | RFC 3501 §§7, 7.1, 7.2.1, 7.2.6, 7.3.1, 7.3.2, 7.4.1, 7.4.2 | MUST | Client duties: accept any response at any time; record FLAGS, EXISTS, RECENT, EXPUNGE and FETCH updates; ignore unknown response codes and capability names; show ALERT text to the user. | n/a: client duties; this is a server engine. |
+| IMAP-XCMD-01 | RFC 3501 §6.5 | Normative | An X-prefixed command the server does not define gets a tagged BAD in every state, and the session goes on. | TestExperimentalCommand |
+| IMAP-XCMD-02 | RFC 3501 §6.5 | MUST | A command outside RFC 3501 has an `X` prefix. | n/a: the engine has no private commands; every other command it accepts (ENABLE, IDLE, MOVE, UNSELECT, GETQUOTA, GETQUOTAROOT) is defined by a published RFC. |
+
+## RFC 3501 audit record
 
 - 2026-10-22: RFC 3501 §§6.3.3 CREATE, 6.3.4 DELETE, 6.3.5 RENAME, 6.3.6
   SUBSCRIBE, 6.3.7 UNSUBSCRIBE, 6.3.8 LIST and 6.3.9 LSUB, with the §7.2.2/§7.2.3
@@ -693,6 +723,16 @@ name the gap rather than claiming it.
   identity, LOGIN/AUTHENTICATE re-authenticated an authenticated session,
   AUTHENTICATE with no mechanism got NO instead of BAD, and CHECK accepted
   arguments.
+- 2026-10-22: RFC 3501 §6.5 and §7 apart from §§7.2.2–7.2.3 read line by line:
+  §7.1 status responses and every response code, §7.1.1–7.1.5 OK/NO/BAD/
+  PREAUTH/BYE, §7.2.1 CAPABILITY, §§7.2.4–7.2.6 STATUS/SEARCH/FLAGS, §§7.3.1–7.3.2
+  EXISTS/RECENT, §§7.4.1–7.4.2 EXPUNGE/FETCH and §7.5 continuation. New rows are
+  IMAP-RESP-01..17, IMAP-RESP-CLIENT-01 and IMAP-XCMD-01..02. Rules already proven
+  elsewhere are not repeated: CAPABILITY listing IMAP4rev1 (IMAP-CAP-01), STATUS
+  (IMAP-STATUS-01), SEARCH (IMAP-SEARCH-01, IMAP-SEARCH-04), FLAGS/EXISTS on
+  selection (IMAP-SELECT-01), EXPUNGE renumbering (IMAP-EXPUNGE-02), FETCH data
+  items (IMAP-FETCH-*, IMAP-ENV-*, IMAP-BS-*, IMAP-MSG-*). One bug fixed: a line
+  with no tag and command was dropped without a reply, so the client waited for
+  a completion that never came; it now gets an untagged BAD.
 - Not yet audited line by line, for the next slice: §§6.4.4 SEARCH, 6.4.5 FETCH
-  and 6.4.6 STORE, §6.5, and §7 apart from §§7.2.2–7.2.3 (status, server data,
-  message status, message data and continuation responses).
+  and 6.4.6 STORE.

@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The FETCH section fuzz check now allows filtered headers to join selected
+  lines and supply their terminating blank line instead of incorrectly requiring
+  a contiguous substring of the stored message.
+- A command line with no tag and command now gets an untagged `BAD`; it used to
+  be dropped without a reply, so the client waited forever (RFC 3501 §7.1.3).
 - LIST and LSUB now prefix a non-empty reference name to the mailbox pattern,
   and an empty pattern returns the reference's root name; the reference used to
   be ignored (RFC 3501 §6.3.8).
@@ -25,6 +30,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Twenty RFC 3501 §6.5/§7 checklist rows from a dated line-by-line audit of
+  server responses: ten mapped (four new wire tests), ten explicit gaps or
+  client-only duties. Combined partial checklist is 276/330 mapped.
 - Twenty-two RFC 3501 checklist rows from a dated line-by-line audit of §§6.1,
   6.2 (AUTHENTICATE now has its own rows), 6.3.1, 6.3.2, 6.3.10, 6.3.11 and the
   CHECK, CLOSE, EXPUNGE, COPY and UID parts of §6.4: seventeen mapped to four

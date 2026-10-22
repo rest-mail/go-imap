@@ -236,7 +236,7 @@ func TestIdleInvalidArguments(t *testing.T) {
 	}
 }
 
-// checklist: IMAP-IDLE-02
+// checklist: IMAP-IDLE-02 IMAP-RESP-17
 func TestIdleDoneAndNextCommand(t *testing.T) {
 	c := expungeClient(t, newExpungeMailbox(1))
 	for _, done := range []string{"DONE", "done"} {
