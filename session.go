@@ -376,6 +376,10 @@ func (s *Session) Handle() {
 		// IMAP commands are: <tag> <command> [<args>]
 		tag, cmd, args := parseIMAPCommand(line)
 		if tag == "" {
+			// No tag and command pair: the command cannot be determined, so
+			// answer with an untagged BAD (RFC 3501 §7.1.3) instead of dropping
+			// the line and leaving the client waiting for a completion.
+			s.send("* BAD Missing tag or command")
 			continue
 		}
 

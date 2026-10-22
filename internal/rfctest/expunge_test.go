@@ -124,7 +124,7 @@ func TestExpungeNoMatches(t *testing.T) {
 // TestExpungeBackendFailure checks total and partial refusal, unchanged flags
 // for failed messages, successful removals and retry without another STORE.
 //
-// checklist: IMAP-EXPUNGE-03 IMAP-UIDEXPUNGE-02
+// checklist: IMAP-EXPUNGE-03 IMAP-UIDEXPUNGE-02 IMAP-RESP-10
 func TestExpungeBackendFailure(t *testing.T) {
 	for _, uid := range []bool{false, true} {
 		for _, allFail := range []bool{false, true} {

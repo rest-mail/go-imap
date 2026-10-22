@@ -299,7 +299,7 @@ func TestUIDFetchExample(t *testing.T) {
 // TestFetchBackendFailure requires NO rather than a success lacking requested
 // data. No failed-message literal or Seen write is emitted; later commands recover.
 //
-// checklist: IMAP-FETCH-10
+// checklist: IMAP-FETCH-10 IMAP-RESP-10
 func TestFetchBackendFailure(t *testing.T) {
 	for _, prefix := range []string{"FETCH 1", "UID FETCH 10"} {
 		for _, item := range []string{"BODY[]", "BODY.PEEK[TEXT]", "RFC822", "RFC822.HEADER", "RFC822.TEXT", "BODY", "BODYSTRUCTURE", "ENVELOPE", "FULL", "(FLAGS RFC822.SIZE BODY[])"} {

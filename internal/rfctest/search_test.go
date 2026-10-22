@@ -139,7 +139,7 @@ func TestSearchCalendarDates(t *testing.T) {
 // metadata matching and the unsupported-charset response, followed by recovery.
 // It does not prove MIME decoding, charset conversion or literal handling.
 //
-// checklist: IMAP-SEARCH-07
+// checklist: IMAP-SEARCH-07 IMAP-RESP-06
 func TestSearchCharsets(t *testing.T) {
 	c := searchClient(t, []imap.Message{{UID: 10, Subject: "hello"}, {UID: 40, Subject: "café"}})
 	for _, prefix := range []string{"SEARCH", "UID SEARCH"} {

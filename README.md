@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 248/288 mapped](https://img.shields.io/badge/partial%20checklist-248%2F288%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 258/308 mapped](https://img.shields.io/badge/partial%20checklist-258%2F308%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -175,8 +175,10 @@ extra arguments while preserving the selection.
 
 ## RFC conformance
 
-The current checklist has 288 requirements: 248 mapped to wire tests and 40
-explicit gaps or backend/deployment responsibilities. Twenty-two rows come from a
+The current checklist has 308 requirements: 258 mapped to wire tests and 50
+explicit gaps or backend/deployment responsibilities. Twenty rows come from a
+line-by-line pass over RFC 3501 §6.5 and §7 server responses (status responses
+and codes, BYE, continuation, the EXPUNGE timing rule). Twenty-two rows come from a
 line-by-line pass over RFC 3501 §§6.3.3–6.3.9 (CREATE, DELETE, RENAME, SUBSCRIBE,
 UNSUBSCRIBE, LIST, LSUB). Folders are implicit, so existence errors, permanent
 DELETE, subscription storage, RENAME INBOX and LIST reference names are recorded

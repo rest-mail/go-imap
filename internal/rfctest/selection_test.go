@@ -59,7 +59,7 @@ func requireLine(t *testing.T, lines []string, want string) {
 // and UID metadata from RFC 3501 §§6.3.1/6.3.2. FLAGS/PERMANENTFLAGS are allowed
 // to vary by backend; the test checks this engine's advertised flag lists.
 //
-// checklist: IMAP-SELECT-01 IMAP-SELECT-02 IMAP-SELECT-03 IMAP-SELECT-04 IMAP-SELECT-05 IMAP-EXAMINE-01
+// checklist: IMAP-SELECT-01 IMAP-SELECT-02 IMAP-SELECT-03 IMAP-SELECT-04 IMAP-SELECT-05 IMAP-EXAMINE-01 IMAP-RESP-08
 func TestSelectionExamples(t *testing.T) {
 	for _, tc := range []struct {
 		command, folder, tag, mode string
@@ -110,7 +110,7 @@ func TestSelectionExamples(t *testing.T) {
 // TestSelectionUnseen distinguishes a sequence number from an unread count,
 // including empty and fully seen mailboxes where no UNSEEN code is valid.
 //
-// checklist: IMAP-SELECT-02
+// checklist: IMAP-SELECT-02 IMAP-RESP-08
 func TestSelectionUnseen(t *testing.T) {
 	for _, command := range []string{"SELECT", "EXAMINE"} {
 		for _, tc := range []struct {

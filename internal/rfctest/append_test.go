@@ -176,7 +176,7 @@ func appendCompletion(t *testing.T, c *client) ([]string, string) {
 // TestAppendExample uses RFC 3501 §6.3.11's A003 message and envelope. The RFC's
 // final blank client line supplies the command terminator after 310 octets.
 //
-// checklist: IMAP-APPEND-01 IMAP-APPEND-02
+// checklist: IMAP-APPEND-01 IMAP-APPEND-02 IMAP-RESP-17
 func TestAppendExample(t *testing.T) {
 	raw := "Date: Mon, 7 Feb 1994 21:52:25 -0800 (PST)\r\n" +
 		"From: Fred Foobar <foobar@Blurdybloop.COM>\r\n" +

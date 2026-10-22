@@ -26,7 +26,7 @@ func writeLiteralWire(t *testing.T, c *client, wire string) {
 // TestCommandLiteralRefusalCloses proves resource refusals cannot turn unread
 // literal bytes into commands. Header-only cases prove no draining is required.
 //
-// checklist: IMAP-LITERAL-02 IMAP-LITERAL-03 IMAP-LITERAL-04
+// checklist: IMAP-LITERAL-02 IMAP-LITERAL-03 IMAP-LITERAL-04 IMAP-RESP-13
 func TestCommandLiteralRefusalCloses(t *testing.T) {
 	limit := imap.MaxLiteralSize
 	for _, tc := range []struct{ name, header string }{
@@ -98,7 +98,7 @@ func TestCommandLiteralSafeRefusal(t *testing.T) {
 // TestCommandLiteralAccepted checks counted literal arguments preserve command
 // framing and support both synchronization forms, including empty credentials.
 //
-// checklist: IMAP-LITERAL-06
+// checklist: IMAP-LITERAL-06 IMAP-RESP-17
 func TestCommandLiteralAccepted(t *testing.T) {
 	for _, sync := range []bool{false, true} {
 		t.Run(fmt.Sprintf("synchronizing=%t", sync), func(t *testing.T) {

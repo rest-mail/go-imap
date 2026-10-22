@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A command line with no tag and command now gets an untagged `BAD`; it used to
+  be dropped without a reply, so the client waited forever (RFC 3501 §7.1.3).
 - LSUB now answers with untagged `LSUB` replies and `OK LSUB completed`; it
   used to send `LIST` replies (RFC 3501 §7.2.3).
 - RENAME now carries inferior hierarchical names with the renamed folder, so
@@ -15,6 +17,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Twenty RFC 3501 §6.5/§7 checklist rows from a dated line-by-line audit of
+  server responses: ten mapped (four new wire tests), ten explicit gaps or
+  client-only duties. Partial checklist is 258/308 mapped.
 - Twenty-two RFC 3501 §§6.3.3–6.3.9 checklist rows from a dated line-by-line
   audit of CREATE, DELETE, RENAME, SUBSCRIBE, UNSUBSCRIBE, LIST and LSUB: ten
   mapped to five new wire tests, twelve explicit gaps from the implicit-folder
