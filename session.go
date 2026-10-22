@@ -484,6 +484,10 @@ func (s *Session) Handle() {
 			}
 			s.handleExpunge(tag)
 		case "UNSELECT":
+			if args != "" {
+				s.tagged(tag, "BAD", "UNSELECT takes no arguments")
+				break
+			}
 			s.handleUnselect(tag)
 		case "ENABLE":
 			s.handleEnable(tag, args)
@@ -492,6 +496,10 @@ func (s *Session) Handle() {
 		case "GETQUOTAROOT":
 			s.handleGetQuotaRoot(tag, args)
 		case "IDLE":
+			if args != "" {
+				s.tagged(tag, "BAD", "IDLE takes no arguments")
+				break
+			}
 			if s.handleIdle(tag) {
 				return
 			}

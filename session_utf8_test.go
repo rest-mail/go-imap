@@ -74,8 +74,8 @@ func TestUTF8Accept_EnableReportsEnabledOnce(t *testing.T) {
 	// Already enabled: not listed again, backend not called again.
 	untagged, status = h.command("a3", "ENABLE UTF8=ACCEPT")
 	mustContain(t, status, " OK", "second ENABLE status")
-	if len(untagged) != 0 {
-		t.Errorf("second ENABLE untagged = %q, want none", untagged)
+	if strings.Join(untagged, "\n") != "* ENABLED" {
+		t.Errorf("second ENABLE untagged = %q, want empty ENABLED", untagged)
 	}
 	if b.mbox.enables != 1 {
 		t.Errorf("EnableUTF8 calls = %d, want 1", b.mbox.enables)
@@ -92,8 +92,8 @@ func TestUTF8Accept_IgnoredInSelectedState(t *testing.T) {
 
 	untagged, status := h.command("a3", "ENABLE UTF8=ACCEPT")
 	mustContain(t, status, " OK", "ENABLE status")
-	if len(untagged) != 0 || b.mbox.enables != 0 {
-		t.Errorf("selected-state ENABLE untagged = %q, enables = %d; want none, 0", untagged, b.mbox.enables)
+	if strings.Join(untagged, "\n") != "* ENABLED" || b.mbox.enables != 0 {
+		t.Errorf("selected-state ENABLE untagged = %q, enables = %d; want empty ENABLED, 0", untagged, b.mbox.enables)
 	}
 }
 
@@ -123,7 +123,7 @@ func TestUTF8Accept_BaseBackendIgnoresEnable(t *testing.T) {
 
 	untagged, status := h.command("a2", "ENABLE UTF8=ACCEPT")
 	mustContain(t, status, " OK", "ENABLE status")
-	if len(untagged) != 0 {
-		t.Errorf("base backend ENABLE untagged = %q, want none", untagged)
+	if strings.Join(untagged, "\n") != "* ENABLED" {
+		t.Errorf("base backend ENABLE untagged = %q, want empty ENABLED", untagged)
 	}
 }
