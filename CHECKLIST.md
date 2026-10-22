@@ -22,6 +22,7 @@ with no test, a test naming an unknown item, or a duplicate ID.
 | ID | Section | Level | Requirement | Tests |
 |----|---------|-------|-------------|-------|
 | IMAP-GREET-01 | RFC 3501 §§3.1, 7.1.1 | Normative | Greet with an untagged OK, which starts the not authenticated state; refuse SELECT before authentication. | TestGreeting |
+| IMAP-GREET-02 | RFC 3501 §§7.1.5, 9 | Normative | A connection the server is unwilling to accept (the Limiter refuses it) is greeted with an untagged BYE, then closed, rather than dropped without a greeting. | TestGreetingByeOnRefusal |
 | IMAP-CAP-01 | RFC 3501 §6.1.1 | MUST | Send a single untagged CAPABILITY response listing IMAP4rev1 before the tagged OK, in every state. | TestCapability |
 | IMAP-NOOP-01 | RFC 3501 §6.1.2 | Normative | NOOP always succeeds, in any state. | TestNoop |
 | IMAP-LOGOUT-01 | RFC 3501 §6.1.3 | MUST | Send an untagged BYE before the tagged OK to LOGOUT, then close the connection. | TestLogout |

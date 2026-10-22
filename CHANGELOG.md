@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- IMAP-GREET-02 (RFC 3501 §§7.1.5, 9): a wire test through the public `Server`
+  proves a `Limiter`-refused connection gets a BYE greeting. Partial checklist
+  is 239/267 mapped.
 - Sixteen RFC 4315/6154 checklist rows for APPENDUID and ordinary LIST
   special-use attributes: eleven mapped to seven new public-Session wire tests,
   five explicit API/extension gaps. Partial checklist is 238/266 mapped.
@@ -36,6 +39,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A connection the `Limiter` refuses is greeted with `* BYE` before the
+  server closes it (RFC 3501 §7.1.5), instead of being dropped with no
+  greeting. The write runs off the accept loop under a 5-second deadline.
 - ENABLE always sends an ENABLED response on success, even when empty, and
   rejects missing or malformed capability atoms before enabling any mode.
 - UNSELECT returns BAD without a selected mailbox, as RFC 3691 requires.
