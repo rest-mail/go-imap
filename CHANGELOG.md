@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- MIME nesting is now bounded at depth 64 for BODY, BODYSTRUCTURE, numeric
+  FETCH sections and SEARCH alike. A multipart or MESSAGE/RFC822 entity at that
+  depth is one opaque APPLICATION/OCTET-STREAM leaf. BODYSTRUCTURE and section
+  FETCH used to recurse without a limit, while SEARCH stopped at a different
+  depth (RFC 3501 §7.4.2).
+- SEARCH BODY and TEXT now decode the encapsulated message of a message whose
+  own Content-Type is message/rfc822, as BODYSTRUCTURE already describes it;
+  its body used to be searched as stored (RFC 3501 §6.4.4).
+
 - The FETCH section fuzz check now allows filtered headers to join selected
   lines and supply their terminating blank line instead of incorrectly requiring
   a contiguous substring of the stored message.

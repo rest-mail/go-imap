@@ -1285,14 +1285,20 @@ func partialOctets(s string, start, count uint32) string {
 // The whole message body is always described — never a NIL or empty structure —
 // so the response is well-formed even for unusual or unparseable input.
 func buildBodyStructure(raw string, extension bool) string {
+	return messageStructure(raw, extension, 0)
+}
+
+// messageStructure describes the RFC 5322 message raw found at MIME nesting
+// depth (see maxMIMEDepth).
+func messageStructure(raw string, extension bool, depth int) string {
 	msg, err := mail.ReadMessage(strings.NewReader(raw))
 	if err != nil {
 		// Unparseable header block: describe the entire input as one text/plain
 		// part so the structure is still well-formed.
-		return singlePartStructure("text", "plain", nil, textproto.MIMEHeader{}, []byte(raw), extension)
+		return singlePartStructure("text", "plain", nil, textproto.MIMEHeader{}, []byte(raw), extension, depth)
 	}
 	body, _ := io.ReadAll(msg.Body)
-	return partStructure(textproto.MIMEHeader(msg.Header), body, extension, "text/plain")
+	return partStructure(textproto.MIMEHeader(msg.Header), body, extension, "text/plain", depth)
 }
 
 // parseContentType adapts mail's RFC 822 lexical rules to mime.ParseMediaType,
@@ -1361,7 +1367,10 @@ func uncommentMIME(value string) (string, error) {
 // and (transfer-encoded) body octets, recursing into multipart entities.
 // defaultType applies when Content-Type is absent or malformed: text/plain
 // (RFC 2045 §5.2), or message/rfc822 inside multipart/digest (RFC 2046 §5.1.5).
-func partStructure(header textproto.MIMEHeader, body []byte, extension bool, defaultType string) string {
+// depth is the entity's MIME nesting depth; at maxMIMEDepth a multipart or
+// message/rfc822 entity is described as an opaque application/octet-stream
+// leaf, as mimeNode.mediaType does for sections and SEARCH.
+func partStructure(header textproto.MIMEHeader, body []byte, extension bool, defaultType string, depth int) string {
 	mediatype, params, err := parseContentType(header.Get("Content-Type"))
 	// ParseMediaType also accepts a bare token (for Content-Disposition).
 	// Content-Type requires type/subtype, with no default subtype (RFC 2045
@@ -1375,17 +1384,21 @@ func partStructure(header textproto.MIMEHeader, body []byte, extension bool, def
 		maintype, subtype = mediatype[:slash], mediatype[slash+1:]
 	}
 
-	if maintype == "multipart" && params["boundary"] != "" {
-		return multipartStructure(subtype, params, header, body, extension)
+	nests := (maintype == "multipart" && params["boundary"] != "") || mediatype == "message/rfc822"
+	if nests && depth >= maxMIMEDepth {
+		return singlePartStructure("application", "octet-stream", nil, header, body, extension, depth)
 	}
-	return singlePartStructure(maintype, subtype, params, header, body, extension)
+	if maintype == "multipart" && params["boundary"] != "" {
+		return multipartStructure(subtype, params, header, body, extension, depth)
+	}
+	return singlePartStructure(maintype, subtype, params, header, body, extension, depth)
 }
 
 // multipartStructure builds the parenthesized structure for a multipart entity:
 // the nested part structures concatenated with no separator, then the subtype,
 // then (for BODYSTRUCTURE) the extension fields (RFC 3501 §7.4.2). header is the
 // multipart's own header, the source of its body-ext-mpart disposition field.
-func multipartStructure(subtype string, params map[string]string, header textproto.MIMEHeader, body []byte, extension bool) string {
+func multipartStructure(subtype string, params map[string]string, header textproto.MIMEHeader, body []byte, extension bool, depth int) string {
 	mr := multipart.NewReader(bytes.NewReader(body), params["boundary"])
 	childType := "text/plain"
 	if strings.EqualFold(subtype, "digest") {
@@ -1401,12 +1414,12 @@ func multipartStructure(subtype string, params map[string]string, header textpro
 			break
 		}
 		pb, _ := io.ReadAll(p)
-		parts.WriteString(partStructure(p.Header, pb, extension, childType))
+		parts.WriteString(partStructure(p.Header, pb, extension, childType, depth+1))
 	}
 	// A multipart with no decodable parts is still described as containing one
 	// empty text/plain part, keeping the structure well-formed.
 	if parts.Len() == 0 {
-		parts.WriteString(singlePartStructure("text", "plain", nil, textproto.MIMEHeader{}, nil, extension))
+		parts.WriteString(singlePartStructure("text", "plain", nil, textproto.MIMEHeader{}, nil, extension, depth+1))
 	}
 
 	var b strings.Builder
@@ -1433,7 +1446,7 @@ func multipartStructure(subtype string, params map[string]string, header textpro
 // entity (RFC 3501 §7.4.2): type, subtype, parameters, id, description,
 // encoding, size — plus a line count for text types, plus (for BODYSTRUCTURE)
 // the single-part extension fields MD5/disposition/language/location.
-func singlePartStructure(maintype, subtype string, params map[string]string, header textproto.MIMEHeader, body []byte, extension bool) string {
+func singlePartStructure(maintype, subtype string, params map[string]string, header textproto.MIMEHeader, body []byte, extension bool, depth int) string {
 	if maintype == "" {
 		maintype = "text"
 	}
@@ -1480,7 +1493,7 @@ func singlePartStructure(maintype, subtype string, params map[string]string, hea
 		enc := string(body)
 		fmt.Fprintf(&b, " %s %s %d",
 			buildEncapsulatedEnvelope(enc),
-			buildBodyStructure(enc, extension),
+			messageStructure(enc, extension, depth+1),
 			countLines(body))
 	case strings.EqualFold(maintype, "text"):
 		// body-type-text adds a line count after the octet size.

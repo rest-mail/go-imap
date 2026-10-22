@@ -9,11 +9,6 @@ import (
 	"strings"
 )
 
-// maxSearchMIMEDepth bounds the MIME recursion of a SEARCH body decode, so a
-// deeply nested message cannot exhaust the stack. Deeper entities are
-// searched as stored.
-const maxSearchMIMEDepth = 64
-
 // searchHeaderDecoder decodes RFC 2047 encoded words in the charsets SEARCH
 // can compare: UTF-8 and US-ASCII natively, ISO-8859-1 by conversion.
 var searchHeaderDecoder = &mime.WordDecoder{
@@ -45,21 +40,19 @@ func decodeSearchHeader(s string) string {
 // searchMessageText is the decoded text of a whole message for SEARCH TEXT:
 // its header block with encoded words decoded, then its decoded body.
 func searchMessageText(raw string) string {
-	return decodeSearchHeader(headerSection(raw)) + searchBodyText(messageNode(raw), 0)
+	return decodeSearchHeader(headerSection(raw)) + searchBodyText(messageNode(raw, 0))
 }
 
 // searchBodyText decodes n's body for SEARCH BODY (RFC 3501 §6.4.4): every
 // leaf has its Content-Transfer-Encoding removed and its charset converted to
 // UTF-8, and an encapsulated MESSAGE/RFC822 contributes its decoded header and
-// body. Parts are separated by CRLF so a match cannot span two parts.
-func searchBodyText(n mimeNode, depth int) string {
-	if depth > maxSearchMIMEDepth {
-		return n.body
-	}
+// body, whether it is a part or the body of a message/rfc822 message. Parts are separated by CRLF so a match cannot span two parts. An
+// entity at maxMIMEDepth is an opaque leaf, as in BODYSTRUCTURE.
+func searchBodyText(n mimeNode) string {
 	mt, params := n.mediaType()
-	if !n.message && mt == "message/rfc822" {
-		inner := messageNode(n.body)
-		return decodeSearchHeader(inner.header) + searchBodyText(inner, depth+1)
+	if mt == "message/rfc822" {
+		inner := messageNode(n.body, n.depth+1)
+		return decodeSearchHeader(inner.header) + searchBodyText(inner)
 	}
 	if strings.HasPrefix(mt, "multipart/") && params["boundary"] != "" {
 		var b strings.Builder
@@ -68,7 +61,7 @@ func searchBodyText(n mimeNode, depth int) string {
 			if !ok {
 				break
 			}
-			b.WriteString(searchBodyText(part, depth+1))
+			b.WriteString(searchBodyText(part))
 			b.WriteString("\r\n")
 		}
 		return b.String()
