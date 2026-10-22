@@ -23,6 +23,9 @@ func TestBodyStructureEncodingComments(t *testing.T) {
 	} {
 		t.Run(tc.value, func(t *testing.T) {
 			base := fmt.Sprintf(`("TEXT" "PLAIN" ("CHARSET" "US-ASCII") "<id@x>" "note" "%s" 9 2`, tc.token)
+			if tc.token == "X-EXAMPLE.V1+FOO" {
+				base = fmt.Sprintf(`("APPLICATION" "OCTET-STREAM" NIL "<id@x>" "note" "%s" 9`, tc.token)
+			}
 			entity := "Content-Transfer-Encoding: " + tc.value + "\r\nContent-ID: <id@x>\r\nContent-Description: note\r\n\r\na=20b\r\ncd"
 			structureResponse(t, entity, base+")", base+" NIL NIL NIL NIL)")
 		})
@@ -45,8 +48,8 @@ func TestBodyStructureEncodingCommentScope(t *testing.T) {
 		outer+part+") 4)", outer+part+" NIL NIL NIL NIL) 4 NIL NIL NIL NIL)")
 }
 
-// Malformed fields keep the prior opaque-string policy. A comment splitting a
-// token must not silently manufacture a recognised encoding. These robustness
+// Malformed fields keep the safely framed encoding value but use an opaque
+// type. A comment splitting a token must not silently manufacture a recognised encoding. These robustness
 // cases do not claim valid MIME or define a general malformed-header policy.
 //
 // checklist: IMAP-CTE-03
@@ -54,7 +57,7 @@ func TestBodyStructureMalformedEncodingComments(t *testing.T) {
 	for _, value := range []string{"base(comment)64", "base 64", "base64 (unfinished", "base64 )", "(comment)", `"base64"`, "base64; x=y", "base64 (escaped\\)"} {
 		t.Run(value, func(t *testing.T) {
 			quoted := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(strings.ToUpper(value))
-			part := `("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "` + quoted + `" 1 1`
+			part := `("APPLICATION" "OCTET-STREAM" NIL NIL NIL "` + quoted + `" 1`
 			structureResponse(t, "Content-Transfer-Encoding: "+value+"\r\n\r\nx", part+")", part+" NIL NIL NIL NIL)")
 		})
 	}

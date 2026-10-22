@@ -73,10 +73,13 @@ func messageNode(raw string, depth int) mimeNode {
 }
 
 // mediaType returns the lower-case Content-Type and its parameters, applying
-// the same defaults and depth limit as partStructure so sections match
-// BODYSTRUCTURE.
+// the same encoding override, defaults and depth limit as partStructure so
+// sections match BODYSTRUCTURE.
 func (n mimeNode) mediaType() (string, map[string]string) {
 	h, _ := textproto.NewReader(bufio.NewReader(strings.NewReader(n.header))).ReadMIMEHeader()
+	if !knownTransferEncoding(h.Get("Content-Transfer-Encoding")) {
+		return "application/octet-stream", map[string]string{}
+	}
 	mt, params, err := parseContentType(h.Get("Content-Type"))
 	if err != nil || !strings.Contains(mt, "/") {
 		mt, params = n.defaultType, map[string]string{}

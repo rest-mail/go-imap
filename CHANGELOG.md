@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- An unknown MIME Content-Transfer-Encoding now overrides Content-Type as
+  application/octet-stream in BODY/BODYSTRUCTURE, numeric FETCH sections and
+  SEARCH (RFC 2045 §6.4). Previously a declared text charset could transform
+  undecodable octets, and declared multipart/message types could expose
+  fabricated nested structures and decoded search matches. Raw FETCH and the
+  original encoding string are preserved.
+
 - A MESSAGE/RFC822 entity with a Content-Transfer-Encoding other than 7bit,
   8bit or binary, which RFC 2046 §5.2.1 prohibits, is now one opaque
   APPLICATION/OCTET-STREAM leaf in BODY, BODYSTRUCTURE and numeric FETCH
