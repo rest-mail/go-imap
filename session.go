@@ -1648,7 +1648,7 @@ func (s *Session) matchOne(msg Message, c searchCriterion, loadRaw func() (strin
 		if !ok {
 			return false
 		}
-		return strings.Contains(strings.ToLower(searchBodyText(messageNode(raw), 0)), strings.ToLower(c.value))
+		return strings.Contains(strings.ToLower(searchBodyText(messageNode(raw, 0))), strings.ToLower(c.value))
 	case "text":
 		// TEXT <string>: case-insensitive substring in the header OR the body —
 		// i.e. anywhere in the decoded message (RFC 3501 §6.4.4). Missing raw ⇒ no match.

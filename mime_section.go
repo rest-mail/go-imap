@@ -58,19 +58,32 @@ type mimeNode struct {
 	header, body string
 	message      bool
 	defaultType  string // used when Content-Type is absent or invalid
+	depth        int    // MIME nesting depth, see maxMIMEDepth
 }
 
-func messageNode(raw string) mimeNode {
-	return mimeNode{header: headerSection(raw), body: textSection(raw), message: true, defaultType: "text/plain"}
+// maxMIMEDepth bounds MIME nesting for BODYSTRUCTURE, section FETCH and
+// SEARCH alike. The top-level message is depth 0; each multipart part and each
+// MESSAGE/RFC822 encapsulation adds one. A multipart or MESSAGE/RFC822 entity
+// at this depth is an opaque application/octet-stream leaf, so a deeply
+// nested message cannot make one FETCH or SEARCH do unbounded work.
+const maxMIMEDepth = 64
+
+func messageNode(raw string, depth int) mimeNode {
+	return mimeNode{header: headerSection(raw), body: textSection(raw), message: true, defaultType: "text/plain", depth: depth}
 }
 
 // mediaType returns the lower-case Content-Type and its parameters, applying
-// the same defaults as partStructure so sections match BODYSTRUCTURE.
+// the same defaults and depth limit as partStructure so sections match
+// BODYSTRUCTURE.
 func (n mimeNode) mediaType() (string, map[string]string) {
 	h, _ := textproto.NewReader(bufio.NewReader(strings.NewReader(n.header))).ReadMIMEHeader()
 	mt, params, err := parseContentType(h.Get("Content-Type"))
 	if err != nil || !strings.Contains(mt, "/") {
-		return n.defaultType, map[string]string{}
+		mt, params = n.defaultType, map[string]string{}
+	}
+	nests := (strings.HasPrefix(mt, "multipart/") && params["boundary"] != "") || mt == "message/rfc822"
+	if nests && n.depth >= maxMIMEDepth {
+		return "application/octet-stream", map[string]string{}
 	}
 	return mt, params
 }
@@ -81,7 +94,7 @@ func (n mimeNode) mediaType() (string, map[string]string) {
 func (n mimeNode) child(k uint32) (mimeNode, bool) {
 	mt, params := n.mediaType()
 	if !n.message && mt == "message/rfc822" {
-		n = messageNode(n.body)
+		n = messageNode(n.body, n.depth+1)
 		mt, params = n.mediaType()
 	}
 	if strings.HasPrefix(mt, "multipart/") && params["boundary"] != "" {
@@ -94,10 +107,10 @@ func (n mimeNode) child(k uint32) (mimeNode, bool) {
 			def = "message/rfc822"
 		}
 		h, b := splitEntity(parts[k-1])
-		return mimeNode{header: h, body: b, defaultType: def}, true
+		return mimeNode{header: h, body: b, defaultType: def, depth: n.depth + 1}, true
 	}
 	if n.message && k == 1 {
-		return mimeNode{header: n.header, body: n.body, defaultType: n.defaultType}, true
+		return mimeNode{header: n.header, body: n.body, defaultType: n.defaultType, depth: n.depth}, true
 	}
 	return mimeNode{}, false
 }
@@ -114,7 +127,7 @@ func numericSection(raw string, path []uint32, text string) (label, payload stri
 	}
 	label = strings.Join(parts, ".")
 
-	node, found := messageNode(raw), true
+	node, found := messageNode(raw, 0), true
 	for _, k := range path {
 		if node, found = node.child(k); !found {
 			break
@@ -125,7 +138,7 @@ func numericSection(raw string, path []uint32, text string) (label, payload stri
 			return mimeNode{}, false
 		}
 		mt, _ := node.mediaType()
-		return messageNode(node.body), mt == "message/rfc822"
+		return messageNode(node.body, node.depth+1), mt == "message/rfc822"
 	}
 
 	up := strings.ToUpper(text)
