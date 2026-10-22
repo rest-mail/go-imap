@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 283/333 mapped](https://img.shields.io/badge/partial%20checklist-283%2F333%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 284/333 mapped](https://img.shields.io/badge/partial%20checklist-284%2F333%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -175,7 +175,7 @@ extra arguments while preserving the selection.
 
 ## RFC conformance
 
-The current checklist has 333 requirements: 283 mapped to wire tests and 50
+The current checklist has 333 requirements: 284 mapped to wire tests and 49
 explicit gaps or backend/deployment responsibilities. Unknown MIME transfer
 encodings override Content-Type as application/octet-stream consistently in
 BODYSTRUCTURE, section FETCH and SEARCH; stored headers and octets remain

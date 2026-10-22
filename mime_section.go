@@ -84,11 +84,29 @@ func (n mimeNode) mediaType() (string, map[string]string) {
 	if err != nil || !strings.Contains(mt, "/") {
 		mt, params = n.defaultType, map[string]string{}
 	}
-	nests := (strings.HasPrefix(mt, "multipart/") && params["boundary"] != "") || mt == "message/rfc822"
-	if nests && n.depth >= maxMIMEDepth {
+	if opaqueEntity(mt, params, h.Get("Content-Transfer-Encoding"), n.depth) {
 		return "application/octet-stream", map[string]string{}
 	}
 	return mt, params
+}
+
+// opaqueEntity reports whether an entity with lower-case media type mt is
+// described as one opaque application/octet-stream leaf instead of being
+// parsed: a multipart or MESSAGE/RFC822 entity at maxMIMEDepth, or a
+// MESSAGE/RFC822 entity whose Content-Transfer-Encoding is not 7bit, 8bit or
+// binary. RFC 2046 §5.2.1 permits no other encoding there, and an encoded body
+// is not a message that can be parsed as stored. BODYSTRUCTURE, sections and
+// SEARCH all use this, so they agree on where the structure stops.
+func opaqueEntity(mt string, params map[string]string, cte string, depth int) bool {
+	if mt == "message/rfc822" {
+		switch transferEncoding(cte) {
+		case "7BIT", "8BIT", "BINARY":
+		default:
+			return true
+		}
+	}
+	nests := (strings.HasPrefix(mt, "multipart/") && params["boundary"] != "") || mt == "message/rfc822"
+	return nests && depth >= maxMIMEDepth
 }
 
 // child returns part k (1-based) of n (RFC 3501 §6.4.5): a multipart's parts
