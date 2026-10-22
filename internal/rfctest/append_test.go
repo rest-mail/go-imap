@@ -211,7 +211,7 @@ func TestAppendExample(t *testing.T) {
 	}
 }
 
-// checklist: IMAP-APPEND-03 IMAP-APPEND-04
+// checklist: IMAP-APPEND-03 IMAP-APPEND-04 IMAP-APPEND-31
 func TestAppendLiteralOctets(t *testing.T) {
 	for _, raw := range []string{"", "Subject: draft\r\n\r\n", "Subject: 8bit\r\n\r\ncaf\xc3\xa9\xff\r\n.hello\r\nZ1 LOGOUT\r\n", "no final newline"} {
 		t.Run(fmt.Sprintf("%d", len(raw)), func(t *testing.T) {

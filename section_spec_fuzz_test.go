@@ -10,7 +10,8 @@ import (
 // FuzzSectionSpec compares numeric section-part parsing with the RFC 3501 §9
 // grammar expressed independently as a regexp plus arbitrary-precision bounds,
 // and resolves the section against an arbitrary message, which must never
-// panic and must return octets of that message.
+// panic. Unfiltered sections must return contiguous message octets; filtered
+// headers may join non-adjacent lines and add a terminating blank line.
 func FuzzSectionSpec(f *testing.F) {
 	nested := "Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\n\r\none\r\n" +
 		"--b\r\nContent-Type: message/rfc822\r\n\r\nSubject: in\r\n\r\ntwo\r\n--b--\r\n"
@@ -21,6 +22,11 @@ func FuzzSectionSpec(f *testing.F) {
 		f.Add(section, nested)
 	}
 	f.Add("1.1", "Content-Type: multipart/mixed; boundary=x\r\n\r\n--x  \r\n\r\na\r\n--xy\r\n--x--")
+	// Filtered headers need not be contiguous in raw, and a truncated header
+	// may acquire its terminating CRLF and blank line.
+	f.Add("2.HEADER.FIELDS (SuBjeCt)", strings.Replace(nested, "Subject: in\r\n\r\ntwo", "SuBjeCt:", 1))
+	f.Add("2.HEADER.FIELDS (Subject)", strings.Replace(nested, "Subject: in", "Subject: in\r\nX-Omitted: middle\r\nSubject: again", 1))
+	f.Add("2.HEADER.FIELDS.NOT (X-Omitted)", strings.Replace(nested, "Subject: in", "Subject: in\r\nX-Omitted: middle\r\nFrom: sender", 1))
 	grammar := regexp.MustCompile(`(?s)^((?:[1-9][0-9]*\.)*[1-9][0-9]*)?(?:\.?)(.*)$`)
 	f.Fuzz(func(t *testing.T, section, raw string) {
 		if len(section) > 1024 || len(raw) > 1<<16 {
@@ -48,7 +54,26 @@ func FuzzSectionSpec(f *testing.F) {
 			return
 		}
 		_, payload, valid := numericSection(raw, path, text)
-		if valid && payload != "" && !strings.Contains(raw, payload) {
+		if !valid || payload == "" {
+			return
+		}
+		if strings.HasPrefix(strings.ToUpper(text), "HEADER.FIELDS") {
+			if payload != "\r\n" && !strings.HasSuffix(payload, "\r\n\r\n") {
+				t.Fatalf("filtered headers lack a terminating blank line: %q", payload)
+			}
+			// Every retained line must occur verbatim and in order in raw.
+			remaining := raw
+			for _, line := range strings.Split(strings.TrimSuffix(payload, "\r\n"), "\r\n") {
+				if line == "" {
+					continue
+				}
+				i := strings.Index(remaining, line)
+				if i < 0 {
+					t.Fatalf("numericSection(%q) header line %q is not in message order", section, line)
+				}
+				remaining = remaining[i+len(line):]
+			}
+		} else if !strings.Contains(raw, payload) {
 			t.Fatalf("numericSection(%q) payload %q is not part of the message", section, payload)
 		}
 	})

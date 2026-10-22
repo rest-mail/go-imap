@@ -46,7 +46,7 @@ func TestNoExpungeDuringFetchStoreSearch(t *testing.T) {
 		t.Fatalf("SELECT: %q", tagged)
 	}
 	box.folders["INBOX"] = []imap.Message{{UID: 1, Size: 24}, {UID: 3, Size: 24}}
-	for i, cmd := range []string{"FETCH 1:* (UID)", "STORE 3 +FLAGS (\\Flagged)", "SEARCH ALL", "UID FETCH 1:* (UID)", "UID SEARCH ALL"} {
+	for i, cmd := range []string{"FETCH 1:* (UID)", "STORE 3 +FLAGS (\\Flagged)", "SEARCH ALL", "UID FETCH 1:* (UID)", "UID STORE 3 +FLAGS (\\Flagged)", "UID SEARCH ALL"} {
 		tag := fmt.Sprintf("C%d", i)
 		lines, tagged := c.command(tag, "%s", cmd)
 		if !strings.HasPrefix(tagged, tag+" OK") {

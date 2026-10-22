@@ -2,13 +2,12 @@
 
 This is an explicitly **PARTIAL** checklist: the first RFC 3501 rows for the
 connection greeting, the any-state commands (CAPABILITY, NOOP, LOGOUT), LOGIN,
-tagged completion, STARTTLS, selection-state (SELECT/EXAMINE), STATUS, STORE, SEARCH, FETCH/ENVELOPE,
+tagged completion, STARTTLS, AUTHENTICATE, CHECK, selection-state (SELECT/EXAMINE), STATUS, STORE, SEARCH, FETCH/ENVELOPE,
 EXPUNGE, CLOSE, APPEND, COPY, mailbox-management (CREATE, DELETE, RENAME,
 SUBSCRIBE, UNSUBSCRIBE, LIST, LSUB) and encoded BODYSTRUCTURE slices, plus partial
 RFC 4315 UID EXPUNGE/COPYUID/APPENDUID, RFC 6154 ordinary LIST attributes,
 RFC 6851 MOVE, RFC 3691 UNSELECT, RFC 5161 ENABLE, RFC 2177 IDLE command exchanges
-and RFC 7888 non-synchronizing APPEND and command-argument refusal slices, and
-RFC 3501 §6.5 X-commands and §7 server responses. It is not
+and RFC 7888 non-synchronizing APPEND and command-argument refusal slices. It is not
 an inventory of all applicable RFC requirements, a full conformance claim, or
 a coverage badge. A mapped row means its named wire test
 in `internal/rfctest` asserts the stated behavior through the public
@@ -25,9 +24,26 @@ with no test, a test naming an unknown item, or a duplicate ID.
 |----|---------|-------|-------------|-------|
 | IMAP-GREET-01 | RFC 3501 §§3.1, 7.1.1 | Normative | Greet with an untagged OK, which starts the not authenticated state; refuse SELECT before authentication. | TestGreeting |
 | IMAP-CAP-01 | RFC 3501 §6.1.1 | MUST | Send a single untagged CAPABILITY response listing IMAP4rev1 before the tagged OK, in every state. | TestCapability |
+| IMAP-CAP-02 | RFC 3501 §6.1.1 | MUST | Implement the STARTTLS, LOGINDISABLED and AUTH=PLAIN capabilities: AUTH=PLAIN is advertised and AUTHENTICATE PLAIN works, and with TLS configured a cleartext session advertises STARTTLS and LOGINDISABLED. | TestAuthenticateCommand, TestStartTLSExample |
 | IMAP-NOOP-01 | RFC 3501 §6.1.2 | Normative | NOOP always succeeds, in any state. | TestNoop |
 | IMAP-LOGOUT-01 | RFC 3501 §6.1.3 | MUST | Send an untagged BYE before the tagged OK to LOGOUT, then close the connection. | TestLogout |
 | IMAP-LOGIN-01 | RFC 3501 §6.2.3 | Normative | LOGIN with valid credentials returns OK and enters the authenticated state; invalid credentials return NO and leave the state unchanged. | TestLogin |
+| IMAP-LOGIN-02 | RFC 3501 §6.2.3 | MUST | Implement a configuration that advertises LOGINDISABLED and refuses LOGIN until TLS protects the session; with TLS configured that is the cleartext behavior. | TestStartTLSExample, TestStartTLSCleartextCredentialsRefused |
+| IMAP-AUTH-STATE-01 | RFC 3501 §§6, 6.2 | Normative | Once authenticated, a session cannot re-enter the not authenticated state or switch user: LOGIN and AUTHENTICATE get BAD with no continuation and no credential check, and the selected mailbox is kept. | TestNoReauthentication |
+| IMAP-ANON-01 | RFC 3501 §6.2 | MAY | Allow access to certain mailboxes without authentication, e.g. SASL ANONYMOUS or LOGIN as "anonymous". | n/a: optional (MAY) and not offered; every mailbox needs LOGIN or AUTHENTICATE against the Backend. |
+| IMAP-AUTHENTICATE-01 | RFC 3501 §6.2.2 | MUST | Implement AUTHENTICATE with the PLAIN mechanism, named case-insensitively; success returns tagged OK and enters the authenticated state. | TestAuthenticateCommand |
+| IMAP-AUTHENTICATE-02 | RFC 3501 §6.2.2 | Normative | Each server challenge is a `+` continuation followed by a base64 string (empty for PLAIN), and each client response is one base64 line. | TestAuthenticateCommand |
+| IMAP-AUTHENTICATE-03 | RFC 3501 §6.2.2 | MUST | A client response of a single `*` cancels the exchange: tagged BAD, and the session stays not authenticated. | TestAuthenticateCommand |
+| IMAP-AUTHENTICATE-04 | RFC 3501 §6.2.2 | SHOULD | An unsupported mechanism gets tagged NO without a continuation. | TestAuthenticateCommand |
+| IMAP-AUTHENTICATE-05 | RFC 3501 §§6, 6.2.2 | Normative | A missing mechanism is an invalid argument and gets BAD; rejected credentials get NO; neither changes state, and a later AUTHENTICATE can still succeed. | TestAuthenticateCommand |
+| IMAP-AUTHENTICATE-06 | RFC 3501 §6.2.2; RFC 4616 §2 | Normative | The authorization identity names the user whose privileges are requested. Acting as another user is not supported, so an authzid naming a different user gets NO; an empty authzid or one equal to the authentication identity is accepted. | TestAuthenticateCommand |
+| IMAP-AUTHENTICATE-07 | RFC 3501 §6.2.2 | Normative | RFC 3501 AUTHENTICATE carries no SASL initial response; one on the command line is refused without a continuation. SASL-IR (RFC 4959) is not advertised. | TestAuthenticateCommand |
+| IMAP-AUTHENTICATE-08 | RFC 3501 §6.2.2 | SHOULD | List the supported mechanisms in CAPABILITY (AUTH=PLAIN); the tagged OK of a successful AUTHENTICATE carries a CAPABILITY response code (MAY). | TestAuthenticateCommand |
+| IMAP-AUTHENTICATE-09 | RFC 3501 §6.2.2 | MUST | Implement a configuration that permits no plaintext password mechanism until STARTTLS: with TLS configured, cleartext AUTHENTICATE is refused before any continuation (sites SHOULD NOT run without such protection). | TestStartTLSCleartextCredentialsRefused |
+| IMAP-AUTHENTICATE-10 | RFC 3501 §6.2.2 | SHOULD | Implement additional SASL mechanisms that do not use plaintext passwords, such as GSSAPI or DIGEST-MD5. | n/a: not supported yet; only PLAIN is offered, and Backend.Authenticate takes a user name and password, so a challenge-response mechanism needs a backend design. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-AUTHENTICATE-11 | RFC 3501 §6.2.2 | Normative | A negotiated SASL security layer takes effect right after the CRLF of the tagged OK. | n/a: PLAIN negotiates no security layer and no other mechanism is offered; see IMAP-AUTHENTICATE-10. |
+| IMAP-AUTHENTICATE-12 | RFC 3501 §6.2.2 | Normative | The SASL service name is "imap". | n/a: PLAIN uses no service name; it matters only for mechanisms such as GSSAPI, see IMAP-AUTHENTICATE-10. |
+| IMAP-CLIENT-01 | RFC 3501 §§6.1.1, 6.2.1, 6.2.3, 6.3.1, 6.3.10, 6.3.11, 6.4.1 | MUST | Client-side duties: require no capability beyond IMAP4rev1 unless advertised; send nothing after STARTTLS until TLS completes, then discard cached capabilities and re-issue CAPABILITY (SHOULD); never send LOGIN when LOGINDISABLED is advertised and use LOGIN only as a last resort; default missing SELECT data; avoid STATUS on the selected mailbox (SHOULD NOT) and never use it to check for new mail (MUST NOT); APPEND RFC 2822 messages (SHOULD); poll for new mail with NOOP, not CHECK (SHOULD). | n/a: client obligations; this library is the server side. Its server-side counterparts are IMAP-STARTTLS-06 (cleartext after STARTTLS never runs), IMAP-STARTTLS-03, IMAP-STARTTLS-08 and IMAP-STATUS-04. |
 | IMAP-TAG-01 | RFC 3501 §§2.2.1, 2.2.2 | Normative | The tagged completion result carries the tag of the command it completes. | TestTaggedCompletion |
 | IMAP-BAD-01 | RFC 3501 §7.1.3 | Normative | An unknown command receives a tagged BAD. | TestTaggedCompletion |
 
@@ -70,6 +86,7 @@ with the examples; they do not prove independent Recent tracking.
 | IMAP-SELECT-10 | RFC 3501 §6.3.1 | MUST | SELECT must return READ-ONLY when access permits reading but forbids modification. | n/a: not supported yet; Mailbox exposes no per-folder write permission. Host can refuse Messages with an error but cannot select read-only through SELECT. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-SELECT-11 | RFC 3501 §§6.3.1, 6.3.2, 9 | Normative | SELECT/EXAMINE require exactly one mailbox astring: missing, malformed, extra or improperly separated arguments receive BAD without metadata reads or writes; a failed selection drops prior selection and deletion marks without expunging, and a later valid selection recovers. | TestSelectionInvalidArguments, TestSelectionInvalidLiteralArguments |
 | IMAP-SELECT-12 | RFC 3501 §§4.3, 5.1, 6.3.1, 6.3.2, 9 | Normative | Decode bare, quoted and counted-literal mailbox names without trimming significant spaces, preserve escaped quoted-specials and quoted wildcard characters, canonicalize only INBOX, and preserve command framing for synchronizing and LITERAL+ names. An explicit empty string reaches the backend unchanged rather than selecting INBOX. | TestSelectionMailboxAstrings, TestSelectionLiteralMailbox |
+| IMAP-SELECT-13 | RFC 3501 §§6.3.1, 6.3.2 | MUST | Before tagged OK to SELECT or EXAMINE, send every REQUIRED response: FLAGS, EXISTS, RECENT, and OK PERMANENTFLAGS, UIDNEXT and UIDVALIDITY, with OK UNSEEN when an unseen message exists. The RECENT value itself is IMAP-SELECT-08. | TestSelectionExamples |
 | IMAP-EXAMINE-01 | RFC 3501 §6.3.2 | MUST | Successful EXAMINE starts tagged OK text with READ-ONLY and reports no permanent flags. | TestSelectionExamples |
 | IMAP-EXAMINE-02 | RFC 3501 §6.3.2 | Normative | EXAMINE forbids permanent writes through STORE, EXPUNGE and MOVE (including UID variants) and CLOSE; a later SELECT restores writable access. | TestExaminePreventsPermanentWrites |
 | IMAP-EXAMINE-03 | RFC 3501 §6.3.2 | Normative | Non-peek FETCH and UID FETCH under EXAMINE return the body without persisting or locally setting Seen. | TestExamineBodyFetchDoesNotSetSeen |
@@ -251,6 +268,8 @@ failed marks, so a retried CLOSE completes.
 | IMAP-EXPUNGE-04 | RFC 3501 §§3, 6.4, 7.1.3 | Normative | EXPUNGE outside the selected state receives BAD and makes no changes. | TestExpungeRequiresSelection |
 | IMAP-EXPUNGE-05 | RFC 3501 §§6.4.3, 9 | Normative | EXPUNGE takes no arguments; reject extra arguments with BAD before deletion. | TestExpungeAndCloseArguments |
 | IMAP-EXPUNGE-06 | RFC 3501 §6.3.2 | Normative | EXPUNGE cannot permanently remove messages from a mailbox selected read-only by EXAMINE. | TestReadOnlyCloseAndExpunge |
+| IMAP-CHECK-01 | RFC 3501 §6.4.1 | Normative | CHECK is valid only in the selected state, under SELECT or EXAMINE; with no housekeeping it is equivalent to NOOP, returns OK and keeps the selection. Before selection it gets BAD. | TestCheckCommand |
+| IMAP-CHECK-02 | RFC 3501 §§6.4.1, 9 | Normative | CHECK takes no arguments; an argument gets BAD. | TestCheckCommand |
 | IMAP-CLOSE-01 | RFC 3501 §§3, 6.4, 7.1.3 | Normative | CLOSE outside the selected state receives BAD. | TestExpungeRequiresSelection |
 | IMAP-CLOSE-02 | RFC 3501 §§6.4.2, 9 | Normative | CLOSE takes no arguments; invalid arguments receive BAD without deletion or deselection. | TestExpungeAndCloseArguments |
 | IMAP-CLOSE-03 | RFC 3501 §6.4.2 | Normative | Successful writable CLOSE removes marked messages without untagged EXPUNGE, enters authenticated state and clears old selection marks before reselection. | TestCloseExample |
@@ -322,6 +341,7 @@ not advertise LITERAL+ and this slice does not claim full extension support.
 | IMAP-APPEND-28 | RFC 3501 §9 | Normative | Decode quoted APPEND mailbox names with escaped DQUOTE or backslash, and reject any other escape, NUL or 8-bit octet before a message-literal continuation. | TestAppendQuotedMailboxGrammar |
 | IMAP-APPEND-29 | RFC 3501 §§6.3.11, 9 | Normative | Accept fixed-width, DQUOTE-delimited date-times with space-padded or two-digit days and preserve explicit dates at DateAppender, including Go's zero time; reject malformed fields, escapes and invalid calendar/time/zone values before continuation or backend writes, preserving synchronizing recovery and non-synchronizing BYE refusal. | TestAppendInvalidDateTime, TestAppendValidDateTime |
 | IMAP-APPEND-30 | RFC 3501 §§4.3, 9 | Normative | Unquoted APPEND mailbox names contain only ASTRING-CHAR octets (including `]`); reject controls, non-ASCII octets, wildcards and quoted-specials before a continuation or backend call, preserving synchronizing recovery and closing on unread non-synchronizing literals. | TestAppendUnquotedMailboxGrammar, TestAppendRejectedNonSynchronizing |
+| IMAP-APPEND-31 | RFC 3501 §6.3.11 | MUST | 8-bit APPEND data is preserved: the counted octets reach the backend unchanged, with no conversion. Storing them faithfully is the backend's duty. | TestAppendLiteralOctets |
 
 Early APPEND refusals with a valid `{n+}` marker choose RFC 7888 §4's
 BYE-and-close policy instead of draining potentially large payloads. This
@@ -647,7 +667,8 @@ name the gap rather than claiming it.
 | IMAP-LIST-01 | RFC 3501 §6.3.8 | Normative | An empty mailbox name returns one reply with `\Noselect`, the hierarchy delimiter and an empty root name. | TestListLsubResponses |
 | IMAP-LIST-02 | RFC 3501 §6.3.8 | Normative | `*` matches zero or more characters including the delimiter; `%` matches zero or more characters except the delimiter. | TestListLsubResponses |
 | IMAP-LIST-03 | RFC 3501 §§5.1, 6.3.8 | Normative | Only names matching the pattern are returned; INBOX matches an INBOX pattern in any case. | TestListLsubResponses |
-| IMAP-LIST-04 | RFC 3501 §6.3.8 | Normative | A non-empty reference name is combined with the mailbox pattern. | n/a: not supported yet; the reference argument is ignored and only the pattern is matched. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-LIST-04 | RFC 3501 §6.3.8 | Normative | A non-empty reference name is prefixed to the mailbox pattern for LIST and LSUB; a pattern that starts at the hierarchy root (`/`) ignores the reference. | TestListReference |
+| IMAP-LIST-05 | RFC 3501 §6.3.8 | Normative | An empty mailbox name with a non-empty reference returns `\Noselect`, the delimiter and the root name of the reference: its first level up to and including the delimiter, or empty when it has none. | TestListReference |
 | IMAP-LSUB-01 | RFC 3501 §§6.3.9, 7.2.3 | Normative | LSUB answers with untagged LSUB replies, not LIST replies, and completes with `OK LSUB completed`. | TestListLsubResponses, TestSubscriptionCommands |
 | IMAP-LSUB-02 | RFC 3501 §6.3.9 | Normative | Under `%`, a non-subscribed superior of a subscribed inferior is returned with `\Noselect`. | n/a: every existing folder counts as subscribed, so there is no unsubscribed superior to report; depends on IMAP-SUB-02. |
 
@@ -688,6 +709,20 @@ inventory is complete.
   LIST and LSUB response forms, read line by line. Every MUST, MUST NOT, SHOULD
   and normative error rule found there now has a row above. Two bugs fixed: LSUB
   answered with `* LIST` replies, and RENAME left inferior names behind.
+- 2026-10-22: RFC 3501 §6.1 (CAPABILITY, NOOP, LOGOUT), §6.2 (its state rule,
+  STARTTLS, AUTHENTICATE and LOGIN), §§6.3.1 SELECT, 6.3.2 EXAMINE, 6.3.10
+  STATUS, 6.3.11 APPEND, and §§6.4.1 CHECK, 6.4.2 CLOSE, 6.4.3 EXPUNGE, 6.4.7
+  COPY and 6.4.8 UID, read line by line. Every MUST, MUST NOT, SHOULD and
+  SHOULD NOT found there maps to a row: new rows IMAP-CAP-02, IMAP-LOGIN-02,
+  IMAP-AUTH-STATE-01, IMAP-ANON-01, IMAP-AUTHENTICATE-01..12, IMAP-CLIENT-01,
+  IMAP-SELECT-13, IMAP-APPEND-31, IMAP-LIST-05 and IMAP-CHECK-01/02; the rest
+  were already covered by the IMAP-STARTTLS, SELECT, EXAMINE, STATUS, APPEND,
+  CLOSE, EXPUNGE, COPY, STORE-04, FETCH-09 and SEARCH-04 rows. Client-only duties
+  are collected in IMAP-CLIENT-01. Bugs fixed: LIST/LSUB ignored the reference
+  (IMAP-LIST-04 is now mapped), AUTHENTICATE ignored a foreign authorization
+  identity, LOGIN/AUTHENTICATE re-authenticated an authenticated session,
+  AUTHENTICATE with no mechanism got NO instead of BAD, and CHECK accepted
+  arguments.
 - 2026-10-22: RFC 3501 §6.5 and §7 apart from §§7.2.2–7.2.3 read line by line:
   §7.1 status responses and every response code, §7.1.1–7.1.5 OK/NO/BAD/
   PREAUTH/BYE, §7.2.1 CAPABILITY, §§7.2.4–7.2.6 STATUS/SEARCH/FLAGS, §§7.3.1–7.3.2
@@ -699,7 +734,5 @@ inventory is complete.
   items (IMAP-FETCH-*, IMAP-ENV-*, IMAP-BS-*, IMAP-MSG-*). One bug fixed: a line
   with no tag and command was dropped without a reply, so the client waited for
   a completion that never came; it now gets an untagged BAD.
-- Not yet audited line by line, for the next slice: §6.1 (CAPABILITY, NOOP,
-  LOGOUT beyond the existing rows), §6.2 (STARTTLS, AUTHENTICATE, LOGIN), §§6.3.1,
-  6.3.2, 6.3.10, 6.3.11, and all of §6.4 (CHECK, CLOSE, EXPUNGE, SEARCH, FETCH,
-  STORE, COPY, UID).
+- Not yet audited line by line, for the next slice: §§6.4.4 SEARCH, 6.4.5 FETCH
+  and 6.4.6 STORE.

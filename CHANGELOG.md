@@ -8,8 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The FETCH section fuzz check now allows filtered headers to join selected
+  lines and supply their terminating blank line instead of incorrectly requiring
+  a contiguous substring of the stored message.
 - A command line with no tag and command now gets an untagged `BAD`; it used to
   be dropped without a reply, so the client waited forever (RFC 3501 §7.1.3).
+- LIST and LSUB now prefix a non-empty reference name to the mailbox pattern,
+  and an empty pattern returns the reference's root name; the reference used to
+  be ignored (RFC 3501 §6.3.8).
+- AUTHENTICATE PLAIN now refuses an authorization identity naming another user
+  with NO; it used to log in as the authentication identity and ignore the
+  requested one (RFC 3501 §6.2.2, RFC 4616 §2).
+- LOGIN and AUTHENTICATE now get BAD once the session is authenticated; a
+  second LOGIN used to switch user mid-session (RFC 3501 §6.2).
+- AUTHENTICATE without a mechanism name now gets BAD, not NO, and CHECK with an
+  argument gets BAD instead of OK (RFC 3501 §§6.2.2, 6.4.1).
 - LSUB now answers with untagged `LSUB` replies and `OK LSUB completed`; it
   used to send `LIST` replies (RFC 3501 §7.2.3).
 - RENAME now carries inferior hierarchical names with the renamed folder, so
@@ -19,7 +32,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Twenty RFC 3501 §6.5/§7 checklist rows from a dated line-by-line audit of
   server responses: ten mapped (four new wire tests), ten explicit gaps or
-  client-only duties. Partial checklist is 258/308 mapped.
+  client-only duties. Combined partial checklist is 276/330 mapped.
+- Twenty-two RFC 3501 checklist rows from a dated line-by-line audit of §§6.1,
+  6.2 (AUTHENTICATE now has its own rows), 6.3.1, 6.3.2, 6.3.10, 6.3.11 and the
+  CHECK, CLOSE, EXPUNGE, COPY and UID parts of §6.4: seventeen mapped to four
+  new wire tests and existing ones, five n/a with reasons. LIST-04 is now
+  mapped. Partial checklist is 266/310 mapped.
 - Twenty-two RFC 3501 §§6.3.3–6.3.9 checklist rows from a dated line-by-line
   audit of CREATE, DELETE, RENAME, SUBSCRIBE, UNSUBSCRIBE, LIST and LSUB: ten
   mapped to five new wire tests, twelve explicit gaps from the implicit-folder
