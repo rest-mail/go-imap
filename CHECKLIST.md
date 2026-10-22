@@ -3,7 +3,8 @@
 This is an explicitly **PARTIAL** checklist: the first RFC 3501 rows for the
 connection greeting, the any-state commands (CAPABILITY, NOOP, LOGOUT), LOGIN,
 tagged completion, STARTTLS, selection-state (SELECT/EXAMINE), STATUS, STORE, SEARCH, FETCH/ENVELOPE,
-EXPUNGE, CLOSE, APPEND, COPY and encoded BODYSTRUCTURE slices, plus partial
+EXPUNGE, CLOSE, APPEND, COPY, mailbox-management (CREATE, DELETE, RENAME,
+SUBSCRIBE, UNSUBSCRIBE, LIST, LSUB) and encoded BODYSTRUCTURE slices, plus partial
 RFC 4315 UID EXPUNGE/COPYUID/APPENDUID, RFC 6154 ordinary LIST attributes,
 RFC 6851 MOVE, RFC 3691 UNSELECT, RFC 5161 ENABLE, RFC 2177 IDLE command exchanges
 and RFC 7888 non-synchronizing APPEND and command-argument refusal slices. It is not
@@ -616,3 +617,48 @@ hosts own their contents. This is not extended LIST support.
 | IMAP-SPECIALUSE-07 | RFC 6154 §2 | MUST | Extended LIST selection filters special-use mailboxes; return option reports attributes. | n/a: not supported yet; extended LIST options are unimplemented. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-SPECIALUSE-08 | RFC 6154 §3 | MAY | CREATE assigns requested special-use attributes. | n/a: optional and unsupported; no role-assignment backend API. |
 | IMAP-SPECIALUSE-09 | RFC 6154 §4 | MAY | METADATA changes special-use assignments. | n/a: optional and unsupported; no METADATA command or backend API. |
+
+## RFC 3501 §§6.3.3–6.3.9: mailbox-management commands — partial slice
+
+Folders are implicit in this engine: the `Mailbox` interface has `Folders` but
+no create, delete or rename operation and no subscription store, so a folder
+exists once the backend lists it. Rows that need that missing state are n/a and
+name the gap rather than claiming it.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-MBOX-AUTH-01 | RFC 3501 §§3, 6.3 | Normative | CREATE, DELETE, RENAME, SUBSCRIBE, UNSUBSCRIBE, LIST and LSUB are authenticated-state commands: before login each gets only a tagged NO and no credential check. | TestMailboxCommandsNeedAuthentication |
+| IMAP-CREATE-01 | RFC 3501 §§5.1, 6.3.3 | Normative | Creating INBOX, in any case, is an error answered with tagged NO; an ordinary new name gets OK. | TestInboxCannotBeCreatedOrDeleted |
+| IMAP-CREATE-02 | RFC 3501 §6.3.3 | Normative | Creating a name that refers to an extant mailbox is an error answered with tagged NO. | n/a: not supported yet; folders are implicit and CREATE acknowledges any valid name without consulting `Folders`, because there is no backend create operation to make the result durable. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-CREATE-03 | RFC 3501 §6.3.3 | SHOULD | Create any superior hierarchical names a new name needs, and treat a trailing separator as a declaration of intent to create inferiors. | n/a: not supported yet; no backend create operation, so no superior name is made. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-CREATE-04 | RFC 3501 §6.3.3 | MUST | A mailbox re-created with a deleted mailbox's name uses UIDs greater than the earlier incarnation's unless its UIDVALIDITY differs. | n/a: UID assignment belongs to the backend; the engine never assigns UIDs. |
+| IMAP-DELETE-01 | RFC 3501 §§5.1, 6.3.4 | Normative | Deleting INBOX, in any case, is an error answered with tagged NO. | TestInboxCannotBeCreatedOrDeleted |
+| IMAP-DELETE-02 | RFC 3501 §6.3.4 | Normative | Deleting a name that does not exist is an error, and DELETE permanently removes the mailbox. | n/a: not supported yet; DELETE moves the folder's messages to Trash and answers OK for an unknown name, since there is no backend delete operation. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-DELETE-03 | RFC 3501 §6.3.4 | MUST NOT | DELETE does not remove inferior hierarchical names. | TestDeleteRenameHierarchy |
+| IMAP-DELETE-04 | RFC 3501 §6.3.4 | SHOULD | A server that refuses to delete a name with inferiors says so. | n/a: the engine does not refuse such a delete, so there is nothing to indicate. |
+| IMAP-DELETE-05 | RFC 3501 §6.3.4 | MUST | Preserve the deleted mailbox's highest-used UID so a new mailbox of the same name does not reuse its UIDs unless UIDVALIDITY differs. | n/a: UID assignment belongs to the backend; see IMAP-CREATE-04. |
+| IMAP-RENAME-01 | RFC 3501 §6.3.5 | Normative | Renaming from a name that does not exist, or to a name that already exists, is an error answered with tagged NO. | n/a: not supported yet; RENAME answers OK without checking either name, since there is no backend rename operation. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-RENAME-02 | RFC 3501 §6.3.5 | MUST | Inferior hierarchical names are renamed with their superior; a near name that only shares the prefix is untouched. | TestDeleteRenameHierarchy |
+| IMAP-RENAME-03 | RFC 3501 §6.3.5 | Normative | Renaming INBOX is permitted: its messages move to the new name, INBOX stays and is left empty, and its inferiors are not renamed. | n/a: not supported yet; RENAME INBOX gets NO (see session_inbox_case_test.go). Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-RENAME-04 | RFC 3501 §6.3.5 | MUST | Preserve the old name's highest-used UID so a new mailbox of that name does not reuse its UIDs unless UIDVALIDITY differs. | n/a: UID assignment belongs to the backend; see IMAP-CREATE-04. |
+| IMAP-SUB-01 | RFC 3501 §§6.3.6, 6.3.7 | Normative | SUBSCRIBE and UNSUBSCRIBE complete with OK in the authenticated and selected states, including for a name with no mailbox (permitted, since validation is a MAY); a missing name is BAD. | TestSubscriptionCommands |
+| IMAP-SUB-02 | RFC 3501 §§6.3.6, 6.3.7, 6.3.9 | MUST NOT | Keep a subscription list: SUBSCRIBE adds a name, UNSUBSCRIBE removes it, and a subscribed name is never removed unilaterally even if its mailbox is gone. | n/a: not supported yet; there is no subscription store and LSUB reports every existing folder, so neither command changes LSUB. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-LIST-01 | RFC 3501 §6.3.8 | Normative | An empty mailbox name returns one reply with `\Noselect`, the hierarchy delimiter and an empty root name. | TestListLsubResponses |
+| IMAP-LIST-02 | RFC 3501 §6.3.8 | Normative | `*` matches zero or more characters including the delimiter; `%` matches zero or more characters except the delimiter. | TestListLsubResponses |
+| IMAP-LIST-03 | RFC 3501 §§5.1, 6.3.8 | Normative | Only names matching the pattern are returned; INBOX matches an INBOX pattern in any case. | TestListLsubResponses |
+| IMAP-LIST-04 | RFC 3501 §6.3.8 | Normative | A non-empty reference name is combined with the mailbox pattern. | n/a: not supported yet; the reference argument is ignored and only the pattern is matched. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-LSUB-01 | RFC 3501 §§6.3.9, 7.2.3 | Normative | LSUB answers with untagged LSUB replies, not LIST replies, and completes with `OK LSUB completed`. | TestListLsubResponses, TestSubscriptionCommands |
+| IMAP-LSUB-02 | RFC 3501 §6.3.9 | Normative | Under `%`, a non-subscribed superior of a subscribed inferior is returned with `\Noselect`. | n/a: every existing folder counts as subscribed, so there is no unsubscribed superior to report; depends on IMAP-SUB-02. |
+
+### Audit record
+
+- 2026-10-22: RFC 3501 §§6.3.3 CREATE, 6.3.4 DELETE, 6.3.5 RENAME, 6.3.6
+  SUBSCRIBE, 6.3.7 UNSUBSCRIBE, 6.3.8 LIST and 6.3.9 LSUB, with the §7.2.2/§7.2.3
+  LIST and LSUB response forms, read line by line. Every MUST, MUST NOT, SHOULD
+  and normative error rule found there now has a row above. Two bugs fixed: LSUB
+  answered with `* LIST` replies, and RENAME left inferior names behind.
+- Not yet audited line by line, for the next slice: §6.1 (CAPABILITY, NOOP,
+  LOGOUT beyond the existing rows), §6.2 (STARTTLS, AUTHENTICATE, LOGIN), §§6.3.1,
+  6.3.2, 6.3.10, 6.3.11, all of §6.4 (CHECK, CLOSE, EXPUNGE, SEARCH, FETCH, STORE,
+  COPY, UID), §6.5, and §7 apart from §§7.2.2–7.2.3 (status, server data, message
+  status, message data and continuation responses).

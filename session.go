@@ -412,9 +412,11 @@ func (s *Session) Handle() {
 		case "AUTHENTICATE":
 			s.handleAuthenticate(tag, args)
 		case "LIST":
-			s.handleList(tag, args)
+			s.handleList(tag, args, "LIST")
 		case "LSUB":
-			s.handleList(tag, args) // treat LSUB same as LIST
+			// Every existing folder counts as subscribed, so LSUB lists the same
+			// names, but each reply is an untagged LSUB (RFC 3501 §7.2.3).
+			s.handleList(tag, args, "LSUB")
 		case "SUBSCRIBE":
 			s.handleSubscribe(tag, args)
 		case "UNSUBSCRIBE":
@@ -672,7 +674,7 @@ func (s *Session) authenticate(tag, username, password, okMsg string) {
 	s.tagged(tag, "OK", "[CAPABILITY "+s.capabilities()+"] "+okMsg)
 }
 
-func (s *Session) handleList(tag, args string) {
+func (s *Session) handleList(tag, args, cmd string) {
 	if !s.auth.authenticated {
 		s.tagged(tag, "NO", "Not authenticated")
 		return
@@ -689,8 +691,8 @@ func (s *Session) handleList(tag, args string) {
 
 	// Empty pattern = return hierarchy delimiter only
 	if pattern == "" {
-		s.send(`* LIST (\Noselect) "/" ""`)
-		s.tagged(tag, "OK", "LIST completed")
+		s.send(`* %s (\Noselect) "/" ""`, cmd)
+		s.tagged(tag, "OK", cmd+" completed")
 		return
 	}
 
@@ -717,9 +719,9 @@ func (s *Session) handleList(tag, args string) {
 		case "Junk":
 			attrs = `\Junk`
 		}
-		s.send(`* LIST (%s) "/" %s`, attrs, encodeMailboxName(f.Name))
+		s.send(`* %s (%s) "/" %s`, cmd, attrs, encodeMailboxName(f.Name))
 	}
-	s.tagged(tag, "OK", "LIST completed")
+	s.tagged(tag, "OK", cmd+" completed")
 }
 
 // handleSubscribe implements SUBSCRIBE (RFC 3501 §6.3.6) and handleUnsubscribe
@@ -2077,10 +2079,21 @@ func (s *Session) handleRename(tag, args string) {
 		return
 	}
 
-	// Move all messages from old folder to new folder.
-	if messages, err := s.mailbox.Messages(oldName); err == nil {
-		for _, msg := range messages {
-			_ = s.mailbox.Move(msg.UID, newName)
+	// Move all messages from old folder to new folder. Inferior hierarchical
+	// names are renamed with it (RFC 3501 §6.3.5): "old/x" becomes "new/x".
+	renames := map[string]string{oldName: newName}
+	if folders, err := s.mailbox.Folders(); err == nil {
+		for _, f := range folders {
+			if rest, ok := strings.CutPrefix(f.Name, oldName+"/"); ok {
+				renames[f.Name] = newName + "/" + rest
+			}
+		}
+	}
+	for from, to := range renames {
+		if messages, err := s.mailbox.Messages(from); err == nil {
+			for _, msg := range messages {
+				_ = s.mailbox.Move(msg.UID, to)
+			}
 		}
 	}
 

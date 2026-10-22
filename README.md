@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 238/266 mapped](https://img.shields.io/badge/partial%20checklist-238%2F266%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 248/288 mapped](https://img.shields.io/badge/partial%20checklist-248%2F288%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -175,8 +175,12 @@ extra arguments while preserving the selection.
 
 ## RFC conformance
 
-The current checklist has 266 requirements: 238 mapped to wire tests and 28
-explicit gaps or backend/deployment responsibilities. Sixteen new rows cover
+The current checklist has 288 requirements: 248 mapped to wire tests and 40
+explicit gaps or backend/deployment responsibilities. Twenty-two rows come from a
+line-by-line pass over RFC 3501 §§6.3.3–6.3.9 (CREATE, DELETE, RENAME, SUBSCRIBE,
+UNSUBSCRIBE, LIST, LSUB). Folders are implicit, so existence errors, permanent
+DELETE, subscription storage, RENAME INBOX and LIST reference names are recorded
+gaps. Sixteen earlier rows cover
 APPENDUID and ordinary LIST special-use attributes, including explicit boundaries
 for unsupported extended LIST and role assignment. Sent, Drafts, Trash and Junk
 roles are inferred from those exact folder names; the host owns their contents.
