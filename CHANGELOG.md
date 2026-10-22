@@ -6,8 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- LSUB now answers with untagged `LSUB` replies and `OK LSUB completed`; it
+  used to send `LIST` replies (RFC 3501 §7.2.3).
+- RENAME now carries inferior hierarchical names with the renamed folder, so
+  `RENAME Work Play` also moves `Work/Q1` to `Play/Q1` (RFC 3501 §6.3.5).
+
 ### Added
 
+- Twenty-two RFC 3501 §§6.3.3–6.3.9 checklist rows from a dated line-by-line
+  audit of CREATE, DELETE, RENAME, SUBSCRIBE, UNSUBSCRIBE, LIST and LSUB: ten
+  mapped to five new wire tests, twelve explicit gaps from the implicit-folder
+  model. Partial checklist is 248/288 mapped.
 - Sixteen RFC 4315/6154 checklist rows for APPENDUID and ordinary LIST
   special-use attributes: eleven mapped to seven new public-Session wire tests,
   five explicit API/extension gaps. Partial checklist is 238/266 mapped.
