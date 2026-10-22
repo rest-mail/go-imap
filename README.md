@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 276/330 mapped](https://img.shields.io/badge/partial%20checklist-276%2F330%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 277/331 mapped](https://img.shields.io/badge/partial%20checklist-277%2F331%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -175,8 +175,9 @@ extra arguments while preserving the selection.
 
 ## RFC conformance
 
-The current checklist has 330 requirements: 276 mapped to wire tests and 54
-explicit gaps or backend/deployment responsibilities. Twenty rows come from a
+The current checklist has 331 requirements: 277 mapped to wire tests and 54
+explicit gaps or backend/deployment responsibilities. A connection the `Limiter`
+refuses is greeted with an untagged BYE (RFC 3501 §7.1.5) before it closes. Twenty rows come from a
 line-by-line pass over RFC 3501 §6.5 and §7 server responses (status responses
 and codes, BYE, continuation, the EXPUNGE timing rule). Twenty-two rows come from a
 line-by-line pass over RFC 3501 §§6.1, 6.2 (AUTHENTICATE has its own rows),

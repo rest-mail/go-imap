@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"sync"
+	"time"
 )
 
 // Server listens for IMAP connections and spawns a session handler per client.
@@ -121,7 +123,7 @@ func (s *Server) acceptLoop(listener net.Listener, implicitTLS bool) {
 		ip := extractIP(conn.RemoteAddr().String())
 		if !s.limiter.Accept(ip) {
 			slog.Warn("imap: connection rejected by limiter", "ip", ip)
-			_ = conn.Close()
+			go refuseConn(conn)
 			continue
 		}
 
@@ -145,6 +147,21 @@ func (s *Server) acceptLoop(listener net.Listener, implicitTLS bool) {
 			session.Handle()
 		}()
 	}
+}
+
+// refuseByeGrace bounds how long a refused connection may hold its goroutine
+// while the BYE greeting is written (and, on an implicit-TLS listener, while
+// the handshake that write triggers completes).
+var refuseByeGrace = 5 * time.Second
+
+// refuseConn greets a connection the [Limiter] turned away with an untagged BYE,
+// the greeting RFC 3501 §7.1.5 defines for a server unwilling to accept a
+// connection from this client, then closes it. It runs off the accept loop so a
+// slow or silent peer (or a stalled TLS handshake) cannot delay other accepts.
+func refuseConn(conn net.Conn) {
+	defer func() { _ = conn.Close() }()
+	_ = conn.SetDeadline(time.Now().Add(refuseByeGrace))
+	_, _ = io.WriteString(conn, "* BYE Connection refused, try again later\r\n")
 }
 
 // trackConn registers conn as in-flight and reserves its slot in the wait
