@@ -15,6 +15,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   fabricated nested structures and decoded search matches. Raw FETCH and the
   original encoding string are preserved.
 
+- A multipart Content-Type without a boundary parameter, which RFC 2046
+  §5.1.1 requires, now takes the RFC 2045 §5.2 default type (text/plain;
+  charset=us-ascii, or message/rfc822 inside multipart/digest) in BODY,
+  BODYSTRUCTURE, numeric FETCH sections and SEARCH. BODYSTRUCTURE used to
+  report it as a leaf "MULTIPART" body, which no client can open.
 - A MESSAGE/RFC822 entity with a Content-Transfer-Encoding other than 7bit,
   8bit or binary, which RFC 2046 §5.2.1 prohibits, is now one opaque
   APPLICATION/OCTET-STREAM leaf in BODY, BODYSTRUCTURE and numeric FETCH
