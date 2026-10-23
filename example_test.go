@@ -91,7 +91,7 @@ func Example() {
 	_, _ = readReply(r, "a3")
 
 	// Output:
-	// capabilities: IMAP4rev1 IDLE MOVE QUOTA UNSELECT ENABLE AUTH=PLAIN
+	// capabilities: IMAP4rev1 IDLE MOVE QUOTA UNSELECT ENABLE SPECIAL-USE AUTH=PLAIN
 	// INBOX EXISTS: 1
 }
 

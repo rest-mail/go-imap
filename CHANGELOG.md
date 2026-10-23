@@ -18,6 +18,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     fields is NO until the client has enabled UTF-8.
   Backends without `UTF8Mailbox` are unchanged. Checklist rows IMAP-UTF8-01 to
   -05.
+- RFC 6154 SPECIAL-USE: the capability is advertised, and LIST takes the
+  `(SPECIAL-USE)` selection option, which lists only the folders with a role,
+  and the `RETURN (SPECIAL-USE)` return option. Any other extended-LIST option
+  is BAD. Checklist row IMAP-SPECIALUSE-07.
+
+### Changed
+
+- **Breaking:** a folder's special-use role comes from the backend, on the new
+  `Folder.SpecialUse` (`SpecialUseSent`, `SpecialUseJunk`, `SpecialUseArchive`
+  and the rest of RFC 6154 §2), never from its name. A folder named Sent, Drafts,
+  Trash or Junk no longer gets an attribute by name; a backend sets the role it
+  knows, so a Spam folder can be `\Junk` and an Archive folder `\Archive`.
 
 ### Fixed
 

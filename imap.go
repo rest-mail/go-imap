@@ -109,6 +109,30 @@ type Message struct {
 // Folder is one mailbox folder reported by LIST/LSUB.
 type Folder struct {
 	Name string
+	// SpecialUse is the folder's role (RFC 6154 §2): one of the SpecialUse
+	// attributes, or empty for an ordinary folder. The store says which folder
+	// holds what; the name alone never does.
+	SpecialUse string
+}
+
+// The special-use attributes of RFC 6154 §2, for [Folder.SpecialUse]. LIST
+// reports the one a folder has, and LIST (SPECIAL-USE) lists only the folders
+// that have one.
+const (
+	SpecialUseAll     = `\All`
+	SpecialUseArchive = `\Archive`
+	SpecialUseDrafts  = `\Drafts`
+	SpecialUseFlagged = `\Flagged`
+	SpecialUseJunk    = `\Junk`
+	SpecialUseSent    = `\Sent`
+	SpecialUseTrash   = `\Trash`
+)
+
+// specialUses is every attribute [Folder.SpecialUse] may hold; anything else is
+// not reported.
+var specialUses = map[string]bool{
+	SpecialUseAll: true, SpecialUseArchive: true, SpecialUseDrafts: true, SpecialUseFlagged: true,
+	SpecialUseJunk: true, SpecialUseSent: true, SpecialUseTrash: true,
 }
 
 // FlagUpdate is a change to a message's persistent flags. A nil field leaves that

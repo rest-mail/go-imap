@@ -26,7 +26,9 @@ func (s *Session) loginDisabled() bool {
 // included only once the concrete [Mailbox] is known (post-authentication) and
 // only when it implements them, so the advertised list never over-promises.
 func (s *Session) capabilities() string {
-	caps := []string{"IMAP4rev1", "IDLE", "MOVE", "QUOTA", "UNSELECT", "ENABLE"}
+	// SPECIAL-USE (RFC 6154): LIST reports each folder's role, and takes the
+	// SPECIAL-USE selection and return options.
+	caps := []string{"IMAP4rev1", "IDLE", "MOVE", "QUOTA", "UNSELECT", "ENABLE", "SPECIAL-USE"}
 	if _, ok := s.mailbox.(UIDPlusMailbox); ok {
 		caps = append(caps, "UIDPLUS")
 	}
