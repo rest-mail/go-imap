@@ -729,13 +729,15 @@ func parseAstring(s string) (val, rest string, ok bool) {
 // validAppendQuotedMailbox checks RFC 3501 §9's quoted grammar before APPEND
 // decodes the mailbox with parseAstring. Only DQUOTE and backslash may be
 // escaped; CHAR excludes NUL and 8-bit octets, and TEXT-CHAR excludes CR/LF.
-func validAppendQuotedMailbox(token string) bool {
+// With utf8 set, RFC 6855 §3's uQUOTED-CHAR also allows 8-bit octets, which
+// the caller has already checked are well-formed UTF-8.
+func validAppendQuotedMailbox(token string, utf8 bool) bool {
 	if len(token) < 2 || token[0] != '"' || token[len(token)-1] != '"' {
 		return false
 	}
 	for i := 1; i < len(token)-1; i++ {
 		c := token[i]
-		if c == 0 || c == '\r' || c == '\n' || c >= 0x80 {
+		if c == 0 || c == '\r' || c == '\n' || (c >= 0x80 && !utf8) {
 			return false
 		}
 		switch c {

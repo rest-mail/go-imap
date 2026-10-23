@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 285/333 mapped](https://img.shields.io/badge/partial%20checklist-285%2F333%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 290/338 mapped](https://img.shields.io/badge/partial%20checklist-290%2F338%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -48,7 +48,9 @@ what your type actually implements, so it never over-promises.
   implements them.
 - Optional `UTF8=ACCEPT` (RFC 6855) via `UTF8Mailbox`: advertised after
   login and switched on with `ENABLE UTF8=ACCEPT`, so the backend can serve
-  raw UTF-8 headers (RFC 6532) instead of a downgraded form.
+  raw UTF-8 headers (RFC 6532) instead of a downgraded form. Quoted-strings
+  take UTF-8, mailbox names are held to Net-Unicode, and APPEND takes the
+  `UTF8 (~{n})` data item.
 - Pluggable per-IP `Limiter` for connection caps and auth-failure bans
   (`NopLimiter` for none).
 - Zero external dependencies.
@@ -175,8 +177,12 @@ extra arguments while preserving the selection.
 
 ## RFC conformance
 
-The current checklist has 333 requirements: 285 mapped to wire tests and 48
-explicit gaps or backend/deployment responsibilities. A backend that returns
+The current checklist has 338 requirements: 290 mapped to wire tests and 48
+explicit gaps or backend/deployment responsibilities. Unknown MIME transfer
+encodings override Content-Type as application/octet-stream consistently in
+BODYSTRUCTURE, section FETCH and SEARCH; stored headers and octets remain
+retrievable without interpreting nested content or applying a declared charset.
+A backend that returns
 `ErrNoSuchMailbox` for a missing destination makes APPEND, COPY and MOVE answer
 `NO [TRYCREATE]`; other backend errors stay a plain NO. A connection the `Limiter`
 refuses is greeted with an untagged BYE (RFC 3501 §7.1.5) before it closes. Twenty rows come from a
