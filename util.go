@@ -1378,11 +1378,7 @@ func partStructure(header textproto.MIMEHeader, body []byte, extension bool, def
 		return singlePartStructure("application", "octet-stream", nil, header, body, extension, depth)
 	}
 	mediatype, params, err := parseContentType(header.Get("Content-Type"))
-	// ParseMediaType also accepts a bare token (for Content-Disposition).
-	// Content-Type requires type/subtype, with no default subtype (RFC 2045
-	// §5.1). Treat a missing subtype like other invalid Content-Type fields
-	// instead of inventing, for example, application/plain.
-	if err != nil || !strings.Contains(mediatype, "/") {
+	if !usableContentType(mediatype, params, err) {
 		mediatype, params = defaultType, map[string]string{}
 	}
 	maintype, subtype := mediatype, ""
