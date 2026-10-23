@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- RFC 6855 UTF8=ACCEPT, for a backend that implements `UTF8Mailbox`:
+  - quoted-strings take UTF-8, and typed 8-bit text that is not UTF-8 is
+    BAD;
+  - CREATE and RENAME refuse mailbox names with controls, DELETE or the
+    Unicode line and paragraph separators;
+  - SEARCH with a CHARSET is BAD once UTF-8 is enabled;
+  - APPEND takes the message as `UTF8 (~{n})`, and a message with 8-bit header
+    fields is NO until the client has enabled UTF-8.
+  Backends without `UTF8Mailbox` are unchanged. Checklist rows IMAP-UTF8-01 to
+  -05.
+
 ### Fixed
 
 - An unknown MIME Content-Transfer-Encoding now overrides Content-Type as

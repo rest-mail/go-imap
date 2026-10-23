@@ -206,9 +206,16 @@ func (s *Session) readLiteralArgs(tag, args string) (assembled string, ok, close
 		}
 		return "", false, fatal
 	}
-	total := 0 // aggregate literal octets across this command
+	total := 0    // aggregate literal octets across this command
+	typed := args // what the client typed, before any literal is spliced in
 	for {
 		prefix, size, sync, isLit := splitTrailingLiteral(args)
+		// A UTF8=ACCEPT server refuses 8-bit text that is not UTF-8 (RFC 6855
+		// §3). Literal octets are exempt: only the typed text is checked, before
+		// a synchronizing literal's continuation is sent.
+		if s.utf8Accept() && !validCommandUTF8(typed) {
+			return reject("Invalid UTF-8 in command", isLit && !sync)
+		}
 		if !isLit {
 			return args, true, false // no (further) trailing literal
 		}
@@ -239,6 +246,7 @@ func (s *Session) readLiteralArgs(tag, args string) (assembled string, ok, close
 			return reject(fmt.Sprintf("Command line too long (limit %d bytes)", MaxCommandLineLength), true)
 		}
 
+		typed = cont
 		args = prefix + quoteLiteral(buf) + cont
 		if len(args) > MaxCommandLineLength {
 			// Only the continuation can introduce another unread literal. A
@@ -1250,6 +1258,11 @@ func (s *Session) parseSearchCriteria(args string) ([]searchCriterion, *searchEr
 	// are encoded in. Only US-ASCII and UTF-8 are supported; any other name is a
 	// tagged NO [BADCHARSET (...)] rather than being ignored.
 	if len(tokens) > 0 && strings.ToUpper(tokens[0]) == "CHARSET" {
+		// Once UTF-8 is enabled every string is UTF-8, so a charset label
+		// conflicts with it and is BAD (RFC 6855 §3).
+		if s.utf8 {
+			return nil, badSearch("CHARSET is not allowed after ENABLE UTF8=ACCEPT")
+		}
 		if len(tokens) < 2 {
 			return nil, badSearch("CHARSET requires an argument")
 		}
@@ -2065,6 +2078,12 @@ func (s *Session) handleCreate(tag, args string) {
 		s.tagged(tag, "NO", "Invalid folder name")
 		return
 	}
+	// A UTF8=ACCEPT server's mailbox names are Net-Unicode without controls or
+	// line and paragraph separators (RFC 6855 §3).
+	if s.utf8Accept() && !validUTF8MailboxName(folder) {
+		s.tagged(tag, "NO", "Invalid folder name")
+		return
+	}
 
 	// Folders are implicit — they exist once a message is moved into them.
 	// CREATE just validates and acknowledges.
@@ -2123,6 +2142,11 @@ func (s *Session) handleRename(tag, args string) {
 		s.tagged(tag, "BAD", "RENAME requires old and new name")
 		return
 	}
+	// The new name follows CREATE's UTF8=ACCEPT rules (RFC 6855 §3).
+	if s.utf8Accept() && !validUTF8MailboxName(newName) {
+		s.tagged(tag, "NO", "Invalid folder name")
+		return
+	}
 	// "INBOX" is case-insensitive (RFC 3501 §5.1): fold the source name so any-case
 	// spelling matches the standard-folder guard below rather than bypassing it.
 	oldName = canonicalizeInbox(oldName)
@@ -2172,6 +2196,13 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 		s.tagged(tag, "NO", "Not authenticated")
 		return
 	}
+	// The mailbox name may be a UTF-8 quoted-string on a UTF8=ACCEPT server;
+	// any other 8-bit octets in the typed line are BAD (RFC 6855 §3).
+	utf8OK := s.utf8Accept()
+	if utf8OK && !validCommandUTF8(args) {
+		s.tagged(tag, "BAD", "Invalid UTF-8 in command")
+		return
+	}
 
 	// APPEND mailbox [flag-list] [date-time] literal  (RFC 3501 §6.3.11). The
 	// mailbox is an astring: an atom (unquoted), a quoted-string, or a literal.
@@ -2215,6 +2246,10 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 		}
 		_, _, synchronizing, literal = splitTrailingLiteral(cont)
 		rejectNonSync = literal && !synchronizing
+		if utf8OK && !validCommandUTF8(cont) {
+			s.tagged(tag, "BAD", "Invalid UTF-8 in command")
+			return
+		}
 		// A literal is CHAR8, which excludes NUL (RFC 3501 §9).
 		if bytes.IndexByte(name, 0) >= 0 {
 			s.tagged(tag, "BAD", "Invalid mailbox name")
@@ -2229,7 +2264,7 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 		// require a string; ']' remains legal in an unquoted astring.
 		mailboxOK := validAstring(token)
 		if strings.HasPrefix(token, `"`) {
-			mailboxOK = validAppendQuotedMailbox(token)
+			mailboxOK = validAppendQuotedMailbox(token, utf8OK)
 		}
 		if !ok || !mailboxOK {
 			s.tagged(tag, "BAD", "Invalid mailbox name")
@@ -2318,9 +2353,12 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 
 	// The terminal argument must be exactly one literal marker, with no
 	// ignored arguments before it or suffix after it. Reuse the unsigned
-	// literal grammar used by ordinary command arguments.
+	// literal grammar used by ordinary command arguments. A UTF8=ACCEPT server
+	// also takes the message as RFC 6855 §4's utf8-literal, "UTF8 (" literal8
+	// ")", whose literal8 is the same marker after a "~" (RFC 4466 §2.2).
 	prefix, size, sync, isLiteral := splitTrailingLiteral(rest)
-	if !isLiteral || prefix != "" {
+	utf8Data := isLiteral && utf8OK && strings.EqualFold(prefix, "UTF8 (~")
+	if !isLiteral || (prefix != "" && !utf8Data) {
 		s.tagged(tag, "BAD", "Invalid message literal")
 		return
 	}
@@ -2348,12 +2386,17 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 
 	// The command's CRLF is separate from the literal's counted octets. Do
 	// not discard arbitrary trailing text or ignore EOF: neither completes a
-	// valid APPEND, and a buffered next command must remain untouched.
-	var terminator [2]byte
-	if _, err := io.ReadFull(s.reader, terminator[:]); err != nil {
+	// valid APPEND, and a buffered next command must remain untouched. A
+	// utf8-literal closes its parenthesis first.
+	want := "\r\n"
+	if utf8Data {
+		want = ")\r\n"
+	}
+	terminator := make([]byte, len(want))
+	if _, err := io.ReadFull(s.reader, terminator); err != nil {
 		return true
 	}
-	if string(terminator[:]) != "\r\n" {
+	if string(terminator) != want {
 		s.tagged(tag, "BAD", "Expected CRLF after message literal")
 		return true
 	}
@@ -2362,6 +2405,12 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 	// command boundary intact, including for a non-synchronizing literal.
 	if bytes.IndexByte(data, 0) >= 0 {
 		s.tagged(tag, "BAD", "NUL in message literal")
+		return false
+	}
+	// Until the client has enabled UTF-8, a UTF8=ACCEPT server must refuse a
+	// message whose header fields carry 8-bit octets (RFC 6855 §4).
+	if utf8OK && !s.utf8 && headerHas8bit(data) {
+		s.tagged(tag, "NO", "8-bit header fields need ENABLE UTF8=ACCEPT")
 		return false
 	}
 

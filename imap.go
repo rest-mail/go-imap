@@ -206,6 +206,13 @@ type UIDPlusMailbox interface {
 // After EnableUTF8 returns nil the client accepts raw UTF-8 header fields
 // ([RFC 6532]), so the backend should stop downgrading them for this session.
 //
+// Implementing it also changes the grammar for the whole session, enabled or
+// not: quoted-strings may carry UTF-8 and 8-bit text that is not UTF-8 is BAD;
+// CREATE and RENAME refuse mailbox names with controls or line and paragraph
+// separators; APPEND takes the message as "UTF8 (" literal8 ")" and, until
+// the client enables UTF-8, refuses one with 8-bit header fields. Once enabled,
+// SEARCH with a CHARSET is BAD.
+//
 // [RFC 6855]: https://www.rfc-editor.org/rfc/rfc6855
 // [RFC 6532]: https://www.rfc-editor.org/rfc/rfc6532
 type UTF8Mailbox interface {

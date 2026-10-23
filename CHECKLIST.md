@@ -612,6 +612,26 @@ its enable callback, not a complete RFC 6855 audit. IDLE polling notifications,
 concurrent mailbox changes, timeout policy, RFC 9051 IMAP4rev2 differences and
 the remaining core/extension requirements still need a complete inventory.
 
+## RFC 6855: UTF8=ACCEPT — partial slice
+
+These rows apply to a session whose backend implements `UTF8Mailbox`, so the
+server advertises UTF8=ACCEPT ([RFC 6855](https://www.rfc-editor.org/rfc/rfc6855));
+ENABLE itself is IMAP-ENABLE-01 to -06. A backend without it keeps RFC 3501
+behaviour. Mailbox names in responses stay literals when they carry 8-bit
+octets, which RFC 6855 §3 permits in either mode; sending them as UTF-8
+quoted-strings after ENABLE is a MAY left undone. NFC normalisation of mailbox
+names (RFC 5198 §2, a SHOULD) is the backend's: this package has no Unicode
+normalisation tables. UTF8=ONLY, CATENATE and downgrading (§§6–7) are not
+implemented.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-UTF8-01 | RFC 6855 §3 | MUST | Take UTF-8 in quoted-strings and answer BAD to typed 8-bit octet sequences that are not well-formed UTF-8 (bare, truncated, surrogate, overlong), before a synchronizing literal's continuation; literal octets are exempt, and a backend without UTF8=ACCEPT is unchanged. | TestUTF8QuotedStrings |
+| IMAP-UTF8-02 | RFC 6855 §3 | MUST | CREATE and RENAME refuse, with NO, mailbox names that are not UTF-8 or contain C0 or C1 controls, DELETE, LINE SEPARATOR or PARAGRAPH SEPARATOR, quoted or literal, and accept other UTF-8 names. | TestUTF8MailboxNames |
+| IMAP-UTF8-03 | RFC 6855 §3 | SHOULD | After ENABLE UTF8=ACCEPT, SEARCH and UID SEARCH with a CHARSET are BAD; before it, CHARSET is accepted as before. | TestUTF8SearchCharset |
+| IMAP-UTF8-04 | RFC 6855 §4; RFC 4466 §2.2 | Normative | APPEND takes the message as "UTF8 (" literal8 ")", synchronizing or not, into a UTF-8 quoted mailbox; a missing ")" is BAD before the backend, and a backend without UTF8=ACCEPT refuses the data item with BAD. | TestUTF8AppendDataItem |
+| IMAP-UTF8-05 | RFC 6855 §4 | MUST | Before ENABLE UTF8=ACCEPT, APPEND of a message with an 8-bit octet in its header fields is NO without reaching the backend, through a plain literal or the UTF8 data item; 8-bit body text is accepted, and after ENABLE the message is. | TestUTF8AppendBeforeEnable |
+
 ## RFC 4315: APPENDUID — partial response-metadata slice
 
 [RFC 4315](https://www.rfc-editor.org/rfc/rfc4315) §3 supplies the
