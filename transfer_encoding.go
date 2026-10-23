@@ -2,6 +2,17 @@ package imap
 
 import "strings"
 
+// knownTransferEncoding reports whether we can interpret this entity's body.
+// RFC 2045 §6.4 requires an unrecognized encoding to override Content-Type
+// with application/octet-stream, including for composite entities.
+func knownTransferEncoding(value string) bool {
+	switch transferEncoding(value) {
+	case "7BIT", "8BIT", "BINARY", "BASE64", "QUOTED-PRINTABLE":
+		return true
+	}
+	return false
+}
+
 // transferEncoding removes lexical whitespace/comments around the single MIME
 // encoding token (RFC 2045 §§1, 6.1; RFC 822 §3.4). It describes the stored
 // encoding without decoding the body. Malformed fields retain the historical

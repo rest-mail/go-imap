@@ -65,3 +65,13 @@ execution-bounded fuzz runs (see golang/go#75804) until the shared producer can
 preserve both. Its fixed 95..100% total-validation rule is reproduced locally
 with offline fixtures, including pipeline failure propagation. Coverage and
 checklist badges remain a later slice after the gate is green.
+
+## Unknown transfer encodings
+
+Checked IMAP-CTE-04 wire proofs exercise RFC 2045 §6.4's opaque type override
+for absent, malformed, text, application, multipart and message Content-Types,
+including multipart/digest defaults and a valid sibling. They check both body
+structure forms, raw and numeric section octets, suppression of nested sections,
+and SEARCH without charset conversion or recursive decoding. Existing encoding
+string and malformed-value tests now expect application/octet-stream for unknown
+encodings. The gate remains 95%; a fresh measured total is left to CI.

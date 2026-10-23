@@ -1372,6 +1372,9 @@ func uncommentMIME(value string) (string, error) {
 // as an application/octet-stream leaf, as mimeNode.mediaType does for sections
 // and SEARCH.
 func partStructure(header textproto.MIMEHeader, body []byte, extension bool, defaultType string, depth int) string {
+	if !knownTransferEncoding(header.Get("Content-Transfer-Encoding")) {
+		return singlePartStructure("application", "octet-stream", nil, header, body, extension, depth)
+	}
 	mediatype, params, err := parseContentType(header.Get("Content-Type"))
 	if !usableContentType(mediatype, params, err) {
 		mediatype, params = defaultType, map[string]string{}

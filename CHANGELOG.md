@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- An unknown MIME Content-Transfer-Encoding now overrides Content-Type as
+  application/octet-stream in BODY/BODYSTRUCTURE, numeric FETCH sections and
+  SEARCH (RFC 2045 §6.4). Previously a declared text charset could transform
+  undecodable octets, and declared multipart/message types could expose
+  fabricated nested structures and decoded search matches. Raw FETCH and the
+  original encoding string are preserved.
+
 - A multipart Content-Type without a boundary parameter, which RFC 2046
   §5.1.1 requires, now takes the RFC 2045 §5.2 default type (text/plain;
   charset=us-ascii, or message/rfc822 inside multipart/digest) in BODY,
