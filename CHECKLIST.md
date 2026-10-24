@@ -634,6 +634,21 @@ offered, and names starting with "#" are ordinary names.
 | IMAP-MUTF7-04 | RFC 3501 §5.1; RFC 6855 §3 | SHOULD | Without UTF8=ACCEPT, CREATE refuses an 8-bit name with NO and no command finds a folder by one; a UTF8=ACCEPT server takes a UTF-8 name before ENABLE but still writes names in modified UTF-7 until then. | TestEightBitNamesBeforeUTF8 |
 | IMAP-MUTF7-05 | RFC 6855 §3 | MUST | After ENABLE UTF8=ACCEPT, names travel as UTF-8 both ways: LIST writes the store's names as they are and command names reach the store unchanged, with no modified UTF-7 decoding. | TestUTF8AcceptNamesAreUTF8 |
 
+## RFC 3501 §§5.2–5.5: updates, flow control, autologout and pipelining
+
+The server learns of other sources' changes by re-reading the selected mailbox:
+on NOOP and CHECK, and on each poll while a client idles (IMAP-STORE-12). FETCH,
+STORE and SEARCH never send EXPUNGE (IMAP-RESP-12), so a client may pipeline
+them by sequence number as §5.5 allows.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-UPDATE-01 | RFC 3501 §§5.2, 6.1.2, 7.4.1 | MUST | NOOP re-reads the selected mailbox and reports another source's expunge (EXPUNGE), flag change (FETCH FLAGS, a SHOULD) and new mail (EXISTS); an expunge alone is never an EXISTS that reduces the count, and no change or a failed read reports nothing. | TestNoopReportsOtherSourcesChanges |
+| IMAP-UPDATE-02 | RFC 3501 §6.4.1 | Normative | With no housekeeping to do, CHECK is equivalent to NOOP and reports the same changes, under SELECT and EXAMINE. | TestCheckReportsLikeNoop |
+| IMAP-UPDATE-03 | RFC 3501 §5.3 | MUST | No untagged response is sent while no command is in progress, even after an idle poll interval, so §5.3's flow-control rule has no unsolicited write to govern; the changes wait for the next command. | TestNoUntaggedResponseWithoutCommand |
+| IMAP-UPDATE-04 | RFC 3501 §5.5 | MUST | Commands sent without waiting run to completion in the order given: FETCH + STORE + FETCH + SEARCH + CHECK of the same message answer in order, each seeing the one before. | TestPipelinedCommandsRunInOrder |
+| IMAP-AUTOLOGOUT-01 | RFC 3501 §5.4 | MUST | An inactivity autologout timer lasts at least 30 minutes, and any command resets it. | n/a: the timer is internal and not settable through Session, so the root package proves it: TestAutologoutIsAtLeastThirtyMinutes and TestSession_CommandActivityResetsAutologout. |
+
 ## RFC 6855: UTF8=ACCEPT — partial slice
 
 These rows apply to a session whose backend implements `UTF8Mailbox`, so the
@@ -827,8 +842,15 @@ inventory is complete.
   UTF-7 name reached the store undecoded. New rows IMAP-MUTF7-01..05. INBOX is
   IMAP-CREATE-01, IMAP-DELETE-01, IMAP-LIST-03 and IMAP-STATUS-02; client-only
   duties (avoid 8-bit names, atom-specials, wildcards) are not server rules.
-- Every command section (§6) and response section (§7) has now been read line
-  by line, and §5.1. Not yet audited line by line, for the next slices:
-  §§5.2–5.5 (unsolicited updates, flow control, autologout, pipelining), §§2–4
-  (the message model, states and data formats), §9's formal syntax beyond the
+- 2026-10-24: RFC 3501 §§5.2–5.5 read line by line. One deviation fixed: NOOP,
+  "the preferred method" to poll (§6.1.2), and CHECK, "equivalent to NOOP"
+  without housekeeping (§6.4.1), never re-read the mailbox, so a client that
+  polls rather than idles saw no new mail, expunge or flag change until it
+  selected again (§5.2 MUST/SHOULD). New rows IMAP-UPDATE-01..04 and
+  IMAP-AUTOLOGOUT-01; no EXPUNGE during FETCH, STORE or SEARCH was already
+  IMAP-RESP-12. Client duties (record size updates, do not pipeline ambiguous
+  commands) are not server rules.
+- Every command section (§6), response section (§7) and §5 has now been read
+  line by line. Not yet audited line by line, for the next slices: §§2–4 (the
+  message model, states and data formats), §9's formal syntax beyond the
   grammar rows above, then RFC 9051 (IMAP4rev2).

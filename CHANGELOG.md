@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- NOOP and CHECK never re-read the selected mailbox, so a client that polls
+  with NOOP rather than IDLE saw no new mail, expunge or flag change until it
+  selected the mailbox again. RFC 3501 calls NOOP the preferred way to poll
+  (§6.1.2), CHECK equivalent to NOOP without housekeeping (§6.4.1), and
+  requires size updates (§5.2). Both now report what other sources changed:
+  EXPUNGE, FETCH FLAGS and EXISTS, as an idling session already did.
+  Checklist rows IMAP-UPDATE-01 to -04 and IMAP-AUTOLOGOUT-01.
+
 ### Changed
 
 - **Breaking:** mailbox names are modified UTF-7 on the wire (RFC 3501

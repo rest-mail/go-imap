@@ -132,7 +132,8 @@ func TestSelectionLiteralMailbox(t *testing.T) {
 					}
 					requireLine(t, lines, "* 1 EXISTS")
 					requireOK(t, c.line(), "N1")
-					if !reflect.DeepEqual(box.reads, []string{want}) || !reflect.DeepEqual(box.validity, []string{want}) {
+					// SELECT reads the mailbox, and the pipelined NOOP polls it again.
+					if !reflect.DeepEqual(box.reads, []string{want, want}) || !reflect.DeepEqual(box.validity, []string{want}) {
 						t.Fatalf("literal decoding: reads=%q validity=%q, want %q", box.reads, box.validity, want)
 					}
 					box.requireNoWrites(t)

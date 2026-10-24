@@ -150,3 +150,12 @@ func readUntilTag(t *testing.T, conn net.Conn, cr *bufio.Reader, tag string) str
 		}
 	}
 }
+
+// TestAutologoutIsAtLeastThirtyMinutes: "If a server has an inactivity
+// autologout timer, the duration of that timer MUST be at least 30 minutes"
+// (RFC 3501 §5.4).
+func TestAutologoutIsAtLeastThirtyMinutes(t *testing.T) {
+	if autologoutTimeout < 30*time.Minute {
+		t.Fatalf("autologout after %v, want at least 30 minutes", autologoutTimeout)
+	}
+}
