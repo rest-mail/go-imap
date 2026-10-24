@@ -14,6 +14,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   rows IMAP-STORE-11 (FLAGS leaves \Recent alone) and IMAP-STORE-12 (another
   source's flag change is reported whatever .SILENT says) complete the RFC 3501
   §6.4.6 STORE audit.
+- SEARCH NEW and OLD, which were refused as unknown keys, now answer what
+  their RFC 3501 §6.4.4 equivalents answer: (RECENT UNSEEN) and NOT RECENT.
+  Checklist row IMAP-SEARCH-27.
+
+### Fixed
+
+- SEARCH FROM matched only the sender's address; it now matches the envelope's
+  FROM field, the decoded display name as well as the address (RFC 3501
+  §6.4.4). Checklist row IMAP-SEARCH-26.
 - RFC 6855 UTF8=ACCEPT, for a backend that implements `UTF8Mailbox`:
   - quoted-strings take UTF-8, and typed 8-bit text that is not UTF-8 is
     BAD;

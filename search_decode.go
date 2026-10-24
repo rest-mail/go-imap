@@ -115,3 +115,14 @@ func latin1ToUTF8(b []byte) string {
 	}
 	return string(r)
 }
+
+// searchMailbox is an envelope address as SEARCH FROM compares it: the decoded
+// display name and the address, written "Name <address>", or the address alone
+// when there is no name.
+func searchMailbox(a Address) string {
+	name := strings.TrimSpace(decodeSearchHeader(a.Name))
+	if name == "" {
+		return a.Email
+	}
+	return name + " <" + a.Email + ">"
+}

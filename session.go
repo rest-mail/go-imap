@@ -1461,6 +1461,13 @@ func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriter
 		// set as RECENT in SELECT/EXAMINE and STATUS; SEARCH RECENT matches that
 		// same set (RFC 3501 §6.4.4).
 		return searchCriterion{kind: "recent"}, idx + 1, nil
+	case "NEW":
+		// NEW "is functionally equivalent to (RECENT UNSEEN)" and OLD to "NOT
+		// RECENT" (RFC 3501 §6.4.4), so both follow whatever RECENT matches.
+		recent, unseen := searchCriterion{kind: "recent"}, searchCriterion{kind: "unseen"}
+		return searchCriterion{kind: "and", sub: []searchCriterion{recent, unseen}}, idx + 1, nil
+	case "OLD":
+		return searchCriterion{kind: "not", sub: []searchCriterion{{kind: "recent"}}}, idx + 1, nil
 	case "KEYWORD", "UNKEYWORD":
 		// No keyword can be stored (PERMANENTFLAGS lists no \*), so KEYWORD
 		// matches nothing and UNKEYWORD matches every message (RFC 3501 §6.4.4).
@@ -1687,7 +1694,9 @@ func (s *Session) matchOne(msg Message, c searchCriterion, loadRaw func() (strin
 		}
 		return msg.Size >= 0 && uint64(msg.Size) < c.size
 	case "from":
-		return strings.Contains(strings.ToLower(msg.From.Email), strings.ToLower(c.value))
+		// FROM matches the envelope's FROM field (RFC 3501 §6.4.4): the
+		// sender's display name as well as the address, as one mailbox.
+		return strings.Contains(strings.ToLower(searchMailbox(msg.From)), strings.ToLower(c.value))
 	case "to":
 		return strings.Contains(strings.ToLower(msg.To), strings.ToLower(c.value))
 	case "subject":
