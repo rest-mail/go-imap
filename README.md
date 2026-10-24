@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 306/354 mapped](https://img.shields.io/badge/partial%20checklist-306%2F354%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 307/356 mapped](https://img.shields.io/badge/partial%20checklist-307%2F356%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -177,7 +177,7 @@ extra arguments while preserving the selection.
 
 ## RFC conformance
 
-The current checklist has 354 requirements: 306 mapped to wire tests and 48
+The current checklist has 356 requirements: 307 mapped to wire tests and 49
 explicit gaps or backend/deployment responsibilities. Unknown MIME transfer
 encodings override Content-Type as application/octet-stream consistently in
 BODYSTRUCTURE, section FETCH and SEARCH; stored headers and octets remain
@@ -228,7 +228,8 @@ A `Mailbox` names its folders in UTF-8; until a client enables UTF8=ACCEPT the
 server writes and reads mailbox names in modified UTF-7 (RFC 3501 §5.1.3), and
 refuses a name that is not valid modified UTF-7.
 NOOP and CHECK report what other sources changed in the selected mailbox:
-expunges, flag changes and new mail (RFC 3501 §5.2).
+expunges, flag changes and new mail (RFC 3501 §5.2). A stopping server tells each
+client why with an untagged BYE before it closes the connection (§3.4).
 The STATUS slice checks the §6.3.10 example, requested metadata, mailbox-name
 astrings and preservation of the selected mailbox and read-only state. Malformed
 STATUS arguments get BAD before metadata reads, including trailing text and

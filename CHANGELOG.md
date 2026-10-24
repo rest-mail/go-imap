@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `Server.Shutdown` closed no session that was waiting for a command or
+  idling, so it waited for clients that would never finish, and a caller then
+  used `Close`, which drops every connection without a word. RFC 3501 §3.4: "A
+  server MUST NOT unilaterally close the connection without sending an untagged
+  BYE response that contains the reason". Shutdown now interrupts every
+  session: one waiting or idling sends `* BYE Server shutting down` and closes
+  at once, one running a command finishes it, then does the same. Checklist row
+  IMAP-STATE-01.
+
+### Fixed
+
 - NOOP and CHECK never re-read the selected mailbox, so a client that polls
   with NOOP rather than IDLE saw no new mail, expunge or flag change until it
   selected the mailbox again. RFC 3501 calls NOOP the preferred way to poll

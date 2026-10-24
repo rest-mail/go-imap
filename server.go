@@ -148,6 +148,7 @@ func (s *Server) acceptLoop(listener net.Listener, implicitTLS bool) {
 			defer s.limiter.Release(ip)
 			session := NewSession(conn, s.backend, s.hostname, s.tlsConfig, s.limiter)
 			session.SetIdlePollInterval(s.idlePoll)
+			session.stop = s.shutdown
 			if implicitTLS {
 				session.usingTLS = true
 			}
@@ -209,13 +210,22 @@ func (s *Server) beginShutdown() {
 	for _, l := range s.listeners {
 		_ = l.Close()
 	}
+	// Interrupt every session's read, so one waiting for a command, or idling,
+	// sees the shutdown at once, says BYE and ends.
+	for c := range s.conns {
+		_ = c.SetReadDeadline(time.Now())
+	}
 }
 
 // Shutdown gracefully stops the server: it stops accepting new connections and
-// then blocks until every in-flight session has finished, or until ctx is done.
-// It returns nil once all sessions have drained, or ctx.Err() if the deadline
-// passes first (the sessions keep running; call [Server.Close] to force them to
-// stop). Shutdown mirrors the semantics of [net/http.Server.Shutdown].
+// tells every session to end. A session waiting for a command, or idling, sends
+// an untagged BYE and closes at once; one running a command finishes it, then
+// does the same, so no client is dropped without being told why (RFC 3501
+// §§3.4, 7.1.5). Shutdown blocks until every session has ended, or until ctx is
+// done. It returns nil once all sessions have drained, or ctx.Err() if the
+// deadline passes first (the sessions keep running; call [Server.Close] to force
+// them to stop). Shutdown mirrors the semantics of [net/http.Server.Shutdown],
+// which closes idle connections the same way.
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.beginShutdown()
 
@@ -236,7 +246,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 
 // Close immediately stops the server: it stops accepting new connections and
 // force-closes every active connection, aborting any in-flight sessions without
-// waiting for them to drain. Unlike [Server.Shutdown] it does not block on the
+// waiting for them to drain, so a session may not get to send its BYE. Unlike [Server.Shutdown] it does not block on the
 // sessions; use Shutdown for a graceful stop. Close mirrors the semantics of
 // [net/http.Server.Close] and always returns nil.
 func (s *Server) Close() error {
