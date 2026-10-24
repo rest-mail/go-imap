@@ -577,6 +577,15 @@ func (s *Session) Handle() {
 			s.handleUnselect(tag)
 		case "ENABLE":
 			s.handleEnable(tag, args)
+		case "NAMESPACE":
+			// One personal namespace: folders sit at the top, under "/" as LIST
+			// gives it; there are no other users' or shared ones (RFC 2342 §5).
+			if !s.auth.authenticated {
+				s.tagged(tag, "NO", "Not authenticated")
+				break
+			}
+			s.send(`* NAMESPACE (("" "/")) NIL NIL`)
+			s.tagged(tag, "OK", "NAMESPACE completed")
 		case "GETQUOTA":
 			s.handleGetQuota(tag, args)
 		case "GETQUOTAROOT":
@@ -808,8 +817,10 @@ func (s *Session) handleList(tag, args, cmd string) {
 	// selection option before the reference, LIST (SPECIAL-USE) "" "*", which
 	// lists only the folders with a role, and a return option after the
 	// pattern, RETURN (SPECIAL-USE), which reports roles, as every LIST does.
-	// Those are the only options this server knows; any other is refused.
+	// RFC 5819's STATUS return option adds each folder's STATUS. Those are the
+	// only options this server knows; any other is refused.
 	onlySpecialUse := false
+	var status []string
 	args = strings.TrimSpace(args)
 	if cmd == "LIST" && strings.HasPrefix(args, "(") {
 		end := strings.IndexByte(args, ')')
@@ -841,11 +852,10 @@ func (s *Session) handleList(tag, args, cmd string) {
 			s.tagged(tag, "BAD", "Invalid LIST arguments")
 			return
 		}
-		for _, opt := range strings.Fields(ret[1][1 : len(ret[1])-1]) {
-			if !strings.EqualFold(opt, "SPECIAL-USE") {
-				s.tagged(tag, "BAD", "Unsupported LIST return option "+opt)
-				return
-			}
+		var refusal string
+		if status, refusal = listReturnOptions(ret[1][1 : len(ret[1])-1]); refusal != "" {
+			s.tagged(tag, "BAD", refusal)
+			return
 		}
 	}
 
@@ -892,8 +902,47 @@ func (s *Session) handleList(tag, args, cmd string) {
 			continue
 		}
 		s.send(`* %s (%s) "/" %s`, cmd, attrs, encodeMailboxName(wire))
+		// Each listed folder is selectable, so its STATUS follows its LIST; one
+		// the store cannot count has its STATUS dropped (RFC 5819 §2).
+		if status != nil {
+			if data, err := s.statusData(f.Name, status); err == nil {
+				s.send(`* STATUS %s (%s)`, encodeMailboxName(wire), data)
+			}
+		}
 	}
 	s.tagged(tag, "OK", cmd+" completed")
+}
+
+// listReturnOptions reads LIST's return options, the inside of RETURN's
+// parentheses (RFC 5258 §6): SPECIAL-USE (RFC 6154), which every LIST reports
+// anyway, and STATUS with a list of STATUS items (RFC 5819 §4), which it gives
+// back. refusal is the BAD text for anything else.
+func listReturnOptions(list string) (status []string, refusal string) {
+	for list != "" {
+		var opt string
+		opt, list, _ = strings.Cut(list, " ")
+		switch {
+		case strings.EqualFold(opt, "SPECIAL-USE"):
+		case strings.EqualFold(opt, "STATUS") && status == nil:
+			end := strings.IndexByte(list, ')')
+			items, ok := parseStatusItems(list[:end+1])
+			for _, item := range items {
+				ok = ok && statusItems[item]
+			}
+			if end < 0 || !ok {
+				return nil, "Invalid STATUS return option"
+			}
+			status, list = items, list[end+1:]
+			if list != "" {
+				if list, ok = strings.CutPrefix(list, " "); !ok || list == "" {
+					return nil, "Invalid LIST return options"
+				}
+			}
+		default:
+			return nil, "Unsupported LIST return option " + opt
+		}
+	}
+	return status, ""
 }
 
 // handleSubscribe implements SUBSCRIBE (RFC 3501 §6.3.6) and handleUnsubscribe
@@ -1046,9 +1095,7 @@ func (s *Session) handleStatus(tag, args string) {
 	// Validate every requested item up front so an unknown one is a BAD syntax
 	// error before any untagged response is emitted.
 	for _, item := range items {
-		switch item {
-		case "MESSAGES", "RECENT", "UNSEEN", "UIDNEXT", "UIDVALIDITY":
-		default:
+		if !statusItems[item] {
 			s.tagged(tag, "BAD", "Unknown STATUS item: "+item)
 			return
 		}
@@ -1061,17 +1108,32 @@ func (s *Session) handleStatus(tag, args string) {
 		return
 	}
 
-	// STATUS must not change the selected mailbox or touch flags: read the
-	// folder's messages fresh, independent of any selected-folder cache.
-	messages, err := s.mailbox.Messages(folder)
+	data, err := s.statusData(folder, items)
 	if err != nil {
 		s.tagged(tag, "NO", "Failed to get status")
 		return
+	}
+	s.send(`* STATUS %s (%s)`, encodeMailboxName(s.wireName(folder)), data)
+	s.tagged(tag, "OK", "STATUS completed")
+}
+
+// statusItems are the STATUS data items (RFC 3501 §6.3.10), with RFC 8438's
+// SIZE.
+var statusItems = map[string]bool{"MESSAGES": true, "RECENT": true, "UNSEEN": true, "UIDNEXT": true, "UIDVALIDITY": true, "SIZE": true}
+
+// statusData is the inside of a STATUS response's parentheses for folder: the
+// requested items, in the order asked, read fresh from the store so neither
+// the selected mailbox nor any flag changes.
+func (s *Session) statusData(folder string, items []string) (string, error) {
+	messages, err := s.mailbox.Messages(folder)
+	if err != nil {
+		return "", err
 	}
 
 	total := len(messages)
 	var unseen int
 	var maxUID uint32
+	var size int64
 	for _, m := range messages {
 		if !m.Seen {
 			unseen++
@@ -1079,6 +1141,7 @@ func (s *Session) handleStatus(tag, args string) {
 		if m.UID > maxUID {
 			maxUID = m.UID
 		}
+		size += int64(m.Size)
 	}
 
 	// Emit exactly the requested items, in the order the client asked for them.
@@ -1105,11 +1168,13 @@ func (s *Session) handleStatus(tag, args string) {
 			// The mailbox's real UIDVALIDITY when the backend supports UIDPLUS,
 			// else the legacy constant 1 — matching SELECT/EXAMINE.
 			fmt.Fprintf(&b, "UIDVALIDITY %d", s.resolveUIDValidity(folder))
+		case "SIZE":
+			// The sum of the messages' RFC822.SIZE, which FETCH gives as the
+			// stored size (RFC 8438 §3).
+			fmt.Fprintf(&b, "SIZE %d", size)
 		}
 	}
-
-	s.send(`* STATUS %s (%s)`, encodeMailboxName(s.wireName(folder)), b.String())
-	s.tagged(tag, "OK", "STATUS completed")
+	return b.String(), nil
 }
 
 func (s *Session) handleFetch(tag, args string) {
@@ -1339,26 +1404,51 @@ func (s *Session) handleSearch(tag, args string) {
 		s.tagged(tag, "NO", "No mailbox selected")
 		return
 	}
+	s.search(tag, args, false)
+}
 
+// search runs SEARCH or UID SEARCH: the matching sequence numbers, or UIDs, in
+// an untagged SEARCH, or with RETURN result options in one untagged ESEARCH
+// (RFC 4731 §3.1).
+func (s *Session) search(tag, args string, uid bool) {
+	returns, args, ok := parseSearchReturn(args)
+	if !ok {
+		s.tagged(tag, "BAD", "Invalid SEARCH RETURN options")
+		return
+	}
 	criteria, serr := s.parseSearchCriteria(args)
 	if serr != nil {
 		s.tagged(tag, serr.status, serr.text)
 		return
 	}
 
-	var seqNums []string
+	var found []uint32
 	for i, msg := range s.messages {
 		if s.matchesCriteria(msg, criteria, s.rawLoader(msg)) {
-			seqNums = append(seqNums, strconv.Itoa(i+1))
+			if uid {
+				found = append(found, msg.UID)
+			} else {
+				found = append(found, uint32(i+1))
+			}
 		}
 	}
 
-	if len(seqNums) > 0 {
-		s.send("* SEARCH %s", strings.Join(seqNums, " "))
-	} else {
-		s.send("* SEARCH")
+	completed := "SEARCH completed"
+	if uid {
+		completed = "UID SEARCH completed"
 	}
-	s.tagged(tag, "OK", "SEARCH completed")
+	if returns == nil {
+		var b strings.Builder
+		b.WriteString("* SEARCH")
+		for _, n := range found {
+			b.WriteString(" " + strconv.FormatUint(uint64(n), 10))
+		}
+		s.send("%s", b.String())
+		s.tagged(tag, "OK", completed)
+		return
+	}
+	s.send("%s", esearchResponse(tag, uid, returns, found))
+	s.tagged(tag, "OK", completed)
 }
 
 // searchCharsets are the character sets SEARCH accepts (RFC 3501 §6.4.4). Any
@@ -3087,27 +3177,8 @@ func (s *Session) handleUIDMove(tag, args string) {
 }
 
 func (s *Session) handleUIDSearch(tag, args string) {
-	// UID SEARCH returns UIDs instead of sequence numbers
-	// Parse the criteria the same way as SEARCH
-	criteria, serr := s.parseSearchCriteria(args)
-	if serr != nil {
-		s.tagged(tag, serr.status, serr.text)
-		return
-	}
-
-	var uids []string
-	for _, msg := range s.messages {
-		if s.matchesCriteria(msg, criteria, s.rawLoader(msg)) {
-			uids = append(uids, strconv.FormatUint(uint64(msg.UID), 10))
-		}
-	}
-
-	if len(uids) > 0 {
-		s.send("* SEARCH %s", strings.Join(uids, " "))
-	} else {
-		s.send("* SEARCH")
-	}
-	s.tagged(tag, "OK", "UID SEARCH completed")
+	// UID SEARCH answers UIDs instead of sequence numbers.
+	s.search(tag, args, true)
 }
 
 // ── Output helpers ────────────────────────────────────────────────────

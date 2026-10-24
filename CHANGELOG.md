@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- STATUS=SIZE (RFC 8438): `STATUS folder (SIZE)`, and LIST's STATUS return
+  option, give a mailbox's size in octets, the sum of its messages'
+  RFC822.SIZE. Part of IMAP4rev2 (rest-mail/rest-mail-server#718).
+- LIST-STATUS (RFC 5819): `LIST "" * RETURN (STATUS (MESSAGES UNSEEN))`
+  follows each folder's LIST with its STATUS, so a client fills its folder
+  list's counts in one command instead of a STATUS per folder. Part of
+  IMAP4rev2 (rest-mail/rest-mail-server#718).
+- ESEARCH (RFC 4731): `SEARCH RETURN (MIN MAX ALL COUNT) ...` and the UID
+  form answer one `* ESEARCH (TAG "...")` with the lowest and highest match,
+  every match as a sequence-set, or their count, so a client can find the
+  first unseen message or count matches without a list of every number.
+  Part of IMAP4rev2 (rest-mail/rest-mail-server#718).
+- NAMESPACE (RFC 2342): `* NAMESPACE (("" "/")) NIL NIL`, one personal
+  namespace with folders at the top and "/" as their delimiter, and no other
+  users' or shared namespaces. Part of IMAP4rev2
+  (rest-mail/rest-mail-server#718).
 - LITERAL- (RFC 7888 §5): the server advertises it, so a client may send
   `{n+}` literals of up to 4096 octets with no continuation round trip. A
   larger one, as a command argument or in APPEND, gets `BAD [TOOBIG]` and

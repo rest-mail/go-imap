@@ -768,7 +768,7 @@ inventory is complete.
 | IMAP-RESP-17 | RFC 3501 §§4.3, 7.5 | Normative | A `+` continuation request asks for the rest of a command: before synchronizing literal octets and during IDLE. | TestCommandLiteralAccepted, TestAppendExample, TestIdleDoneAndNextCommand |
 | IMAP-RESP-CLIENT-01 | RFC 3501 §§7, 7.1, 7.2.1, 7.2.6, 7.3.1, 7.3.2, 7.4.1, 7.4.2 | MUST | Client duties: accept any response at any time; record FLAGS, EXISTS, RECENT, EXPUNGE and FETCH updates; ignore unknown response codes and capability names; show ALERT text to the user. | n/a: client duties; this is a server engine. |
 | IMAP-XCMD-01 | RFC 3501 §6.5 | Normative | An X-prefixed command the server does not define gets a tagged BAD in every state, and the session goes on. | TestExperimentalCommand |
-| IMAP-XCMD-02 | RFC 3501 §6.5 | MUST | A command outside RFC 3501 has an `X` prefix. | n/a: the engine has no private commands; every other command it accepts (ENABLE, IDLE, MOVE, UNSELECT, GETQUOTA, GETQUOTAROOT) is defined by a published RFC. |
+| IMAP-XCMD-02 | RFC 3501 §6.5 | MUST | A command outside RFC 3501 has an `X` prefix. | n/a: the engine has no private commands; every other command it accepts (ENABLE, IDLE, MOVE, UNSELECT, NAMESPACE, GETQUOTA, GETQUOTAROOT) is defined by a published RFC. |
 
 ## RFC 4959: SASL-IR, the initial client response
 
@@ -778,6 +778,39 @@ inventory is complete.
 | IMAP-SASLIR-02 | RFC 4959 §§3, 4 | Normative | A PLAIN initial response on the command line is used as the client's first response: the command completes with no continuation, as in the RFC's example. | TestSASLIR |
 | IMAP-SASLIR-03 | RFC 4959 §3 | MUST | Clients that omit the initial response are still supported: the RFC 3501 continuation exchange works unchanged. | TestSASLIR |
 | IMAP-SASLIR-04 | RFC 4959 §3 | MUST | `=` is a zero-length response; one that does not decode as base64, pad inside it or quoted, is handled as any client response that does not decode (NO); an empty or space-separated argument is BAD; none gets a continuation or leaves the session authenticated. | TestSASLIR |
+
+## RFC 8438: STATUS=SIZE
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-STATUSSIZE-01 | RFC 8438 §3 | MUST | STATUS=SIZE is advertised; STATUS, and LIST's STATUS return option, take SIZE, the mailbox's size in octets, no less than the sum of its messages' RFC822.SIZE (the A01 example: 44421), and 0 for an empty one; values are written as 63-bit integers. | TestStatusSize |
+| IMAP-STATUSSIZE-02 | RFC 8438 §3 | SHOULD | With QUOTA, SIZE equals the storage usage that enforces the mailbox's STORAGE limit. | n/a: the quota root is the account, not one mailbox (GETQUOTAROOT names one root for every folder), so a folder's SIZE is its own share of the root's usage. |
+
+## RFC 5819: LIST-STATUS
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-LISTSTATUS-01 | RFC 5819 §§2, 4 | MUST | LIST-STATUS is advertised; LIST's `STATUS (items)` return option follows each listed selectable mailbox's LIST with an untagged STATUS carrying the requested items in the order asked (the A01 example), beside SPECIAL-USE and in any case; without it no STATUS is sent. | TestListStatus |
+| IMAP-LISTSTATUS-02 | RFC 5819 §2 | MAY | A mailbox whose STATUS the store cannot read is still listed, its STATUS dropped, and the command completes OK. | TestListStatus |
+| IMAP-LISTSTATUS-03 | RFC 5819 §4; RFC 5258 §6 | Normative | `STATUS SP "(" status-att *(SP status-att) ")"`: an empty or unknown item, a missing list, doubled spaces, a second STATUS or an unknown return option is BAD with no response. | TestListStatusRefusals |
+| IMAP-LISTSTATUS-04 | RFC 5819 §2 | MUST NOT | A mailbox that cannot be selected gets no STATUS and is listed `\Noselect`. | n/a: every folder a Mailbox lists is selectable; the only `\Noselect` LIST answer is the empty pattern's root, which takes no STATUS. |
+
+## RFC 4731: ESEARCH, SEARCH result options
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-ESEARCH-01 | RFC 4731 §§3.1, 4; RFC 4466 §2.6 | Normative | ESEARCH is advertised; SEARCH and UID SEARCH take SP "RETURN" SP "(" [option *(SP option)] ")" before the criteria (CHARSET included), the option names in any case. | TestESearch |
+| IMAP-ESEARCH-02 | RFC 4731 §3.1; RFC 4466 §2.6.2 | MUST | With result options the command answers one untagged ESEARCH, correlated by `(TAG "<tag>")`, instead of SEARCH; without them it answers SEARCH as before. | TestESearch |
+| IMAP-ESEARCH-03 | RFC 4731 §3.1 | MUST | MIN and MAX are the lowest and highest match, ALL every match as a sequence-set, COUNT their number; an empty list is ALL; UID SEARCH's ESEARCH carries the UID indicator and answers in UIDs (the A282-A286 examples). | TestESearch |
+| IMAP-ESEARCH-04 | RFC 4731 §3.1 | MUST | With no match the ESEARCH response is still sent; MIN, MAX and ALL are left out, and COUNT, when asked, is 0. | TestESearchNoMatches |
+| IMAP-ESEARCH-05 | RFC 4466 §2.6; RFC 3501 §9 | Normative | A RETURN list that is malformed, misspaced, not followed by criteria, or names an option the server does not offer (SAVE, PARTIAL) is BAD with no response. | TestESearchRefusals |
+
+## RFC 2342: NAMESPACE
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-NAMESPACE-01 | RFC 2342 §§4, 5 | Normative | NAMESPACE is advertised, and answers one untagged NAMESPACE before OK: the personal namespace with prefix "" and the hierarchy delimiter LIST gives ("/"), and NIL for the other users' and shared classes, which the server does not have (example 5.1), in the authenticated and selected states. | TestNamespace |
+| IMAP-NAMESPACE-02 | RFC 2342 §5 | Normative | NAMESPACE takes no arguments (BAD otherwise), and before authentication answers NO with no NAMESPACE response. | TestNamespace |
 
 ## RFC 7888: LITERAL-, non-synchronizing literals up to 4096 octets
 
