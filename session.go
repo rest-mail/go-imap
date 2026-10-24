@@ -1698,7 +1698,7 @@ func (s *Session) matchOne(msg Message, c searchCriterion, loadRaw func() (strin
 		// sender's display name as well as the address, as one mailbox.
 		return strings.Contains(strings.ToLower(searchMailbox(msg.From)), strings.ToLower(c.value))
 	case "to":
-		return strings.Contains(strings.ToLower(msg.To), strings.ToLower(c.value))
+		return strings.Contains(strings.ToLower(decodeSearchHeader(msg.To)), strings.ToLower(c.value))
 	case "subject":
 		return strings.Contains(strings.ToLower(decodeSearchHeader(msg.Subject)), strings.ToLower(c.value))
 	case "body":

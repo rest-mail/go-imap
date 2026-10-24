@@ -23,6 +23,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - SEARCH FROM matched only the sender's address; it now matches the envelope's
   FROM field, the decoded display name as well as the address (RFC 3501
   §6.4.4). Checklist row IMAP-SEARCH-26.
+- SEARCH TO compared the recipient list with its encoded words undecoded; it
+  now decodes them first, as SUBJECT and FROM do (RFC 3501 §6.4.4). Checklist
+  row IMAP-SEARCH-28, which also tests DELETED, UNDELETED and UNFLAGGED.
+- BODY[HEADER.FIELDS] and BODY[HEADER.FIELDS.NOT] added a blank line to a
+  message that has no body and no blank line; RFC 3501 §6.4.5 includes the
+  blank line in every header fetch except that one. A message that starts
+  with the blank line now has that line alone as its header, and the rest
+  as its text, at the top level as in MIME parts. Checklist row
+  IMAP-FETCH-24.
 - RFC 6855 UTF8=ACCEPT, for a backend that implements `UTF8Mailbox`:
   - quoted-strings take UTF-8, and typed 8-bit text that is not UTF-8 is
     BAD;

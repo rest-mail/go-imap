@@ -100,3 +100,61 @@ func TestSearchNewAndOld(t *testing.T) {
 		}
 	}
 }
+
+// TestSearchDeletedUnflaggedAndTo: DELETED and UNDELETED follow the \Deleted
+// flag a STORE sets and clears in the session, UNFLAGGED is the complement of
+// FLAGGED, and TO matches a case-insensitive substring of the envelope's TO
+// field, with encoded words decoded first (RFC 3501 §6.4.4). None reads message
+// content.
+//
+// checklist: IMAP-SEARCH-28
+func TestSearchDeletedUnflaggedAndTo(t *testing.T) {
+	box := newFetchMailbox()
+	box.messages = []imap.Message{
+		{UID: 10, Flagged: true, To: "Anne <anne@example.com>"},
+		{UID: 40, To: "bob@example.org, carol@example.net"},
+		{UID: 90, Flagged: true, To: "=?UTF-8?Q?J=C3=B6rg_Brown?= <jb@example.net>"},
+		{UID: 150},
+	}
+	c := fetchClient(t, box, "SELECT")
+	for _, tc := range []struct{ query, seqs, uids string }{
+		{"UNFLAGGED", "2 4", "40 150"},
+		{"NOT UNFLAGGED", "1 3", "10 90"},
+		{"FLAGGED UNFLAGGED", "", ""},
+		{"DELETED", "", ""},
+		{"UNDELETED", "1 2 3 4", "10 40 90 150"},
+		{`TO "ANNE"`, "1", "10"},
+		{`TO "example.net"`, "2 3", "40 90"},
+		{`TO "brown <jb@"`, "3", "90"},
+		{`TO "=?UTF-8?"`, "", ""},
+		{`TO "anne" UNFLAGGED`, "", ""},
+	} {
+		t.Run("before/"+tc.query, func(t *testing.T) {
+			requireSearch(t, c, "SEARCH "+tc.query, strings.TrimSpace("* SEARCH "+tc.seqs))
+			requireSearch(t, c, "UID SEARCH "+tc.query, strings.TrimSpace("* SEARCH "+tc.uids))
+		})
+	}
+
+	_, tagged := c.command("D1", `STORE 2,4 +FLAGS.SILENT (\Deleted)`)
+	requireOK(t, tagged, "D1")
+	for _, tc := range []struct{ query, seqs, uids string }{
+		{"DELETED", "2 4", "40 150"},
+		{"UNDELETED", "1 3", "10 90"},
+		{"DELETED UNFLAGGED", "2 4", "40 150"},
+		{"OR DELETED FLAGGED", "1 2 3 4", "10 40 90 150"},
+		{`NOT DELETED TO "example"`, "1 3", "10 90"},
+	} {
+		t.Run("deleted/"+tc.query, func(t *testing.T) {
+			requireSearch(t, c, "SEARCH "+tc.query, strings.TrimSpace("* SEARCH "+tc.seqs))
+			requireSearch(t, c, "UID SEARCH "+tc.query, strings.TrimSpace("* SEARCH "+tc.uids))
+		})
+	}
+
+	_, tagged = c.command("D2", `STORE 2 -FLAGS.SILENT (\Deleted)`)
+	requireOK(t, tagged, "D2")
+	requireSearch(t, c, "SEARCH DELETED", "* SEARCH 4")
+	requireSearch(t, c, "UID SEARCH UNDELETED", "* SEARCH 10 40 90")
+	if len(box.fetches) != 0 {
+		t.Fatalf("metadata searches read content: %v", box.fetches)
+	}
+}

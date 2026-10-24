@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 295/342 mapped](https://img.shields.io/badge/partial%20checklist-295%2F342%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 297/344 mapped](https://img.shields.io/badge/partial%20checklist-297%2F344%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -177,7 +177,7 @@ extra arguments while preserving the selection.
 
 ## RFC conformance
 
-The current checklist has 342 requirements: 295 mapped to wire tests and 47
+The current checklist has 344 requirements: 297 mapped to wire tests and 47
 explicit gaps or backend/deployment responsibilities. Unknown MIME transfer
 encodings override Content-Type as application/octet-stream consistently in
 BODYSTRUCTURE, section FETCH and SEARCH; stored headers and octets remain
@@ -219,8 +219,11 @@ or changing session state, including .SILENT and empty mailboxes. Wire tests
 check reversed/star/32-bit boundary sets, sparse UIDs and recovery after rejection.
 A malformed flag operand is also refused with BAD before any change; out-of-range
 message sequence numbers and overlapping UID-set semantics remain unaudited.
-SEARCH FROM matches the sender's display name as well as the address, and NEW
+SEARCH FROM matches the sender's display name as well as the address, TO
+decodes encoded words first, and NEW
 and OLD are answered as their RFC equivalents, (RECENT UNSEEN) and NOT RECENT.
+A message with no body and no blank line answers every header fetch without
+the blank line it does not have.
 The STATUS slice checks the §6.3.10 example, requested metadata, mailbox-name
 astrings and preservation of the selected mailbox and read-only state. Malformed
 STATUS arguments get BAD before metadata reads, including trailing text and

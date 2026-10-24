@@ -11,7 +11,8 @@ import (
 // grammar expressed independently as a regexp plus arbitrary-precision bounds,
 // and resolves the section against an arbitrary message, which must never
 // panic. Unfiltered sections must return contiguous message octets; filtered
-// headers may join non-adjacent lines and add a terminating blank line.
+// headers may join non-adjacent lines and end each with CRLF, followed by the
+// blank line only when the message has one (RFC 3501 §6.4.5).
 func FuzzSectionSpec(f *testing.F) {
 	nested := "Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\n\r\none\r\n" +
 		"--b\r\nContent-Type: message/rfc822\r\n\r\nSubject: in\r\n\r\ntwo\r\n--b--\r\n"
@@ -23,7 +24,7 @@ func FuzzSectionSpec(f *testing.F) {
 	}
 	f.Add("1.1", "Content-Type: multipart/mixed; boundary=x\r\n\r\n--x  \r\n\r\na\r\n--xy\r\n--x--")
 	// Filtered headers need not be contiguous in raw, and a truncated header
-	// may acquire its terminating CRLF and blank line.
+	// acquires its terminating CRLF but no blank line, which it does not have.
 	f.Add("2.HEADER.FIELDS (SuBjeCt)", strings.Replace(nested, "Subject: in\r\n\r\ntwo", "SuBjeCt:", 1))
 	f.Add("2.HEADER.FIELDS (Subject)", strings.Replace(nested, "Subject: in", "Subject: in\r\nX-Omitted: middle\r\nSubject: again", 1))
 	f.Add("2.HEADER.FIELDS.NOT (X-Omitted)", strings.Replace(nested, "Subject: in", "Subject: in\r\nX-Omitted: middle\r\nFrom: sender", 1))
@@ -58,8 +59,8 @@ func FuzzSectionSpec(f *testing.F) {
 			return
 		}
 		if strings.HasPrefix(strings.ToUpper(text), "HEADER.FIELDS") {
-			if payload != "\r\n" && !strings.HasSuffix(payload, "\r\n\r\n") {
-				t.Fatalf("filtered headers lack a terminating blank line: %q", payload)
+			if !strings.HasSuffix(payload, "\r\n") {
+				t.Fatalf("filtered headers lack a terminating CRLF: %q", payload)
 			}
 			// Every retained line must occur verbatim and in order in raw.
 			remaining := raw

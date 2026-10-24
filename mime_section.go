@@ -213,9 +213,6 @@ func numericSection(raw string, path []uint32, text string) (label, payload stri
 // splitEntity splits a MIME entity into its header (with the terminating blank
 // line) and body. An entity starting with a blank line has no header fields.
 func splitEntity(raw string) (header, body string) {
-	if strings.HasPrefix(raw, "\r\n") {
-		return "\r\n", raw[2:]
-	}
 	return headerSection(raw), textSection(raw)
 }
 

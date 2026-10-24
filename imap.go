@@ -102,7 +102,7 @@ type Message struct {
 	From    Address
 	Date    time.Time
 	// To is the message's recipient list as a single string; SEARCH TO does a
-	// case-insensitive substring match against it.
+	// case-insensitive substring match against it, with encoded words decoded.
 	To string
 }
 
