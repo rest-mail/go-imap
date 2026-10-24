@@ -89,16 +89,16 @@ func TestSelectionExamples(t *testing.T) {
 			for _, want := range []string{
 				fmt.Sprintf("* %d EXISTS", tc.count),
 				fmt.Sprintf("* %d RECENT", tc.recent),
-				fmt.Sprintf("* OK [UNSEEN %d]", tc.unseen),
-				"* OK [UIDVALIDITY 3857529045]", "* OK [UIDNEXT 4392]",
+				fmt.Sprintf("* OK [UNSEEN %d] Message %d is first unseen", tc.unseen, tc.unseen),
+				"* OK [UIDVALIDITY 3857529045] UIDs valid", "* OK [UIDNEXT 4392] Predicted next UID",
 				`* FLAGS (\Seen \Answered \Flagged \Deleted \Draft)`,
 			} {
 				requireLine(t, lines, want)
 			}
 			if tc.command == "EXAMINE" {
-				requireLine(t, lines, "* OK [PERMANENTFLAGS ()]")
+				requireLine(t, lines, "* OK [PERMANENTFLAGS ()] No permanent flags permitted")
 			} else {
-				requireLine(t, lines, `* OK [PERMANENTFLAGS (\Seen \Answered \Flagged \Deleted \Draft)]`)
+				requireLine(t, lines, `* OK [PERMANENTFLAGS (\Seen \Answered \Flagged \Deleted \Draft)] Limited`)
 			}
 			if box.stores+box.deletes+box.moves != 0 {
 				t.Fatal("selection changed permanent state")
@@ -143,7 +143,7 @@ func TestSelectionUnseen(t *testing.T) {
 					if len(unseen) != 0 {
 						t.Fatalf("no unseen messages: %q", unseen)
 					}
-				} else if len(unseen) != 1 || unseen[0] != fmt.Sprintf("* OK [UNSEEN %d]", tc.first) {
+				} else if len(unseen) != 1 || unseen[0] != fmt.Sprintf("* OK [UNSEEN %d] Message %d is first unseen", tc.first, tc.first) {
 					t.Fatalf("UNSEEN %q, want sequence %d", unseen, tc.first)
 				}
 			})

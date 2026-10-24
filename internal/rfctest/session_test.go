@@ -127,11 +127,11 @@ func TestLogin(t *testing.T) {
 // TestTaggedCompletion checks each completion result carries the tag of the
 // command it completes, in command order, and an unknown command is BAD.
 //
-// checklist: IMAP-TAG-01 IMAP-BAD-01 IMAP-RESP-01
+// checklist: IMAP-TAG-01 IMAP-BAD-01 IMAP-RESP-01 IMAP-SYNTAX-02
 func TestTaggedCompletion(t *testing.T) {
 	c := dial(t)
 	c.line()
-	for _, tag := range []string{"A001", "x.7", "tag+1"} {
+	for _, tag := range []string{"A001", "x.7", "a]1"} {
 		if _, tagged := c.command(tag, "NOOP"); !strings.HasPrefix(tagged, tag+" OK") {
 			t.Fatalf("%s: %q", tag, tagged)
 		}

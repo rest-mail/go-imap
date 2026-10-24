@@ -29,6 +29,46 @@ func parseIMAPCommand(line string) (tag, cmd, args string) {
 	return
 }
 
+// noArguments are the commands whose grammar ends at the command name (RFC 3501
+// §9's command-any, command-nonauth and command-select, RFC 2177 IDLE, RFC 3691
+// UNSELECT). STARTTLS starts no negotiation the client may not expect.
+var noArguments = map[string]bool{
+	"CAPABILITY": true, "LOGOUT": true, "NOOP": true, "STARTTLS": true,
+	"CHECK": true, "CLOSE": true, "EXPUNGE": true, "UNSELECT": true, "IDLE": true,
+}
+
+// validTag reports whether tag is RFC 3501 §9's tag: one or more ASTRING-CHARs
+// other than "+". That leaves out SP, CTL, 8-bit octets, "(", ")", "{", "%",
+// "*", DQUOTE and "\", and lets "]" in.
+func validTag(tag string) bool {
+	if tag == "" {
+		return false
+	}
+	for i := 0; i < len(tag); i++ {
+		if c := tag[i]; c <= 0x20 || c >= 0x7f || strings.IndexByte(`(){%*"\+`, c) >= 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// parseLoginArgs reads LOGIN's arguments, userid SP password (RFC 3501 §9): two
+// astrings, one SP between them and nothing after.
+func parseLoginArgs(args string) (user, password string, ok bool) {
+	user, rest, ok := parseAstring(args)
+	if !ok || strings.HasPrefix(args, " ") || !validAstring(args[:len(args)-len(rest)]) {
+		return "", "", false
+	}
+	if rest, ok = cutSingleSP(rest); !ok {
+		return "", "", false
+	}
+	password, after, ok := parseAstring(rest)
+	if !ok || after != "" || !validAstring(rest) {
+		return "", "", false
+	}
+	return user, password, true
+}
+
 // parseIMAPArgs splits IMAP arguments respecting quoted strings and parenthesized lists.
 func parseIMAPArgs(args string) []string {
 	var result []string

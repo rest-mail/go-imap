@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- RFC 3501 §9's rules every line shares (#374). A status response's code is
+  followed by text (`resp-text = ["[" resp-text-code "]" SP] text`), but
+  SELECT and EXAMINE sent `* OK [UNSEEN n]`, `[UIDVALIDITY n]`, `[UIDNEXT n]`
+  and `[PERMANENTFLAGS (...)]`, and MOVE sent `* OK [COPYUID ...]`, with
+  nothing after the code. Each now carries text, as RFC 3501's own examples
+  do. A tag with `*`, `%`, `+`, DQUOTE, backslash or another character a tag
+  cannot hold now gets `* BAD Invalid tag`, so a `*` or `+` tag cannot pass
+  for an untagged or continuation response. CAPABILITY, NOOP, LOGOUT and
+  CLOSE refuse a trailing space or arguments, as CHECK, EXPUNGE, IDLE,
+  UNSELECT and STARTTLS already did. LOGIN takes exactly two astrings: extra
+  arguments, invalid escapes and atom-specials get BAD without the
+  credentials being checked.
 - `Server.Shutdown` closed no session that was waiting for a command or
   idling, so it waited for clients that would never finish, and a caller then
   used `Close`, which drops every connection without a word. RFC 3501 §3.4: "A

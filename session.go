@@ -437,6 +437,13 @@ func (s *Session) Handle() {
 			s.send("* BAD Missing tag or command")
 			continue
 		}
+		if !validTag(tag) {
+			// A tag is ASTRING-CHARs other than "+" (RFC 3501 §9), so a "*" or
+			// "+" tag cannot pass for an untagged or continuation response. The
+			// tag is not echoed.
+			s.send("* BAD Invalid tag")
+			continue
+		}
 
 		ucmd := strings.ToUpper(cmd)
 
@@ -459,11 +466,19 @@ func (s *Session) Handle() {
 			args = materialized
 		}
 
+		// These commands take no arguments, and SP is exactly one space that only
+		// separates (RFC 3501 §9), so anything after the command name, even a
+		// lone trailing space, is refused.
+		if noArguments[ucmd] && len(line) > len(tag)+1+len(cmd) {
+			s.tagged(tag, "BAD", ucmd+" takes no arguments")
+			continue
+		}
+
 		switch ucmd {
 		case "CAPABILITY":
 			s.handleCapability(tag)
 		case "STARTTLS":
-			if s.handleSTARTTLS(tag, args) {
+			if s.handleSTARTTLS(tag) {
 				return
 			}
 		case "LOGIN":
@@ -519,19 +534,11 @@ func (s *Session) Handle() {
 				s.tagged(tag, "BAD", "CHECK valid only in selected state")
 				break
 			}
-			if args != "" {
-				s.tagged(tag, "BAD", "CHECK takes no arguments")
-				break
-			}
 			// With no housekeeping to do, "CHECK is equivalent to NOOP" (RFC
 			// 3501 §6.4.1).
 			s.pollSelected()
 			s.tagged(tag, "OK", "CHECK completed")
 		case "CLOSE":
-			if args != "" {
-				s.tagged(tag, "BAD", "CLOSE takes no arguments")
-				break
-			}
 			// CLOSE is a Selected State command (RFC 3501 §6.4.2): reject it when
 			// no mailbox is selected rather than answering OK.
 			if s.selected == nil {
@@ -549,16 +556,8 @@ func (s *Session) Handle() {
 			s.deleted = make(map[uint32]bool)
 			s.tagged(tag, "OK", "CLOSE completed")
 		case "EXPUNGE":
-			if args != "" {
-				s.tagged(tag, "BAD", "EXPUNGE takes no arguments")
-				break
-			}
 			s.handleExpunge(tag)
 		case "UNSELECT":
-			if args != "" {
-				s.tagged(tag, "BAD", "UNSELECT takes no arguments")
-				break
-			}
 			s.handleUnselect(tag)
 		case "ENABLE":
 			s.handleEnable(tag, args)
@@ -567,10 +566,6 @@ func (s *Session) Handle() {
 		case "GETQUOTAROOT":
 			s.handleGetQuotaRoot(tag, args)
 		case "IDLE":
-			if args != "" {
-				s.tagged(tag, "BAD", "IDLE takes no arguments")
-				break
-			}
 			if s.handleIdle(tag) {
 				return
 			}
@@ -591,13 +586,7 @@ func (s *Session) handleCapability(tag string) {
 	s.tagged(tag, "OK", "CAPABILITY completed")
 }
 
-func (s *Session) handleSTARTTLS(tag, args string) bool {
-	// STARTTLS takes no arguments (RFC 3501 §6.2.1); refuse rather than begin a
-	// negotiation the client may not expect.
-	if args != "" {
-		s.tagged(tag, "BAD", "STARTTLS takes no arguments")
-		return false
-	}
+func (s *Session) handleSTARTTLS(tag string) bool {
 	if s.usingTLS {
 		s.tagged(tag, "BAD", "Already in TLS mode")
 		return false
@@ -642,14 +631,11 @@ func (s *Session) handleLogin(tag, args string) {
 		return
 	}
 
-	// Parse: LOGIN <user> <password>
-	parts := parseIMAPArgs(args)
-	if len(parts) < 2 {
+	username, password, ok := parseLoginArgs(args)
+	if !ok {
 		s.tagged(tag, "BAD", "LOGIN requires username and password")
 		return
 	}
-	username := unquote(parts[0])
-	password := unquote(parts[1])
 
 	s.authenticate(tag, username, password, "LOGIN completed")
 }
@@ -971,28 +957,30 @@ func (s *Session) handleSelect(tag, args string, readOnly bool) {
 
 	s.send("* %d EXISTS", total)
 	s.send("* %d RECENT", unread)
+	// Each response code below is followed by text: RFC 3501 §9's resp-text is
+	// ["[" resp-text-code "]" SP] text, and text is one or more characters.
 	// SELECT/EXAMINE UNSEEN is the first unseen sequence number, unlike
 	// STATUS UNSEEN's count (RFC 3501 §§6.3.1, 6.3.10). Omit it when none
 	// exists: zero is not a valid message sequence number.
 	if firstUnseen != 0 {
-		s.send("* OK [UNSEEN %d]", firstUnseen)
+		s.send("* OK [UNSEEN %d] Message %d is first unseen", firstUnseen, firstUnseen)
 	}
-	s.send("* OK [UIDVALIDITY %d]", s.resolveUIDValidity(folder))
+	s.send("* OK [UIDVALIDITY %d] UIDs valid", s.resolveUIDValidity(folder))
 	// UIDNEXT (RFC 3501 §2.3.1.1) is the UID that will be assigned to the next
 	// message: it must be strictly greater than every existing UID, i.e.
 	// highest-UID + 1 — not oldest-UID + 1. maxUID() returns 0 for an empty
 	// mailbox, so this yields 1 there.
-	s.send("* OK [UIDNEXT %d]", s.maxUID()+1)
+	s.send("* OK [UIDNEXT %d] Predicted next UID", s.maxUID()+1)
 	s.send("* FLAGS (\\Seen \\Answered \\Flagged \\Deleted \\Draft)")
 	if readOnly {
 		// A read-only mailbox permits no permanent flag changes (RFC 3501 §6.3.2).
-		s.send("* OK [PERMANENTFLAGS ()]")
+		s.send("* OK [PERMANENTFLAGS ()] No permanent flags permitted")
 		s.tagged(tag, "OK", "[READ-ONLY] EXAMINE completed")
 		return
 	}
 	// No \* entry: Message and FlagUpdate carry only system flags, so a keyword
 	// cannot be stored and must not be advertised as creatable (RFC 3501 §7.1).
-	s.send("* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Deleted \\Draft)]")
+	s.send("* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Deleted \\Draft)] Limited")
 	s.tagged(tag, "OK", "[READ-WRITE] SELECT completed")
 }
 

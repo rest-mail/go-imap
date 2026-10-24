@@ -39,8 +39,9 @@ func TestCommandLineWithinLimitAccepted(t *testing.T) {
 	mock := newMockBackend()
 	h := newIMAPHarness(t, mock)
 
-	pad := strings.Repeat("A", 1024) // ~1 KiB, well under the 8 KiB default
-	untagged, status := h.command("a1", "CAPABILITY %s", pad)
+	// A ~1 KiB tag, well under the 8 KiB default; CAPABILITY takes no arguments.
+	pad := strings.Repeat("A", 1024)
+	untagged, status := h.command(pad, "CAPABILITY")
 	if !strings.Contains(status, "OK") {
 		t.Fatalf("under-limit CAPABILITY: status = %q, want OK", status)
 	}
