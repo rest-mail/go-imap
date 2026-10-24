@@ -737,6 +737,7 @@ name the gap rather than claiming it.
 | IMAP-LIST-03 | RFC 3501 §§5.1, 6.3.8 | Normative | Only names matching the pattern are returned; INBOX matches an INBOX pattern in any case. | TestListLsubResponses |
 | IMAP-LIST-04 | RFC 3501 §6.3.8 | Normative | A non-empty reference name is prefixed to the mailbox pattern for LIST and LSUB; a pattern that starts at the hierarchy root (`/`) ignores the reference. | TestListReference |
 | IMAP-LIST-05 | RFC 3501 §6.3.8 | Normative | An empty mailbox name with a non-empty reference returns `\Noselect`, the delimiter and the root name of the reference: its first level up to and including the delimiter, or empty when it has none. | TestListReference |
+| IMAP-LIST-06 | RFC 3501 §6.3.8 | Normative | When `%` ends the pattern, matching levels of hierarchy are returned too, and a level that is not a selectable mailbox is returned with `\Noselect`; with `*` every name below is listed itself. | TestListHierarchyLevels |
 | IMAP-LSUB-01 | RFC 3501 §§6.3.9, 7.2.3 | Normative | LSUB answers with untagged LSUB replies, not LIST replies, and completes with `OK LSUB completed`. | TestListLsubResponses, TestSubscriptionCommands |
 | IMAP-LSUB-02 | RFC 3501 §6.3.9 | Normative | Under `%`, a non-subscribed superior of a subscribed inferior is returned with `\Noselect`. | n/a: every existing folder counts as subscribed, so there is no unsubscribed superior to report; depends on IMAP-SUB-02. |
 
@@ -827,6 +828,21 @@ inventory is complete.
 | IMAP-ESEARCH-03 | RFC 4731 §3.1 | MUST | MIN and MAX are the lowest and highest match, ALL every match as a sequence-set, COUNT their number; an empty list is ALL; UID SEARCH's ESEARCH carries the UID indicator and answers in UIDs (the A282-A286 examples). | TestESearch |
 | IMAP-ESEARCH-04 | RFC 4731 §3.1 | MUST | With no match the ESEARCH response is still sent; MIN, MAX and ALL are left out, and COUNT, when asked, is 0. | TestESearchNoMatches |
 | IMAP-ESEARCH-05 | RFC 4466 §2.6; RFC 3501 §9 | Normative | A RETURN list that is malformed, misspaced, not followed by criteria, or names an option the server does not offer (PARTIAL) is BAD with no response. | TestESearchRefusals |
+
+## RFC 5258: LIST-EXTENDED
+
+Every folder counts as subscribed in this engine (LSUB says so too), so
+`\Subscribed` and SUBSCRIBED selection follow existence; REMOTE adds nothing,
+as there are no remote mailboxes.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-LISTEXT-01 | RFC 5258 §§3, 4 | MUST | LIST-EXTENDED is advertised; the CHILDREN return option gives each reply exactly one of \HasChildren and \HasNoChildren (example 3); REMOTE is accepted and lists no remote mailboxes (example 4); option names are case-insensitive. | TestListExtendedChildren |
+| IMAP-LISTEXT-02 | RFC 5258 §§3, 3.3; RFC 5819 §2 | MUST | \NonExistent is accurate: a level that is not a mailbox, matched, with a descendant that meets the selection and is not matched, is returned \NonExistent \HasChildren (example 11) and gets no STATUS. | TestListExtendedChildren, TestListExtendedRecursiveMatch |
+| IMAP-LISTEXT-03 | RFC 5258 §§3.1-3.3 | MUST | The SUBSCRIBED selection option lists the subscribed names with \Subscribed and implies the return option; the SUBSCRIBED return option marks them on any LIST; attributes are accurate and additive. | TestListExtendedSubscribed |
+| IMAP-LISTEXT-04 | RFC 5258 §§3.1, 3.5 | MUST | RECURSIVEMATCH also returns a matched name whose descendant meets the selection without being matched, with CHILDINFO naming the criteria (example 8); CHILDINFO is never sent without RECURSIVEMATCH. | TestListExtendedRecursiveMatch |
+| IMAP-LISTEXT-05 | RFC 5258 §3 | SHOULD | Several patterns in parentheses: a name matching any is answered once (example 7); an extended LIST ignores an empty pattern instead of treating it as the delimiter request. | TestListMultiplePatterns |
+| IMAP-LISTEXT-06 | RFC 5258 §§3, 3.1 | MUST | An unknown selection or return option is BAD; RECURSIVEMATCH alone or with only REMOTE is BAD; an unterminated pattern list is BAD. | TestListExtendedRefusals |
 
 ## RFC 2342: NAMESPACE
 

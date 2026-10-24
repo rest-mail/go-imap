@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- LIST-EXTENDED (RFC 5258): SUBSCRIBED, REMOTE and RECURSIVEMATCH selection
+  options, SUBSCRIBED and CHILDREN return options, several patterns in
+  parentheses, \NonExistent and CHILDINFO. Every folder counts as subscribed,
+  as LSUB already said. Part of IMAP4rev2 (rest-mail/rest-mail-server#718).
 - SEARCHRES (RFC 5182): `SEARCH RETURN (SAVE) ...` keeps its result, and
   `$` names it in FETCH, STORE, COPY, MOVE, SEARCH and their UID forms, so a
   client can search and act on the result without the list of numbers
@@ -48,6 +52,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- LIST with a pattern ending in `%` now returns a level of hierarchy that is
+  not itself a folder, with `\Noselect` (RFC 3501 §6.3.8): with only
+  `Music/Rock`, `LIST "" %` used to leave `Music` out, so a client showing the
+  top level never offered it.
 - RFC 3501 §9's rules every line shares (#374). A status response's code is
   followed by text (`resp-text = ["[" resp-text-code "]" SP] text`), but
   SELECT and EXAMINE sent `* OK [UNSEEN n]`, `[UIDVALIDITY n]`, `[UIDNEXT n]`

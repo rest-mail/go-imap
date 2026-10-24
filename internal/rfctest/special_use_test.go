@@ -82,8 +82,8 @@ func TestSpecialUseExtendedList(t *testing.T) {
 		`* LIST () "/" "INBOX"`, `* LIST (\Sent) "/" "Sent"`,
 		`* LIST (\Junk) "/" "Spam"`, `* LIST () "/" "Projects"`)
 	for _, bad := range []string{
-		`LIST (SUBSCRIBED) "" "*"`,
-		`LIST "" "*" RETURN (CHILDREN)`,
+		`LIST (VIRTUAL) "" "*"`,
+		`LIST "" "*" RETURN (MYRIGHTS)`,
 		`LIST "" "*" EXTRA`,
 		`LIST (SPECIAL-USE "" "*"`,
 	} {
