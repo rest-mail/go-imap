@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 316/365 mapped](https://img.shields.io/badge/partial%20checklist-316%2F365%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 320/369 mapped](https://img.shields.io/badge/partial%20checklist-320%2F369%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -43,6 +43,8 @@ what your type actually implements, so it never over-promises.
 - `IDLE` (RFC 2177), with the poll goroutine fully stopped before each tagged
   completion so responses never interleave, and `QUOTA` (RFC 2087).
 - `UNSELECT` (RFC 3691) and `ENABLE` (RFC 5161) baseline commands.
+- `LITERAL-` (RFC 7888): non-synchronizing literals up to 4096 octets, no
+  continuation round trip for short strings.
 - `SASL-IR` (RFC 4959): `AUTHENTICATE PLAIN` may carry its response on the
   command line, one round trip fewer at sign-in.
 - Optional `UIDPLUS` (RFC 4315) via `UIDPlusMailbox` and atomic server-side
@@ -312,7 +314,8 @@ fully consumed commands preserve the connection. An overlong initial command
 line ending in a `{n+}` marker sends BYE and closes; other overlong lines keep
 the session. Overlong AUTHENTICATE responses and IDLE lines are refused or
 ignored without closing, since neither admits a literal. Malformed markers
-remain unaudited. LITERAL+ is not advertised.
+remain unaudited. LITERAL- (RFC 7888) is advertised: a `{n+}` literal over
+4096 octets gets BAD and BYE with TOOBIG.
 The COPY/UID COPY slice checks the RFC 3501 §6.4.7 and RFC 4315 §3 examples,
 sparse/overlapping UID sets, COPYUID correspondence, read-only sources, destination
 names, backend errors, selection state and RFC 3501 §9 argument syntax

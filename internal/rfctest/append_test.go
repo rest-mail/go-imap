@@ -448,7 +448,7 @@ func TestAppendRequiresAuthentication(t *testing.T) {
 // an in-flight message (or a later command) into a new command. Header-only
 // cases also prove that refusal does not wait to drain an attacker-sized body.
 //
-// checklist: IMAP-APPEND-22 IMAP-APPEND-24 IMAP-APPEND-26 IMAP-APPEND-30
+// checklist: IMAP-APPEND-22 IMAP-APPEND-24 IMAP-APPEND-26 IMAP-APPEND-30 IMAP-LITMINUS-04
 func TestAppendRejectedNonSynchronizing(t *testing.T) {
 	for _, tc := range []struct {
 		name, args, status string
@@ -465,8 +465,10 @@ func TestAppendRejectedNonSynchronizing(t *testing.T) {
 		{"invalid date", `INBOX "bad date"`, "BAD", false},
 		{"unterminated date", `INBOX "bad date`, "BAD", false},
 		{"extra argument", "INBOX garbage", "BAD", false},
-		{"oversized", "INBOX", "NO", false},
-		{"maximum size", "INBOX", "NO", false},
+		// Over LITERAL-'s 4096 octets, a non-synchronizing literal is BAD
+		// with TOOBIG (RFC 7888 §5), before its size is weighed.
+		{"oversized", "INBOX", "BAD", false},
+		{"maximum size", "INBOX", "BAD", false},
 	} {
 		for _, pipelined := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/pipelined=%t", tc.name, pipelined), func(t *testing.T) {
@@ -500,7 +502,7 @@ func TestAppendRejectedNonSynchronizing(t *testing.T) {
 				if line := c.line(); !strings.HasPrefix(line, "A1 "+tc.status+" ") {
 					t.Fatalf("refusal: %q", line)
 				}
-				if line := c.line(); !strings.HasPrefix(line, "* BYE ") || !strings.Contains(line, "APPEND") {
+				if line := c.line(); !strings.HasPrefix(line, "* BYE ") || !strings.Contains(line, "APPEND") && !strings.HasPrefix(line, "* BYE [TOOBIG] ") {
 					t.Fatalf("closing explanation: %q", line)
 				}
 				if !c.closed() {
