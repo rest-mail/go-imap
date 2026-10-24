@@ -108,6 +108,9 @@ type Message struct {
 
 // Folder is one mailbox folder reported by LIST/LSUB.
 type Folder struct {
+	// Name is the store's own name for the folder, in UTF-8, with "/" between
+	// levels of hierarchy. The [Server] writes it in modified UTF-7 for a client
+	// that has not enabled UTF8=ACCEPT (RFC 3501 §5.1.3).
 	Name string
 	// SpecialUse is the folder's role (RFC 6154 §2): one of the SpecialUse
 	// attributes, or empty for an ordinary folder. The store says which folder
@@ -157,6 +160,11 @@ type Backend interface {
 // scoped to the user that [Backend.Authenticate] accepted; a Mailbox is used by
 // one session, though [Mailbox.Messages] may be called concurrently by the IDLE
 // poller while the client is idling.
+//
+// Every folder name a Mailbox takes or returns is the store's UTF-8 name. The
+// [Server] converts at the wire: until the client enables UTF8=ACCEPT, names are
+// modified UTF-7 there (RFC 3501 §5.1.3), decoded before they reach the Mailbox,
+// and a name that is not valid modified UTF-7 never does.
 type Mailbox interface {
 	// Folders lists the account's folders (LIST/LSUB).
 	Folders() ([]Folder, error)
@@ -233,9 +241,11 @@ type UIDPlusMailbox interface {
 // Implementing it also changes the grammar for the whole session, enabled or
 // not: quoted-strings may carry UTF-8 and 8-bit text that is not UTF-8 is BAD;
 // CREATE and RENAME refuse mailbox names with controls or line and paragraph
-// separators; APPEND takes the message as "UTF8 (" literal8 ")" and, until
+// separators, and a UTF-8 mailbox name is taken before the client enables the
+// mode (RFC 6855 §3); APPEND takes the message as "UTF8 (" literal8 ")" and, until
 // the client enables UTF-8, refuses one with 8-bit header fields. Once enabled,
-// SEARCH with a CHARSET is BAD.
+// SEARCH with a CHARSET is BAD, and mailbox names travel as UTF-8 both ways
+// rather than in modified UTF-7.
 //
 // [RFC 6855]: https://www.rfc-editor.org/rfc/rfc6855
 // [RFC 6532]: https://www.rfc-editor.org/rfc/rfc6532

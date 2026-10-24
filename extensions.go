@@ -74,7 +74,10 @@ func (s *Session) uidValidity(folder string) (uint32, bool) {
 func (s *Session) copyMessages(seqNums []int, dest string) (string, error) {
 	// "INBOX" is case-insensitive (RFC 3501 §5.1): fold an any-case destination to
 	// the one real INBOX. Shared by COPY and UID COPY.
-	dest = canonicalizeInbox(dest)
+	dest, ok := s.folderName(dest)
+	if !ok {
+		return "", errInvalidMailboxName
+	}
 	up, uidPlus := s.mailbox.(UIDPlusMailbox)
 	var srcUIDs, dstUIDs []uint32
 	seen := make(map[int]bool)
@@ -150,7 +153,11 @@ func (s *Session) moveMessages(tag, cmdName string, seqNums []int, dest string) 
 	}
 	// "INBOX" is case-insensitive (RFC 3501 §5.1): fold an any-case destination to
 	// the one real INBOX. Shared by MOVE and UID MOVE.
-	dest = canonicalizeInbox(dest)
+	dest, ok := s.folderName(dest)
+	if !ok {
+		s.tagged(tag, "NO", "No such mailbox")
+		return
+	}
 	mover, hasMover := s.mailbox.(Mover)
 
 	var srcUIDs, dstUIDs []uint32

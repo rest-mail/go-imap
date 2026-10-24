@@ -65,11 +65,12 @@ func TestListEscapesBackslashInMailboxName(t *testing.T) {
 	}
 }
 
-// TestListLiteralEncodesControlChars: a folder name containing CR/LF cannot be
-// carried in a quoted-string, so it MUST be emitted as a literal — otherwise the
-// CR/LF injects extra response lines (the security bug in issue #24). On the
-// pre-fix code the name was interpolated raw, so the harness saw the line split
-// across the injected CRLF and NO literal was emitted — RED there.
+// TestListLiteralEncodesControlChars: a folder name containing CR/LF must never
+// inject extra response lines (the security bug in issue #24). Before the client
+// enables UTF-8 the name is modified UTF-7 (RFC 3501 §5.1.3), whose base64 carries
+// the CR and LF, so it is one quoted token on one line. Once UTF-8 is enabled
+// the name travels as it is, and a quoted-string cannot carry CR/LF, so it MUST
+// be emitted as a literal.
 func TestListLiteralEncodesControlChars(t *testing.T) {
 	const evil = "Bad\r\nInject"
 	b := newMockBackend()
@@ -78,6 +79,19 @@ func TestListLiteralEncodesControlChars(t *testing.T) {
 	h.login("a1")
 
 	untagged, status := h.command("a2", `LIST "" "*"`)
+	if !hasStatus(status, "OK") {
+		t.Fatalf("LIST status = %q, want OK", status)
+	}
+	if want := `* LIST () "/" "Bad&AA0ACg-Inject"`; !hasLine(untagged, want) {
+		t.Errorf("LIST lines = %v, want one to be %q", untagged, want)
+	}
+
+	h = newIMAPHarnessWith(t, utf8MockBackend{b}, b.user, b.pass)
+	h.login("u1")
+	if _, status := h.command("u2", "ENABLE UTF8=ACCEPT"); !hasStatus(status, "OK") {
+		t.Fatalf("ENABLE status = %q, want OK", status)
+	}
+	untagged, status = h.command("u3", `LIST "" "*"`)
 	if !hasStatus(status, "OK") {
 		t.Fatalf("LIST status = %q, want OK", status)
 	}
@@ -96,6 +110,21 @@ func TestListLiteralEncodesControlChars(t *testing.T) {
 		t.Errorf("no LIST line carried the {11} literal marker; lines = %v", untagged)
 	}
 }
+
+// utf8MockBackend serves its mockBackend's mailbox as a [UTF8Mailbox].
+type utf8MockBackend struct{ *mockBackend }
+
+func (b utf8MockBackend) Authenticate(user, pass string) (Mailbox, error) {
+	m, err := b.mockBackend.Authenticate(user, pass)
+	if err != nil {
+		return nil, err
+	}
+	return utf8MockMailbox{m.(*mockMailbox)}, nil
+}
+
+type utf8MockMailbox struct{ *mockMailbox }
+
+func (utf8MockMailbox) EnableUTF8() error { return nil }
 
 // TestListRoundTripAtomSafeName: a plain, atom-safe name round-trips — it is
 // emitted quoted per the encoder's rule and decodes back to the original.
