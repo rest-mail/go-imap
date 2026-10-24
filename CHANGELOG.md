@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- LITERAL- (RFC 7888 §5): the server advertises it, so a client may send
+  `{n+}` literals of up to 4096 octets with no continuation round trip. A
+  larger one, as a command argument or in APPEND, gets `BAD [TOOBIG]` and
+  `BYE [TOOBIG]`, and the session ends without running its octets; APPEND's
+  oversized `{n+}` message was a NO before. Part of IMAP4rev2
+  (rest-mail/rest-mail-server#718).
 - SASL-IR (RFC 4959): AUTHENTICATE takes the initial client response on
   the command line (`AUTHENTICATE PLAIN <base64>`, or `=` for an empty one),
   saving a round trip at sign-in, and SASL-IR is advertised beside

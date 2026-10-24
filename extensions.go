@@ -28,7 +28,8 @@ func (s *Session) loginDisabled() bool {
 func (s *Session) capabilities() string {
 	// SPECIAL-USE (RFC 6154): LIST reports each folder's role, and takes the
 	// SPECIAL-USE selection and return options.
-	caps := []string{"IMAP4rev1", "IDLE", "MOVE", "QUOTA", "UNSELECT", "ENABLE", "SPECIAL-USE"}
+	// LITERAL- (RFC 7888 §5): non-synchronizing literals up to 4096 octets.
+	caps := []string{"IMAP4rev1", "LITERAL-", "IDLE", "MOVE", "QUOTA", "UNSELECT", "ENABLE", "SPECIAL-USE"}
 	if _, ok := s.mailbox.(UIDPlusMailbox); ok {
 		caps = append(caps, "UIDPLUS")
 	}

@@ -82,6 +82,15 @@ var MaxCommandLineLength = 8 * 1024
 // argument-literal handling never touches.
 var MaxLiteralSize = 8 * 1024
 
+// nonSyncTooBig is the refusal of a non-synchronizing literal over
+// maxNonSyncLiteral, as the tagged BAD and the BYE that follows it say it.
+var nonSyncTooBig = fmt.Sprintf("[TOOBIG] Non-synchronizing literal over %d bytes; send it as a synchronizing literal", maxNonSyncLiteral)
+
+// maxNonSyncLiteral is the largest non-synchronizing literal ({N+}) a client may
+// send: the server advertises LITERAL-, so a larger one "MUST be sent as a
+// synchronizing literal" (RFC 7888 §5).
+const maxNonSyncLiteral = 4096
+
 // readLine reads one CRLF/LF-terminated line from the client and returns it with
 // any trailing CR/LF stripped, enforcing MaxCommandLineLength on the line length
 // (excluding the terminator).
@@ -225,6 +234,13 @@ func (s *Session) readLiteralArgs(tag, args string) (assembled string, ok, close
 			return args, true, false // no (further) trailing literal
 		}
 
+		// A non-synchronizing literal over LITERAL-'s limit has its octets in
+		// flight: refuse it and end the session, with TOOBIG (RFC 7888 §§4-5).
+		if !sync && size > maxNonSyncLiteral {
+			s.tagged(tag, "BAD", nonSyncTooBig)
+			s.send("* BYE %s", nonSyncTooBig)
+			return "", false, true
+		}
 		// Bound the literal BEFORE soliciting its octets. A synchronizing literal
 		// is refused without a continuation, so the client never sends the octets.
 		if size > MaxLiteralSize || total+size > MaxLiteralSize {
@@ -2322,12 +2338,20 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 	// rather than dispatching those octets as commands (RFC 7888 §§3–4).
 	_, _, synchronizing, literal := splitTrailingLiteral(args)
 	rejectNonSync := literal && !synchronizing
+	bye := "APPEND rejected with unread non-synchronizing literal"
 	defer func() {
 		if rejectNonSync {
-			s.send("* BYE APPEND rejected with unread non-synchronizing literal")
+			s.send("* BYE %s", bye)
 			closeConn = true
 		}
 	}()
+	// tooBig refuses a non-synchronizing literal over LITERAL-'s limit: the
+	// tagged BAD MUST carry TOOBIG on APPEND, and the BYE that ends the session,
+	// since its octets are in flight, SHOULD (RFC 7888 §5).
+	tooBig := func() {
+		s.tagged(tag, "BAD", nonSyncTooBig)
+		bye = nonSyncTooBig
+	}
 
 	if !s.auth.authenticated {
 		s.tagged(tag, "NO", "Not authenticated")
@@ -2357,6 +2381,10 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 		// A line that is only a literal marker carries the mailbox name as a
 		// literal astring (RFC 3501 §§4.3, 9); the rest of the command, ending
 		// in the message literal, follows its octets.
+		if !sync && size > maxNonSyncLiteral {
+			tooBig()
+			return
+		}
 		if size > MaxCommandLineLength {
 			s.tagged(tag, "BAD", "Invalid mailbox name")
 			return
@@ -2501,6 +2529,10 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 	utf8Data := isLiteral && utf8OK && strings.EqualFold(prefix, "UTF8 (~")
 	if !isLiteral || (prefix != "" && !utf8Data) {
 		s.tagged(tag, "BAD", "Invalid message literal")
+		return
+	}
+	if !sync && size > maxNonSyncLiteral {
+		tooBig()
 		return
 	}
 	if size > 10*1024*1024 {

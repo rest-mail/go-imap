@@ -311,8 +311,8 @@ response codes are not covered by this slice.
 A003 tag, destination and Seen flag. The remaining tests check the engine's
 callback inputs and wire framing; they do not establish durable storage or
 rollback by arbitrary backends. Draft/incomplete message headers are accepted.
-The RFC 7888 rows cover the already accepted `{n+}` form only; this engine does
-not advertise LITERAL+ and this slice does not claim full extension support.
+The RFC 7888 rows cover the `{n+}` form; the engine advertises LITERAL-
+(IMAP-LITMINUS-01..04), not LITERAL+.
 
 | ID | Section | Level | Requirement | Tests |
 |----|---------|-------|-------------|-------|
@@ -353,12 +353,13 @@ BYE-and-close policy instead of draining potentially large payloads. This
 includes malformed preceding arguments and unauthenticated commands. Invalid
 markers outside the unsigned 32-bit literal grammar are not a supported
 non-synchronizing form. An overlong initial APPEND line ending in `+}` is
-covered by IMAP-LITERAL-08. LITERAL+ remains unadvertised.
+covered by IMAP-LITERAL-08. LITERAL- is advertised, not LITERAL+; a `{n+}`
+message over 4096 octets is BAD with TOOBIG (IMAP-LITMINUS-04).
 
 ## RFC 3501 / RFC 7888: command-argument literals — partial refusal slice
 
 These rows cover the existing non-APPEND literal materialization path and its
-resource limits. They do not prove full command grammar or LITERAL+ support.
+resource limits. LITERAL- itself is the IMAP-LITMINUS rows below.
 RFC 7888 §§3–4 permit BYE-and-close instead of consuming refused in-flight
 literal data. Once a continuation line exceeds the line cap, its suffix and
 any next literal marker are lost; this path closes conservatively as well.
@@ -777,6 +778,15 @@ inventory is complete.
 | IMAP-SASLIR-02 | RFC 4959 §§3, 4 | Normative | A PLAIN initial response on the command line is used as the client's first response: the command completes with no continuation, as in the RFC's example. | TestSASLIR |
 | IMAP-SASLIR-03 | RFC 4959 §3 | MUST | Clients that omit the initial response are still supported: the RFC 3501 continuation exchange works unchanged. | TestSASLIR |
 | IMAP-SASLIR-04 | RFC 4959 §3 | MUST | `=` is a zero-length response; one that does not decode as base64, pad inside it or quoted, is handled as any client response that does not decode (NO); an empty or space-separated argument is BAD; none gets a continuation or leaves the session authenticated. | TestSASLIR |
+
+## RFC 7888: LITERAL-, non-synchronizing literals up to 4096 octets
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-LITMINUS-01 | RFC 7888 §5 | MUST NOT | Advertise LITERAL- and never LITERAL+ beside it. | TestLiteralMinus |
+| IMAP-LITMINUS-02 | RFC 7888 §3 | MUST | A non-synchronizing literal gets no continuation; its octets and the line after them are part of the same command, as in the RFC's LOGIN example. | TestLiteralMinus |
+| IMAP-LITMINUS-03 | RFC 7888 §§4, 5 | Normative | A non-synchronizing literal of up to 4096 octets is taken as a command argument and as APPEND's message; a synchronizing literal of any size the command allows is unaffected. | TestLiteralMinusLimit |
+| IMAP-LITMINUS-04 | RFC 7888 §§4, 5 | MUST | One over 4096 octets, as a command argument, APPEND's mailbox or APPEND's message, gets a tagged BAD with TOOBIG and a BYE with TOOBIG, and the session ends without running its in-flight octets. | TestLiteralMinusLimit, TestAppendRejectedNonSynchronizing |
 
 ## RFC 3501 §9: formal syntax — partial slice
 
