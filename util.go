@@ -1077,7 +1077,7 @@ func parseFetchItems(s string) ([]string, bool) {
 			case "FLAGS", "UID", "INTERNALDATE", "ENVELOPE", "BODY", "BODYSTRUCTURE",
 				"RFC822", "RFC822.HEADER", "RFC822.TEXT", "RFC822.SIZE":
 			default:
-				if !strings.HasPrefix(up, "BODY[") && !strings.HasPrefix(up, "BODY.PEEK[") {
+				if !strings.HasPrefix(up, "BODY[") && !strings.HasPrefix(up, "BODY.PEEK[") && !binaryItem(up) {
 					return nil, false
 				}
 			}
@@ -1263,6 +1263,12 @@ func bodySection(item string, loadRaw func() (string, bool)) (name, payload stri
 func validFetchSections(tokens []string) bool {
 	for _, item := range tokens {
 		up := strings.ToUpper(item)
+		if binaryItem(up) {
+			if !validBinaryItem(item) {
+				return false
+			}
+			continue
+		}
 		if !strings.HasPrefix(up, "BODY[") && !strings.HasPrefix(up, "BODY.PEEK[") {
 			continue
 		}

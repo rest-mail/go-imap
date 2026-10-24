@@ -1212,7 +1212,7 @@ func (s *Session) handleFetch(tag, args string) {
 		msg := s.messages[seq-1]
 
 		if err := s.fetchResponse(seq, msg, tokens); err != nil {
-			s.tagged(tag, "NO", "FETCH failed")
+			s.tagged(tag, "NO", fetchFailure(err, "FETCH failed"))
 			return
 		}
 	}
@@ -1252,7 +1252,12 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) error {
 		fmt.Sprintf("UID %d", msg.UID),
 		"", // FLAGS — set after the loop, once marksSeen is known
 	}
-	type litFrag struct{ name, payload string }
+	// binary marks a BINARY section, sent as a literal8 when it holds a NUL
+	// (RFC 3516 §4.3); otherwise it is a plain literal, as the RFC prefers.
+	type litFrag struct {
+		name, payload string
+		binary        bool
+	}
 	var lits []litFrag
 
 	for _, item := range tokens {
@@ -1284,16 +1289,32 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) error {
 			}
 		case up == "RFC822":
 			if r, ok := loadRaw(); ok {
-				lits = append(lits, litFrag{"RFC822", r})
+				lits = append(lits, litFrag{name: "RFC822", payload: r})
 				marksSeen = true
 			}
 		case up == "RFC822.HEADER": // defined as BODY.PEEK[HEADER]: no \Seen.
 			if r, ok := loadRaw(); ok {
-				lits = append(lits, litFrag{"RFC822.HEADER", headerSection(r)})
+				lits = append(lits, litFrag{name: "RFC822.HEADER", payload: headerSection(r)})
 			}
 		case up == "RFC822.TEXT":
 			if r, ok := loadRaw(); ok {
-				lits = append(lits, litFrag{"RFC822.TEXT", textSection(r)})
+				lits = append(lits, litFrag{name: "RFC822.TEXT", payload: textSection(r)})
+				marksSeen = true
+			}
+		case binaryItem(up):
+			name, data, size, peek, ok, err := binarySection(item, loadRaw)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				continue
+			}
+			if size {
+				plain = append(plain, fmt.Sprintf("%s %d", name, len(data)))
+				continue
+			}
+			lits = append(lits, litFrag{name: name, payload: data, binary: true})
+			if !peek {
 				marksSeen = true
 			}
 		case strings.HasPrefix(up, "BODY[") || strings.HasPrefix(up, "BODY.PEEK["):
@@ -1301,7 +1322,7 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) error {
 			if !ok {
 				continue
 			}
-			lits = append(lits, litFrag{name, payload})
+			lits = append(lits, litFrag{name: name, payload: payload})
 			if !peek {
 				marksSeen = true
 			}
@@ -1343,7 +1364,11 @@ func (s *Session) fetchResponse(seq int, msg Message, tokens []string) error {
 	}
 	s.writeString(head)
 	for _, lf := range lits {
-		s.writeString(fmt.Sprintf(" %s {%d}\r\n", lf.name, len(lf.payload)))
+		eight := ""
+		if lf.binary && strings.IndexByte(lf.payload, 0) >= 0 {
+			eight = "~"
+		}
+		s.writeString(fmt.Sprintf(" %s %s{%d}\r\n", lf.name, eight, len(lf.payload)))
 		s.writeString(lf.payload)
 	}
 	s.writeString(")\r\n")
@@ -2616,6 +2641,13 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 	// also takes the message as RFC 6855 §4's utf8-literal, "UTF8 (" literal8
 	// ")", whose literal8 is the same marker after a "~" (RFC 4466 §2.2).
 	prefix, size, sync, isLiteral := splitTrailingLiteral(rest)
+	// A literal8 message (RFC 3516 §4.4) may hold NUL, which the store cannot
+	// keep (CHAR8 messages only), so it fails with UNKNOWN-CTE before any
+	// octet is invited.
+	if isLiteral && prefix == "~" {
+		s.tagged(tag, "NO", "[UNKNOWN-CTE] Binary content cannot be stored")
+		return
+	}
 	utf8Data := isLiteral && utf8OK && strings.EqualFold(prefix, "UTF8 (~")
 	if !isLiteral || (prefix != "" && !utf8Data) {
 		s.tagged(tag, "BAD", "Invalid message literal")
@@ -3091,7 +3123,7 @@ func (s *Session) handleUIDFetch(tag, args string) {
 		msg := s.messages[seq-1]
 
 		if err := s.fetchResponse(seq, msg, tokens); err != nil {
-			s.tagged(tag, "NO", "UID FETCH failed")
+			s.tagged(tag, "NO", fetchFailure(err, "UID FETCH failed"))
 			return
 		}
 	}

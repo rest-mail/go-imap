@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 331/382 mapped](https://img.shields.io/badge/partial%20checklist-331%2F382%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 338/389 mapped](https://img.shields.io/badge/partial%20checklist-338%2F389%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -43,6 +43,7 @@ what your type actually implements, so it never over-promises.
 - `IDLE` (RFC 2177), with the poll goroutine fully stopped before each tagged
   completion so responses never interleave, and `QUOTA` (RFC 2087).
 - `UNSELECT` (RFC 3691) and `ENABLE` (RFC 5161) baseline commands.
+- `BINARY` (RFC 3516): `FETCH BINARY[part]` answers decoded section octets.
 - `STATUS=SIZE` (RFC 8438): `STATUS folder (SIZE)`, the folder's octets.
 - `LIST-STATUS` (RFC 5819): `LIST ... RETURN (STATUS (...))` gives each
   folder's STATUS with its LIST.

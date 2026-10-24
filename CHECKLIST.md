@@ -779,6 +779,18 @@ inventory is complete.
 | IMAP-SASLIR-03 | RFC 4959 §3 | MUST | Clients that omit the initial response are still supported: the RFC 3501 continuation exchange works unchanged. | TestSASLIR |
 | IMAP-SASLIR-04 | RFC 4959 §3 | MUST | `=` is a zero-length response; one that does not decode as base64, pad inside it or quoted, is handled as any client response that does not decode (NO); an empty or space-separated argument is BAD; none gets a continuation or leaves the session authenticated. | TestSASLIR |
 
+## RFC 3516: BINARY
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-BINARY-01 | RFC 3516 §§4.1-4.3 | MUST | BINARY is advertised; FETCH BINARY[part] and BINARY.PEEK[part] answer the section with its Content-Transfer-Encoding removed: quoted-printable and base64 decoded, 7bit, 8bit and binary as stored, BINARY[] the whole message, a part that does not exist empty. | TestBinaryFetch |
+| IMAP-BINARY-02 | RFC 3516 §4.3 | SHOULD | Decoded data holding a NUL is a literal8 (`~{n}`); other data is a literal. | TestBinaryFetch |
+| IMAP-BINARY-03 | RFC 3516 §§4.2-4.3 | MUST | A partial counts octets of the decoded data and labels the origin (`BINARY[2]<2>`); BINARY.SIZE[part] is the decoded length BINARY sends, and sets no flag. | TestBinaryFetch |
+| IMAP-BINARY-04 | RFC 3516 §4.2 | Normative | BINARY sets \Seen and reports it in the same FETCH, as BODY does; BINARY.PEEK does not. | TestBinarySeen |
+| IMAP-BINARY-05 | RFC 3516 §4.3 | MUST | A section whose encoding cannot be removed (an unknown one, or base64 that does not decode) fails BINARY and BINARY.SIZE with NO [UNKNOWN-CTE] and no FETCH response. | TestBinaryUnknownCTE |
+| IMAP-BINARY-06 | RFC 3516 §6 | Normative | section-binary is `"[" [section-part] "]"`: HEADER, TEXT, MIME, a zero or trailing-dot part, a BINARY.SIZE partial or the response-only `<n>` form is BAD with no response. | TestBinaryGrammar |
+| IMAP-BINARY-07 | RFC 3516 §4.4 | MUST | APPEND's literal8 form, which may carry binary content the store cannot keep, fails with NO [UNKNOWN-CTE] before a continuation, and the session goes on. | TestBinaryAppend |
+
 ## RFC 8438: STATUS=SIZE
 
 | ID | Section | Level | Requirement | Tests |
