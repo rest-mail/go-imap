@@ -26,6 +26,7 @@ type Session struct {
 	hostname  string
 	tlsConfig *tls.Config
 	limiter   Limiter
+	idlePoll  time.Duration // SetIdlePollInterval; zero is idlePollInterval
 
 	// Session state
 	usingTLS bool
@@ -334,6 +335,11 @@ func (s *Session) sendAutologoutBye() {
 }
 
 // Handle runs the IMAP state machine until the client disconnects or LOGOUTs.
+// SetIdlePollInterval sets how often an idling session re-reads its selected mailbox to
+// report what other sources changed: new messages, expunges and flag changes (RFC 2177;
+// RFC 3501 §§6.4.6, 7). Zero keeps the default, 15 seconds. Call it before Handle.
+func (s *Session) SetIdlePollInterval(d time.Duration) { s.idlePoll = d }
+
 func (s *Session) Handle() {
 	defer func() { _ = s.conn.Close() }()
 	defer s.recoverPanic() // contain any panic from a backend method or handler
@@ -1455,6 +1461,13 @@ func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriter
 		// set as RECENT in SELECT/EXAMINE and STATUS; SEARCH RECENT matches that
 		// same set (RFC 3501 §6.4.4).
 		return searchCriterion{kind: "recent"}, idx + 1, nil
+	case "NEW":
+		// NEW "is functionally equivalent to (RECENT UNSEEN)" and OLD to "NOT
+		// RECENT" (RFC 3501 §6.4.4), so both follow whatever RECENT matches.
+		recent, unseen := searchCriterion{kind: "recent"}, searchCriterion{kind: "unseen"}
+		return searchCriterion{kind: "and", sub: []searchCriterion{recent, unseen}}, idx + 1, nil
+	case "OLD":
+		return searchCriterion{kind: "not", sub: []searchCriterion{{kind: "recent"}}}, idx + 1, nil
 	case "KEYWORD", "UNKEYWORD":
 		// No keyword can be stored (PERMANENTFLAGS lists no \*), so KEYWORD
 		// matches nothing and UNKEYWORD matches every message (RFC 3501 §6.4.4).
@@ -1681,9 +1694,11 @@ func (s *Session) matchOne(msg Message, c searchCriterion, loadRaw func() (strin
 		}
 		return msg.Size >= 0 && uint64(msg.Size) < c.size
 	case "from":
-		return strings.Contains(strings.ToLower(msg.From.Email), strings.ToLower(c.value))
+		// FROM matches the envelope's FROM field (RFC 3501 §6.4.4): the
+		// sender's display name as well as the address, as one mailbox.
+		return strings.Contains(strings.ToLower(searchMailbox(msg.From)), strings.ToLower(c.value))
 	case "to":
-		return strings.Contains(strings.ToLower(msg.To), strings.ToLower(c.value))
+		return strings.Contains(strings.ToLower(decodeSearchHeader(msg.To)), strings.ToLower(c.value))
 	case "subject":
 		return strings.Contains(strings.ToLower(decodeSearchHeader(msg.Subject)), strings.ToLower(c.value))
 	case "body":
@@ -2587,7 +2602,11 @@ func (s *Session) handleIdle(tag string) (terminate bool) {
 	go func() {
 		defer close(stopped)
 		defer s.recoverPanic() // a backend Messages panic here is a separate goroutine; contain it too
-		ticker := time.NewTicker(idlePollInterval)
+		interval := idlePollInterval
+		if s.idlePoll > 0 {
+			interval = s.idlePoll
+		}
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {

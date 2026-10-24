@@ -142,11 +142,15 @@ example. Flag lists are sets; this engine orders system flags as \Seen,
 | IMAP-STORE-08 | RFC 3501 §§6.4.6, 6.4.8, 9 | Normative | Accept reversed ranges, star, lists and unsigned-32-bit sequence-set bounds; resolve sparse or nonexistent UIDs by mailbox membership and preserve normal/silent flag updates and UID replies. | TestStoreValidSequenceSet |
 | IMAP-STORE-09 | RFC 3501 §§6.4.6, 9 | Normative | STORE and UID STORE reject a malformed flag operand with BAD before backend writes, session flag changes or FETCH responses: unbalanced, nested or repeated parentheses, extra or non-SP separators, quoted strings, and flags that are not an atom with an optional leading `\` (atom-specials, `\*`, non-ASCII or control octets). | TestStoreInvalidFlagList |
 | IMAP-STORE-10 | RFC 3501 §§6.4.6, 9 | Normative | Accept an empty flag-list, bare SP-separated flags, case-insensitive system flags, and keywords or flag-extensions using any ATOM-CHAR, for every action with and without .SILENT. | TestStoreValidFlagList |
+| IMAP-STORE-11 | RFC 3501 §§2.3.2, 6.4.6 | Normative | FLAGS replaces the flags other than \Recent: naming \Recent in a FLAGS, +FLAGS or -FLAGS list sets or clears nothing, and a STORE never answers with \Recent. | TestStoreLeavesRecentAlone |
+| IMAP-STORE-12 | RFC 3501 §6.4.6 | SHOULD | .SILENT suppresses only the STORE's own answer: a flag change from another source the session observes (when an idling session re-reads its mailbox) is still reported with an untagged FETCH carrying the message's flags. | TestStoreSilentStillReportsOtherSourcesChanges |
 
 A NO from a multi-message set reports the first refused write; earlier
 messages in the set keep their applied changes, which RFC 3501 permits.
-Out-of-range message sequence numbers, overlapping UID-set
-semantics and STORE under concurrent sessions remain unaudited.
+Out-of-range message sequence numbers and overlapping UID-set semantics
+remain unaudited. Another source's flag changes are observed while a
+session idles (IMAP-STORE-12); between commands the session does not
+re-read its mailbox.
 
 ## RFC 3501: SEARCH and UID SEARCH — partial criteria slice
 
@@ -166,7 +170,7 @@ and BCC values are matched after RFC 2047 encoded-word decoding (IMAP-SEARCH-10)
 |----|---------|-------|-------------|-------|
 | IMAP-SEARCH-01 | RFC 3501 §§6.4.4, 7.2.5 | MUST | Successful SEARCH sends one untagged SEARCH listing matching sequence numbers before tagged OK; no matches yields an empty SEARCH response. | TestSearchExample, TestSearchRequiresSelection |
 | IMAP-SEARCH-02 | RFC 3501 §6.4.4 | Normative | Multiple keys and parenthesized groups intersect their matches; OR takes the union of two operands and NOT complements its operand. | TestSearchExample, TestSearchBooleanKeys |
-| IMAP-SEARCH-03 | RFC 3501 §6.4.4 | Normative | ALL matches every message; SEEN/UNSEEN and FLAGGED filter flags; FROM email and SUBJECT match case-insensitive substrings in metadata. | TestSearchExample, TestSearchBooleanKeys |
+| IMAP-SEARCH-03 | RFC 3501 §6.4.4 | Normative | ALL matches every message; SEEN/UNSEEN and FLAGGED filter flags; FROM and SUBJECT match case-insensitive substrings in metadata. | TestSearchExample, TestSearchBooleanKeys |
 | IMAP-SEARCH-04 | RFC 3501 §§6.4.8, 7.2.5 | MUST | UID SEARCH applies the same criteria but returns UIDs rather than sequence numbers, including sparse UID assignments. | TestSearchBooleanKeys, TestSearchSequenceAndUIDKeys |
 | IMAP-SEARCH-05 | RFC 3501 §§6.4.4, 6.4.8 | Normative | Bare sequence-set keys select sequence numbers even inside UID SEARCH; UID keys select UIDs. Reversed ranges, star and nonexistent UIDs respect the selected mailbox. | TestSearchSequenceAndUIDKeys |
 | IMAP-SEARCH-06 | RFC 3501 §6.4.4 | Normative | BEFORE, ON and SINCE compare internal calendar dates, disregarding time and timezone; BEFORE excludes and SINCE includes the specified day. | TestSearchCalendarDates |
@@ -175,7 +179,7 @@ and BCC values are matched after RFC 2047 encoded-word decoding (IMAP-SEARCH-10)
 | IMAP-SEARCH-09 | RFC 3501 §§3, 6.4 | Normative | SEARCH and UID SEARCH require a selected mailbox; authenticating alone does not permit searching. | TestSearchRequiresSelection |
 | IMAP-SEARCH-10 | RFC 3501 §6.4.4 | MUST | Decode MIME transfer encodings and encoded headers to the selected character set before searching: BODY/TEXT remove base64 and quoted-printable encodings in every MIME leaf, including encapsulated messages; TEXT, HEADER and SUBJECT decode RFC 2047 encoded words; UTF-8, US-ASCII and ISO-8859-1 content is compared as UTF-8. Malformed encodings, and parts in other charsets, are compared as stored. | TestSearchDecodesMIME |
 | IMAP-SEARCH-11 | RFC 3501 §6.4.4 | Normative | Support the KEYWORD and UNKEYWORD search keys with a flag-keyword atom operand. No keyword can be stored, so KEYWORD matches nothing and UNKEYWORD matches every message; a missing or non-atom operand is BAD. | TestSearchKeywordKeys |
-| IMAP-SEARCH-12 | RFC 3501 §6.4.4 | Normative | RECENT, NEW and OLD search independent Recent state. | n/a: not supported yet; RECENT approximates unseen, NEW/OLD are rejected and Message has no Recent field. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-SEARCH-12 | RFC 3501 §6.4.4 | Normative | RECENT, NEW and OLD search independent Recent state. | n/a: not supported yet; RECENT approximates unseen, and NEW and OLD follow it (IMAP-SEARCH-27). Message has no Recent field. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-SEARCH-13 | RFC 3501 §§6.4.4, 6.4.8, 9 | Normative | Reject malformed bare sequence-set keys and UID set operands with BAD and no partial SEARCH result or content evaluation, including inside NOT, OR and groups and in empty mailboxes; keep the session reusable. | TestSearchInvalidSequenceSet |
 | IMAP-SEARCH-14 | RFC 3501 §§6.4.4, 6.4.8, 9 | Normative | Valid reversed, star, overlapping and unsigned-32-bit boundary sets retain sequence/UID membership semantics under SEARCH and UID SEARCH, with each match returned once and no content reads or flag writes. | TestSearchValidSequenceSet |
 | IMAP-SEARCH-15 | RFC 3501 §§6.4.4, 6.4.8 | Normative | ANSWERED/UNANSWERED and DRAFT/UNDRAFT match the presence/absence of their respective system flag under SEARCH and UID SEARCH, including Boolean/group combinations and empty/read-only mailboxes, without content reads or flag changes. | TestSearchAnsweredDraftKeys |
@@ -189,6 +193,9 @@ and BCC values are matched after RFC 2047 encoded-word decoding (IMAP-SEARCH-10)
 | IMAP-SEARCH-23 | RFC 3501 §§6.4.4, 6.4.8, 9 | Normative | Reject date-token padding, controls, non-ASCII digits/months, quoted escapes, malformed widths and invalid calendar dates with BAD before results, content reads or flag changes, including Boolean/groups and empty mailboxes; keep command framing and selection reusable. | TestSearchInvalidDateGrammar |
 | IMAP-SEARCH-24 | RFC 3501 §§4.3, 6.4.4, 6.4.8, 9 | Normative | Quoted SEARCH operands decode escaped DQUOTE and backslash without ending the token early, including Boolean/groups; synchronizing and LITERAL+ string operands preserve quotes, backslashes, parentheses, CRLF, UTF-8 and empty values without flag writes. | TestSearchQuotedStrings, TestSearchQuotedLiterals |
 | IMAP-SEARCH-25 | RFC 3501 §§4.3, 6.4.4, 6.4.8, 9 | Normative | Unterminated quotes, invalid escapes, embedded quotes in bare tokens, NUL and text adjoining a closing quote receive BAD before results or content evaluation, including Boolean/groups and empty/read-only mailboxes; selection and command framing remain reusable. | TestSearchInvalidQuotes |
+| IMAP-SEARCH-26 | RFC 3501 §§6.4.4, 7.4.2 | Normative | FROM matches a case-insensitive substring of the envelope's FROM field: the decoded display name as well as the address, so a string may span "Name <address>"; SEARCH and UID SEARCH read only metadata. | TestSearchFromMatchesTheEnvelopeMailbox |
+| IMAP-SEARCH-27 | RFC 3501 §6.4.4 | Normative | NEW (functionally "(RECENT UNSEEN)") and OLD ("NOT RECENT") are operand-free, case-insensitive keys that answer exactly what their equivalents answer under SEARCH and UID SEARCH, alone, in Boolean/groups and with sets, in SELECT/EXAMINE and empty mailboxes, without content reads or flag changes. | TestSearchNewAndOld |
+| IMAP-SEARCH-28 | RFC 3501 §6.4.4 | Normative | DELETED and UNDELETED follow the \Deleted flag STORE sets and clears in the session; UNFLAGGED is the complement of FLAGGED; TO matches a case-insensitive substring of the envelope's TO field after encoded-word decoding; SEARCH and UID SEARCH read only metadata. | TestSearchDeletedUnflaggedAndTo |
 
 This is not a full search grammar or conformance audit. Date tokens and
 quoted-token framing/escapes are checked above, each with a grammar-based fuzz
@@ -199,10 +206,9 @@ quoted strings, so this slice preserves CR/LF and 8-bit literal bytes and does
 not distinguish them from illegal bytes sent directly in a wire quoted-string.
 Literal date operands, full string character validation, bare astring grammar
 and separators between keys remain unaudited. Out-of-range message sequence
-number rejection is also outside this slice. FROM display-name matching,
-backend Fetch errors, BODY/TEXT matching beyond the empty-result example,
-malformed charset data, concurrency, EXPUNGE suppression and the RFC's UID SEARCH
-example remain for later slices. No coverage gate or independent implementation
+number rejection is also outside this slice. Backend Fetch errors, BODY/TEXT
+matching beyond the empty-result example, malformed charset data, concurrency,
+EXPUNGE suppression and the RFC's UID SEARCH example remain for later slices. No coverage gate or independent implementation
 comparison is added here.
 
 ## RFC 3501: FETCH and UID FETCH — partial data/flag slice
@@ -237,12 +243,12 @@ UID/sequence-number example. This does not inventory all MIME or grammar rules.
 | IMAP-FETCH-21 | RFC 3501 §§6.4.5, 6.4.8, 9 | Normative | Standalone case-insensitive FAST, ALL and FULL produce their explicit-list results; ordinary singleton and list forms preserve exact literals, metadata and Seen semantics for FETCH and UID FETCH in SELECT and EXAMINE. | TestFetchItemForms |
 | IMAP-FETCH-22 | RFC 3501 §§6.4.5, 6.4.8, 9 | Normative | HEADER.FIELDS and HEADER.FIELDS.NOT require one SP and a nonempty list of valid astrings with exact SP separators; malformed forms receive BAD before content reads, Seen writes or responses, including empty/nonmatching sets; preserve command stream and selection. | TestFetchInvalidHeaderLists |
 | IMAP-FETCH-23 | RFC 3501 §§4.3, 6.4.5, 7.4.2, 9 | Normative | Decode quoted and literal header names, preserve their exact values for case-insensitive include/exclude matching, emit valid astring labels and exact folded-header subsets, apply partials after selection and retain PEEK/EXAMINE Seen semantics. | TestFetchHeaderAstrings, TestFetchHeaderLiteralNames |
+| IMAP-FETCH-24 | RFC 3501 §6.4.5 | Normative | The blank line is included in every header fetch except for a message with no body and no blank line: HEADER, RFC822.HEADER, HEADER.FIELDS and HEADER.FIELDS.NOT answer such a message without one and TEXT with nothing; a message starting with the blank line has that line alone as its header and everything after it as its text. | TestFetchHeaderOnlyMessage |
 
 This slice does not prove full ENVELOPE/BODYSTRUCTURE semantics, static attribute
-immutability across sessions, absent-part NIL handling, header-only messages
-without a delimiting blank line, sequence-set overlap behavior, rejection of
-out-of-range message sequence numbers, UID exhaustion or concurrent EXPUNGE
-suppression. Hosts must provide correct raw message bytes, octet size, internal
+immutability across sessions, absent-part NIL handling, sequence-set overlap
+behavior, rejection of out-of-range message sequence numbers, UID exhaustion or
+concurrent EXPUNGE suppression. Hosts must provide correct raw message bytes, octet size, internal
 date and persistent UID/flag metadata.
 Backend data-load failure now refuses ENVELOPE instead of falling back to partial
 Message metadata. A failure stops a multi-message command without undoing earlier
@@ -762,5 +768,43 @@ inventory is complete.
   items (IMAP-FETCH-*, IMAP-ENV-*, IMAP-BS-*, IMAP-MSG-*). One bug fixed: a line
   with no tag and command was dropped without a reply, so the client waited for
   a completion that never came; it now gets an untagged BAD.
-- Not yet audited line by line, for the next slice: §§6.4.4 SEARCH, 6.4.5 FETCH
-  and 6.4.6 STORE.
+- 2026-10-24: RFC 3501 §6.4.6 STORE read line by line, with the §2.3.2 rule
+  that \Recent is not the client's to change. Every rule maps to a row: the
+  untagged FETCH with the resulting flags (IMAP-STORE-01), FLAGS/+FLAGS/-FLAGS
+  (IMAP-STORE-02), .SILENT (IMAP-STORE-03), NO for a store error (IMAP-STORE-05),
+  BAD for invalid arguments (IMAP-STORE-07, 09), the section's example
+  (TestStoreExample) and two new rows: FLAGS leaves \Recent alone
+  (IMAP-STORE-11), and another source's change is reported whatever .SILENT
+  says (IMAP-STORE-12). No bug found. A session's IDLE poll interval can now
+  be set (Session/Server.SetIdlePollInterval), which IMAP-STORE-12's wire test
+  uses.
+- 2026-10-24: RFC 3501 §6.4.4 SEARCH read line by line. Every defined key and
+  rule maps to a row: the untagged SEARCH response (IMAP-SEARCH-01), AND of
+  keys and parenthesized lists, OR and NOT (IMAP-SEARCH-02), CHARSET with
+  BADCHARSET and decoding before comparison (IMAP-SEARCH-07, 10), sequence
+  sets and UID (IMAP-SEARCH-05, 13, 14), ALL, SEEN/UNSEEN, FLAGGED and SUBJECT
+  (IMAP-SEARCH-03), ANSWERED/DRAFT and their negations (IMAP-SEARCH-15, 16),
+  BCC/CC/HEADER (IMAP-SEARCH-19, 21), the internal and sent dates
+  (IMAP-SEARCH-06, 20, 22, 23), BODY/TEXT (IMAP-SEARCH-10), KEYWORD/UNKEYWORD
+  (IMAP-SEARCH-11), LARGER/SMALLER (IMAP-SEARCH-17, 18) and the A282/A283
+  examples (TestSearchExample). Three bugs fixed: FROM compared only the
+  address, not the envelope's display name (IMAP-SEARCH-26); NEW and OLD were
+  BAD as unknown keys (IMAP-SEARCH-27); TO compared encoded words undecoded
+  (IMAP-SEARCH-28, which also gives DELETED, UNDELETED and UNFLAGGED their
+  first tests). RECENT stays a recorded gap (IMAP-SEARCH-12). The MAY rule
+  excluding non-TEXT/MESSAGE parts is not taken: every leaf is searched.
+- 2026-10-24: RFC 3501 §6.4.5 FETCH read line by line. Every data item and
+  rule maps to a row: macros (IMAP-FETCH-08, 21), BODY[section] and partials
+  (IMAP-FETCH-01, 04, 06, 14, 18, 19), HEADER.FIELDS[.NOT] (IMAP-FETCH-05, 22,
+  23), the implicit \Seen (IMAP-FETCH-02, 11, 12), BODY.PEEK, the RFC822 forms
+  (IMAP-FETCH-03), INTERNALDATE and RFC822.SIZE (IMAP-FETCH-07), ENVELOPE and
+  BODYSTRUCTURE (IMAP-ENV-*, IMAP-BS-*), NO for a fetch error (IMAP-FETCH-10)
+  and BAD for invalid arguments (IMAP-FETCH-15, 20). One bug fixed: the blank
+  line rule for a message with no body and no blank line, and the header of a
+  message that starts with its blank line (IMAP-FETCH-24). Static items not
+  changing is the host's to keep: the engine derives them from the stored
+  message and metadata, which it never rewrites.
+- Every command section (§6) and response section (§7) has now been read line
+  by line. Not yet audited line by line, for the next slices: §§2–5 (the
+  message model, states, data formats and operational rules), §9's formal
+  syntax beyond the grammar rows above, then RFC 9051 (IMAP4rev2).

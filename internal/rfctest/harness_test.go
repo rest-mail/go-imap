@@ -91,12 +91,22 @@ func dialConn(t *testing.T, box imap.Mailbox, wrap func(net.Conn) net.Conn) *cli
 // dialTLS starts the session with a TLS config, enabling STARTTLS.
 func dialTLS(t *testing.T, box imap.Mailbox, wrap func(net.Conn) net.Conn, cfg *tls.Config) *client {
 	t.Helper()
+	return dialConfigured(t, box, wrap, cfg, nil)
+}
+
+// dialConfigured starts the session after configure has set it up, such as its IDLE poll
+// interval.
+func dialConfigured(t *testing.T, box imap.Mailbox, wrap func(net.Conn) net.Conn, cfg *tls.Config, configure func(*imap.Session)) *client {
+	t.Helper()
 	clientConn, serverConn := net.Pipe()
 	if wrap != nil {
 		serverConn = wrap(serverConn)
 	}
 	b := &backend{box: box}
 	sess := imap.NewSession(serverConn, b, "imap.test", cfg, imap.NopLimiter{})
+	if configure != nil {
+		configure(sess)
+	}
 	done := make(chan struct{})
 	go func() {
 		defer close(done)

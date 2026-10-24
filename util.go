@@ -925,7 +925,8 @@ func filterHeaders(raw string, fields []string) string {
 }
 
 // selectHeaders returns header lines from raw's RFC 5322 header block, terminated
-// by the blank line that ends a header section. Field-name matching is
+// by the blank line that ends it when raw has one: a message with no body and no
+// blank line answers without it (RFC 3501 §6.4.5). Field-name matching is
 // case-insensitive. With exclude=false only headers whose name appears in fields
 // are kept (HEADER.FIELDS); with exclude=true every header EXCEPT those in fields
 // is kept (HEADER.FIELDS.NOT, RFC 3501 §6.4.5). A folded header — one whose value
@@ -933,11 +934,7 @@ func filterHeaders(raw string, fields []string) string {
 // or dropped as a whole together with its parent header, so folded values are
 // returned in full rather than truncated to their first line.
 func selectHeaders(raw string, fields []string, exclude bool) string {
-	headerEnd := strings.Index(raw, "\r\n\r\n")
-	headerSection := raw
-	if headerEnd >= 0 {
-		headerSection = raw[:headerEnd]
-	}
+	end, blank := headerEnd(raw)
 
 	// Build a set of field names to match (case-insensitive).
 	set := make(map[string]bool, len(fields))
@@ -947,7 +944,7 @@ func selectHeaders(raw string, fields []string, exclude bool) string {
 
 	var result strings.Builder
 	keep := false // whether the header currently being read is selected
-	for _, line := range strings.Split(headerSection, "\r\n") {
+	for _, line := range strings.Split(raw[:end], "\r\n") {
 		if line == "" {
 			continue
 		}
@@ -971,7 +968,9 @@ func selectHeaders(raw string, fields []string, exclude bool) string {
 			result.WriteString(line + "\r\n")
 		}
 	}
-	result.WriteString("\r\n") // blank line to end headers
+	if blank {
+		result.WriteString("\r\n")
+	}
 	return result.String()
 }
 
@@ -1118,22 +1117,31 @@ func expandFetchMacros(tokens []string) []string {
 	}
 }
 
-// headerSection returns the RFC 2822 header block of raw, including the blank
-// line that terminates it.
-func headerSection(raw string) string {
-	if end := strings.Index(raw, "\r\n\r\n"); end >= 0 {
-		return raw[:end+4]
+// headerEnd is the length of raw's header block, including the blank line that
+// ends it, and whether raw has that line. Raw starting with a blank line has no
+// header fields; raw with no blank line is header fields only, with no body.
+func headerEnd(raw string) (end int, blank bool) {
+	if strings.HasPrefix(raw, "\r\n") {
+		return 2, true
 	}
-	return raw
+	if i := strings.Index(raw, "\r\n\r\n"); i >= 0 {
+		return i + 4, true
+	}
+	return len(raw), false
+}
+
+// headerSection returns the RFC 2822 header block of raw, including the blank
+// line that terminates it when there is one.
+func headerSection(raw string) string {
+	end, _ := headerEnd(raw)
+	return raw[:end]
 }
 
 // textSection returns the body of raw (everything after the header-terminating
 // blank line), or "" if there is none.
 func textSection(raw string) string {
-	if end := strings.Index(raw, "\r\n\r\n"); end >= 0 && end+4 < len(raw) {
-		return raw[end+4:]
-	}
-	return ""
+	end, _ := headerEnd(raw)
+	return raw[end:]
 }
 
 // bodySection answers a BODY[...] / BODY.PEEK[...] fetch item. It returns the
