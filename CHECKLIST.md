@@ -889,8 +889,8 @@ here cover the rules every command line and response shares.
   LOGIN took any number of arguments, invalid escapes and atom-specials.
   Probed and already right: doubled SP and TAB, NUL, case, sequence-set and
   number limits, partial ranges, section parts, dates, empty lists, flag
-  atoms, STATUS items and FETCH macros. Left for the next §9 slice: 8-bit
-  octets in quoted strings before UTF8=ACCEPT are let through, because a
-  spliced literal arrives as a quoted string (validAstring); telling the two
-  apart needs the literal reader to keep its own token. Then RFC 9051
-  (IMAP4rev2).
+  atoms, STATUS items and FETCH macros. Kept, for the owner to decide: 8-bit
+  text outside a literal is accepted when the server does not support
+  UTF8=ACCEPT (rest-mail/go-imap#150). The literal reader could refuse it, but
+  SEARCH's tests send 8-bit quoted terms on purpose, and a quoted 8-bit LOGIN
+  password would be refused. Next: RFC 9051 (IMAP4rev2).
