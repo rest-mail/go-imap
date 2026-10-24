@@ -768,7 +768,7 @@ inventory is complete.
 | IMAP-RESP-17 | RFC 3501 §§4.3, 7.5 | Normative | A `+` continuation request asks for the rest of a command: before synchronizing literal octets and during IDLE. | TestCommandLiteralAccepted, TestAppendExample, TestIdleDoneAndNextCommand |
 | IMAP-RESP-CLIENT-01 | RFC 3501 §§7, 7.1, 7.2.1, 7.2.6, 7.3.1, 7.3.2, 7.4.1, 7.4.2 | MUST | Client duties: accept any response at any time; record FLAGS, EXISTS, RECENT, EXPUNGE and FETCH updates; ignore unknown response codes and capability names; show ALERT text to the user. | n/a: client duties; this is a server engine. |
 | IMAP-XCMD-01 | RFC 3501 §6.5 | Normative | An X-prefixed command the server does not define gets a tagged BAD in every state, and the session goes on. | TestExperimentalCommand |
-| IMAP-XCMD-02 | RFC 3501 §6.5 | MUST | A command outside RFC 3501 has an `X` prefix. | n/a: the engine has no private commands; every other command it accepts (ENABLE, IDLE, MOVE, UNSELECT, GETQUOTA, GETQUOTAROOT) is defined by a published RFC. |
+| IMAP-XCMD-02 | RFC 3501 §6.5 | MUST | A command outside RFC 3501 has an `X` prefix. | n/a: the engine has no private commands; every other command it accepts (ENABLE, IDLE, MOVE, UNSELECT, NAMESPACE, GETQUOTA, GETQUOTAROOT) is defined by a published RFC. |
 
 ## RFC 4959: SASL-IR, the initial client response
 
@@ -778,6 +778,13 @@ inventory is complete.
 | IMAP-SASLIR-02 | RFC 4959 §§3, 4 | Normative | A PLAIN initial response on the command line is used as the client's first response: the command completes with no continuation, as in the RFC's example. | TestSASLIR |
 | IMAP-SASLIR-03 | RFC 4959 §3 | MUST | Clients that omit the initial response are still supported: the RFC 3501 continuation exchange works unchanged. | TestSASLIR |
 | IMAP-SASLIR-04 | RFC 4959 §3 | MUST | `=` is a zero-length response; one that does not decode as base64, pad inside it or quoted, is handled as any client response that does not decode (NO); an empty or space-separated argument is BAD; none gets a continuation or leaves the session authenticated. | TestSASLIR |
+
+## RFC 2342: NAMESPACE
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-NAMESPACE-01 | RFC 2342 §§4, 5 | Normative | NAMESPACE is advertised, and answers one untagged NAMESPACE before OK: the personal namespace with prefix "" and the hierarchy delimiter LIST gives ("/"), and NIL for the other users' and shared classes, which the server does not have (example 5.1), in the authenticated and selected states. | TestNamespace |
+| IMAP-NAMESPACE-02 | RFC 2342 §5 | Normative | NAMESPACE takes no arguments (BAD otherwise), and before authentication answers NO with no NAMESPACE response. | TestNamespace |
 
 ## RFC 7888: LITERAL-, non-synchronizing literals up to 4096 octets
 

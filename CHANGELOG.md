@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- NAMESPACE (RFC 2342): `* NAMESPACE (("" "/")) NIL NIL`, one personal
+  namespace with folders at the top and "/" as their delimiter, and no other
+  users' or shared namespaces. Part of IMAP4rev2
+  (rest-mail/rest-mail-server#718).
 - LITERAL- (RFC 7888 §5): the server advertises it, so a client may send
   `{n+}` literals of up to 4096 octets with no continuation round trip. A
   larger one, as a command argument or in APPEND, gets `BAD [TOOBIG]` and

@@ -31,10 +31,12 @@ func parseIMAPCommand(line string) (tag, cmd, args string) {
 
 // noArguments are the commands whose grammar ends at the command name (RFC 3501
 // §9's command-any, command-nonauth and command-select, RFC 2177 IDLE, RFC 3691
-// UNSELECT). STARTTLS starts no negotiation the client may not expect.
+// UNSELECT, RFC 2342 NAMESPACE). STARTTLS starts no negotiation the client may
+// not expect.
 var noArguments = map[string]bool{
 	"CAPABILITY": true, "LOGOUT": true, "NOOP": true, "STARTTLS": true,
 	"CHECK": true, "CLOSE": true, "EXPUNGE": true, "UNSELECT": true, "IDLE": true,
+	"NAMESPACE": true,
 }
 
 // validTag reports whether tag is RFC 3501 §9's tag: one or more ASTRING-CHARs

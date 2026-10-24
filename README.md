@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 320/369 mapped](https://img.shields.io/badge/partial%20checklist-320%2F369%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 322/371 mapped](https://img.shields.io/badge/partial%20checklist-322%2F371%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -43,6 +43,7 @@ what your type actually implements, so it never over-promises.
 - `IDLE` (RFC 2177), with the poll goroutine fully stopped before each tagged
   completion so responses never interleave, and `QUOTA` (RFC 2087).
 - `UNSELECT` (RFC 3691) and `ENABLE` (RFC 5161) baseline commands.
+- `NAMESPACE` (RFC 2342): one personal namespace, `(("" "/"))`.
 - `LITERAL-` (RFC 7888): non-synchronizing literals up to 4096 octets, no
   continuation round trip for short strings.
 - `SASL-IR` (RFC 4959): `AUTHENTICATE PLAIN` may carry its response on the

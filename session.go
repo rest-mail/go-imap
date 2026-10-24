@@ -577,6 +577,15 @@ func (s *Session) Handle() {
 			s.handleUnselect(tag)
 		case "ENABLE":
 			s.handleEnable(tag, args)
+		case "NAMESPACE":
+			// One personal namespace: folders sit at the top, under "/" as LIST
+			// gives it; there are no other users' or shared ones (RFC 2342 §5).
+			if !s.auth.authenticated {
+				s.tagged(tag, "NO", "Not authenticated")
+				break
+			}
+			s.send(`* NAMESPACE (("" "/")) NIL NIL`)
+			s.tagged(tag, "OK", "NAMESPACE completed")
 		case "GETQUOTA":
 			s.handleGetQuota(tag, args)
 		case "GETQUOTAROOT":
