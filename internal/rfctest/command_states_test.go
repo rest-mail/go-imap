@@ -77,15 +77,15 @@ func (c *client) authenticate(tag, mech, resp string) string {
 // TestAuthenticateCommand covers RFC 3501 §6.2.2: AUTHENTICATE PLAIN is
 // implemented and advertised, a continuation carries the exchange, success
 // enters the authenticated state, a "*" cancel is BAD, rejected credentials and
-// unsupported mechanisms are NO, and a missing mechanism is BAD. An initial
-// response on the command line is refused, and success carries a CAPABILITY
-// response code. Failures leave the session not authenticated and able to
+// unsupported mechanisms are NO, and a missing mechanism is BAD. Success
+// carries a CAPABILITY response code. (An initial response on the command
+// line is RFC 4959's, TestSASLIR.) Failures leave the session not authenticated and able to
 // retry.
 //
 // An authorization identity naming another user is refused; one equal to the
 // authentication identity is accepted.
 //
-// checklist: IMAP-AUTHENTICATE-01 IMAP-AUTHENTICATE-02 IMAP-AUTHENTICATE-03 IMAP-AUTHENTICATE-04 IMAP-AUTHENTICATE-05 IMAP-AUTHENTICATE-06 IMAP-AUTHENTICATE-07 IMAP-AUTHENTICATE-08 IMAP-CAP-02
+// checklist: IMAP-AUTHENTICATE-01 IMAP-AUTHENTICATE-02 IMAP-AUTHENTICATE-03 IMAP-AUTHENTICATE-04 IMAP-AUTHENTICATE-05 IMAP-AUTHENTICATE-06 IMAP-AUTHENTICATE-08 IMAP-CAP-02
 func TestAuthenticateCommand(t *testing.T) {
 	c := dial(t)
 	c.line()
@@ -118,13 +118,6 @@ func TestAuthenticateCommand(t *testing.T) {
 	if _, tagged := c.command("a4", "AUTHENTICATE"); !strings.HasPrefix(tagged, "a4 BAD") {
 		t.Errorf("missing mechanism: %q, want tagged BAD", tagged)
 	}
-	// RFC 3501 AUTHENTICATE carries no SASL initial response: one on the
-	// command line is refused without a continuation or a credential check.
-	if _, tagged := c.command("a8", "AUTHENTICATE PLAIN %s", plainResponse(testUser, testPass)); strings.HasPrefix(tagged, "a8 OK") {
-		t.Errorf("initial response: %q, want refusal", tagged)
-	}
-	selectRefused("s3")
-
 	other := base64.StdEncoding.EncodeToString([]byte("bob@example.com\x00" + testUser + "\x00" + testPass))
 	if got := c.authenticate("a7", "PLAIN", other); !strings.HasPrefix(got, "a7 NO") {
 		t.Errorf("authorization identity of another user: %q, want tagged NO", got)

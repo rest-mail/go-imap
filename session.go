@@ -671,31 +671,50 @@ func (s *Session) handleAuthenticate(tag, args string) {
 		return
 	}
 
-	// Simplified — only support PLAIN
-	if !strings.EqualFold(strings.TrimSpace(args), "PLAIN") {
+	// "AUTHENTICATE" SP auth-type [SP (base64 / "=")] (RFC 4959 §7). Only
+	// PLAIN is supported.
+	mech, initial, hasInitial := strings.Cut(args, " ")
+	if !strings.EqualFold(mech, "PLAIN") {
 		s.tagged(tag, "NO", "Unsupported mechanism")
 		return
 	}
-	// Continuation request: "+" SP [base64-challenge] (RFC 3501 §7.5 / §6.2.2,
-	// RFC 4959). PLAIN carries no server challenge, so the base64 part is empty
-	// and the line is "+ " (note the required trailing space after the "+").
-	s.send("+ ")
-
-	line, tooLong, err := s.readLine()
-	if err != nil {
-		return
+	var line string
+	if hasInitial {
+		// SASL-IR: the initial client response is on the command line, so no
+		// continuation is sent. "=" is a zero-length response; an empty or
+		// space-separated one is not base64 / "=" at all.
+		if initial == "" || strings.Contains(initial, " ") {
+			s.tagged(tag, "BAD", "Invalid initial response")
+			return
+		}
+		if initial != "=" {
+			line = initial
+		}
+	} else {
+		// Continuation request: "+" SP [base64-challenge] (RFC 3501 §§6.2.2,
+		// 7.5). PLAIN carries no server challenge, so the base64 part is empty
+		// and the line is "+ " (note the required trailing space after the "+").
+		s.send("+ ")
+		var tooLong bool
+		var err error
+		line, tooLong, err = s.readLine()
+		if err != nil {
+			return
+		}
+		if tooLong {
+			s.tagged(tag, "BAD", "Authentication response line too long")
+			return
+		}
+		// A lone "*" cancels the exchange, and the server MUST reject the
+		// AUTHENTICATE command with a tagged BAD (RFC 3501 §6.2.2), not decode
+		// it as base64 and report a NO.
+		if line == "*" {
+			s.tagged(tag, "BAD", "authentication aborted")
+			return
+		}
 	}
-	if tooLong {
-		s.tagged(tag, "BAD", "Authentication response line too long")
-		return
-	}
-	// A lone "*" is the SASL abort signal (RFC 4959): the client cancels the
-	// exchange, and the server MUST reject the AUTHENTICATE command with a tagged
-	// BAD — not decode it as base64 and report a NO.
-	if line == "*" {
-		s.tagged(tag, "BAD", "authentication aborted")
-		return
-	}
+	// An initial response's decoding errors are handled as any client
+	// response's (RFC 4959 §3).
 	decoded, err := decodeBase64(line)
 	if err != nil {
 		s.tagged(tag, "NO", "Invalid base64")

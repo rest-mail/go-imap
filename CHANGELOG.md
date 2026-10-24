@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- SASL-IR (RFC 4959): AUTHENTICATE takes the initial client response on
+  the command line (`AUTHENTICATE PLAIN <base64>`, or `=` for an empty one),
+  saving a round trip at sign-in, and SASL-IR is advertised beside
+  AUTH=PLAIN. The RFC 3501 exchange without it works as before. Part of
+  IMAP4rev2 (rest-mail/rest-mail-server#718).
+
 ### Fixed
 
 - RFC 3501 §9's rules every line shares (#374). A status response's code is
