@@ -1117,8 +1117,9 @@ func (s *Session) handleStatus(tag, args string) {
 	s.tagged(tag, "OK", "STATUS completed")
 }
 
-// statusItems are the STATUS data items (RFC 3501 §6.3.10).
-var statusItems = map[string]bool{"MESSAGES": true, "RECENT": true, "UNSEEN": true, "UIDNEXT": true, "UIDVALIDITY": true}
+// statusItems are the STATUS data items (RFC 3501 §6.3.10), with RFC 8438's
+// SIZE.
+var statusItems = map[string]bool{"MESSAGES": true, "RECENT": true, "UNSEEN": true, "UIDNEXT": true, "UIDVALIDITY": true, "SIZE": true}
 
 // statusData is the inside of a STATUS response's parentheses for folder: the
 // requested items, in the order asked, read fresh from the store so neither
@@ -1132,6 +1133,7 @@ func (s *Session) statusData(folder string, items []string) (string, error) {
 	total := len(messages)
 	var unseen int
 	var maxUID uint32
+	var size int64
 	for _, m := range messages {
 		if !m.Seen {
 			unseen++
@@ -1139,6 +1141,7 @@ func (s *Session) statusData(folder string, items []string) (string, error) {
 		if m.UID > maxUID {
 			maxUID = m.UID
 		}
+		size += int64(m.Size)
 	}
 
 	// Emit exactly the requested items, in the order the client asked for them.
@@ -1165,6 +1168,10 @@ func (s *Session) statusData(folder string, items []string) (string, error) {
 			// The mailbox's real UIDVALIDITY when the backend supports UIDPLUS,
 			// else the legacy constant 1 — matching SELECT/EXAMINE.
 			fmt.Fprintf(&b, "UIDVALIDITY %d", s.resolveUIDValidity(folder))
+		case "SIZE":
+			// The sum of the messages' RFC822.SIZE, which FETCH gives as the
+			// stored size (RFC 8438 §3).
+			fmt.Fprintf(&b, "SIZE %d", size)
 		}
 	}
 	return b.String(), nil

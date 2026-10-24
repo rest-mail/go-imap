@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- STATUS=SIZE (RFC 8438): `STATUS folder (SIZE)`, and LIST's STATUS return
+  option, give a mailbox's size in octets, the sum of its messages'
+  RFC822.SIZE. Part of IMAP4rev2 (rest-mail/rest-mail-server#718).
 - LIST-STATUS (RFC 5819): `LIST "" * RETURN (STATUS (MESSAGES UNSEEN))`
   follows each folder's LIST with its STATUS, so a client fills its folder
   list's counts in one command instead of a STATUS per folder. Part of

@@ -779,6 +779,13 @@ inventory is complete.
 | IMAP-SASLIR-03 | RFC 4959 §3 | MUST | Clients that omit the initial response are still supported: the RFC 3501 continuation exchange works unchanged. | TestSASLIR |
 | IMAP-SASLIR-04 | RFC 4959 §3 | MUST | `=` is a zero-length response; one that does not decode as base64, pad inside it or quoted, is handled as any client response that does not decode (NO); an empty or space-separated argument is BAD; none gets a continuation or leaves the session authenticated. | TestSASLIR |
 
+## RFC 8438: STATUS=SIZE
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-STATUSSIZE-01 | RFC 8438 §3 | MUST | STATUS=SIZE is advertised; STATUS, and LIST's STATUS return option, take SIZE, the mailbox's size in octets, no less than the sum of its messages' RFC822.SIZE (the A01 example: 44421), and 0 for an empty one; values are written as 63-bit integers. | TestStatusSize |
+| IMAP-STATUSSIZE-02 | RFC 8438 §3 | SHOULD | With QUOTA, SIZE equals the storage usage that enforces the mailbox's STORAGE limit. | n/a: the quota root is the account, not one mailbox (GETQUOTAROOT names one root for every folder), so a folder's SIZE is its own share of the root's usage. |
+
 ## RFC 5819: LIST-STATUS
 
 | ID | Section | Level | Requirement | Tests |
