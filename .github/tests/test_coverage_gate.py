@@ -105,7 +105,7 @@ class WorkflowFixtures(unittest.TestCase):
         for path in ROOT.glob('*_test.go'):
             declared.extend(re.findall(r'^func (Fuzz\w+)\(\w+ \*testing\.F\)',
                                        path.read_text(), re.M))
-        self.assertEqual(len(targets), 8)
+        self.assertEqual(len(targets), 9)
         self.assertCountEqual(targets, declared)
 
 
