@@ -779,6 +779,16 @@ inventory is complete.
 | IMAP-SASLIR-03 | RFC 4959 §3 | MUST | Clients that omit the initial response are still supported: the RFC 3501 continuation exchange works unchanged. | TestSASLIR |
 | IMAP-SASLIR-04 | RFC 4959 §3 | MUST | `=` is a zero-length response; one that does not decode as base64, pad inside it or quoted, is handled as any client response that does not decode (NO); an empty or space-separated argument is BAD; none gets a continuation or leaves the session authenticated. | TestSASLIR |
 
+## RFC 4731: ESEARCH, SEARCH result options
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-ESEARCH-01 | RFC 4731 §§3.1, 4; RFC 4466 §2.6 | Normative | ESEARCH is advertised; SEARCH and UID SEARCH take SP "RETURN" SP "(" [option *(SP option)] ")" before the criteria (CHARSET included), the option names in any case. | TestESearch |
+| IMAP-ESEARCH-02 | RFC 4731 §3.1; RFC 4466 §2.6.2 | MUST | With result options the command answers one untagged ESEARCH, correlated by `(TAG "<tag>")`, instead of SEARCH; without them it answers SEARCH as before. | TestESearch |
+| IMAP-ESEARCH-03 | RFC 4731 §3.1 | MUST | MIN and MAX are the lowest and highest match, ALL every match as a sequence-set, COUNT their number; an empty list is ALL; UID SEARCH's ESEARCH carries the UID indicator and answers in UIDs (the A282-A286 examples). | TestESearch |
+| IMAP-ESEARCH-04 | RFC 4731 §3.1 | MUST | With no match the ESEARCH response is still sent; MIN, MAX and ALL are left out, and COUNT, when asked, is 0. | TestESearchNoMatches |
+| IMAP-ESEARCH-05 | RFC 4466 §2.6; RFC 3501 §9 | Normative | A RETURN list that is malformed, misspaced, not followed by criteria, or names an option the server does not offer (SAVE, PARTIAL) is BAD with no response. | TestESearchRefusals |
+
 ## RFC 2342: NAMESPACE
 
 | ID | Section | Level | Requirement | Tests |

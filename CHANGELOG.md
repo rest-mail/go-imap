@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- ESEARCH (RFC 4731): `SEARCH RETURN (MIN MAX ALL COUNT) ...` and the UID
+  form answer one `* ESEARCH (TAG "...")` with the lowest and highest match,
+  every match as a sequence-set, or their count, so a client can find the
+  first unseen message or count matches without a list of every number.
+  Part of IMAP4rev2 (rest-mail/rest-mail-server#718).
 - NAMESPACE (RFC 2342): `* NAMESPACE (("" "/")) NIL NIL`, one personal
   namespace with folders at the top and "/" as their delimiter, and no other
   users' or shared namespaces. Part of IMAP4rev2

@@ -1348,26 +1348,51 @@ func (s *Session) handleSearch(tag, args string) {
 		s.tagged(tag, "NO", "No mailbox selected")
 		return
 	}
+	s.search(tag, args, false)
+}
 
+// search runs SEARCH or UID SEARCH: the matching sequence numbers, or UIDs, in
+// an untagged SEARCH, or with RETURN result options in one untagged ESEARCH
+// (RFC 4731 §3.1).
+func (s *Session) search(tag, args string, uid bool) {
+	returns, args, ok := parseSearchReturn(args)
+	if !ok {
+		s.tagged(tag, "BAD", "Invalid SEARCH RETURN options")
+		return
+	}
 	criteria, serr := s.parseSearchCriteria(args)
 	if serr != nil {
 		s.tagged(tag, serr.status, serr.text)
 		return
 	}
 
-	var seqNums []string
+	var found []uint32
 	for i, msg := range s.messages {
 		if s.matchesCriteria(msg, criteria, s.rawLoader(msg)) {
-			seqNums = append(seqNums, strconv.Itoa(i+1))
+			if uid {
+				found = append(found, msg.UID)
+			} else {
+				found = append(found, uint32(i+1))
+			}
 		}
 	}
 
-	if len(seqNums) > 0 {
-		s.send("* SEARCH %s", strings.Join(seqNums, " "))
-	} else {
-		s.send("* SEARCH")
+	completed := "SEARCH completed"
+	if uid {
+		completed = "UID SEARCH completed"
 	}
-	s.tagged(tag, "OK", "SEARCH completed")
+	if returns == nil {
+		var b strings.Builder
+		b.WriteString("* SEARCH")
+		for _, n := range found {
+			b.WriteString(" " + strconv.FormatUint(uint64(n), 10))
+		}
+		s.send("%s", b.String())
+		s.tagged(tag, "OK", completed)
+		return
+	}
+	s.send("%s", esearchResponse(tag, uid, returns, found))
+	s.tagged(tag, "OK", completed)
 }
 
 // searchCharsets are the character sets SEARCH accepts (RFC 3501 §6.4.4). Any
@@ -3096,27 +3121,8 @@ func (s *Session) handleUIDMove(tag, args string) {
 }
 
 func (s *Session) handleUIDSearch(tag, args string) {
-	// UID SEARCH returns UIDs instead of sequence numbers
-	// Parse the criteria the same way as SEARCH
-	criteria, serr := s.parseSearchCriteria(args)
-	if serr != nil {
-		s.tagged(tag, serr.status, serr.text)
-		return
-	}
-
-	var uids []string
-	for _, msg := range s.messages {
-		if s.matchesCriteria(msg, criteria, s.rawLoader(msg)) {
-			uids = append(uids, strconv.FormatUint(uint64(msg.UID), 10))
-		}
-	}
-
-	if len(uids) > 0 {
-		s.send("* SEARCH %s", strings.Join(uids, " "))
-	} else {
-		s.send("* SEARCH")
-	}
-	s.tagged(tag, "OK", "UID SEARCH completed")
+	// UID SEARCH answers UIDs instead of sequence numbers.
+	s.search(tag, args, true)
 }
 
 // ── Output helpers ────────────────────────────────────────────────────
