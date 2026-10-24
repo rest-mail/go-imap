@@ -160,7 +160,8 @@ func TestCoverageListReplies(t *testing.T) {
 	for _, fail := range []bool{false, true} {
 		t.Run(fmt.Sprintf("backendError=%v", fail), func(t *testing.T) {
 			b := newMockBackend()
-			b.mbox.folders = []Folder{{Name: "INBOX"}, {Name: "Sent"}, {Name: "Drafts"}, {Name: "Trash"}, {Name: "Junk"}, {Name: "Archive"}}
+			b.mbox.folders = []Folder{{Name: "INBOX"}, {Name: "Sent", SpecialUse: SpecialUseSent}, {Name: "Drafts", SpecialUse: SpecialUseDrafts},
+				{Name: "Trash", SpecialUse: SpecialUseTrash}, {Name: "Junk", SpecialUse: SpecialUseJunk}, {Name: "Archive"}}
 			m := &coverageListMailbox{mockMailbox: b.mbox}
 			if fail {
 				m.err = errors.New("folders unavailable")

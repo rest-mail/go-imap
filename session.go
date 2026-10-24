@@ -730,6 +730,29 @@ func (s *Session) handleList(tag, args, cmd string) {
 		return
 	}
 
+	// The extended LIST syntax (RFC 5258) carries RFC 6154's options: a
+	// selection option before the reference, LIST (SPECIAL-USE) "" "*", which
+	// lists only the folders with a role, and a return option after the
+	// pattern, RETURN (SPECIAL-USE), which reports roles, as every LIST does.
+	// Those are the only options this server knows; any other is refused.
+	onlySpecialUse := false
+	args = strings.TrimSpace(args)
+	if cmd == "LIST" && strings.HasPrefix(args, "(") {
+		end := strings.IndexByte(args, ')')
+		if end < 0 {
+			s.tagged(tag, "BAD", "Unterminated LIST selection options")
+			return
+		}
+		for _, opt := range strings.Fields(args[1:end]) {
+			if !strings.EqualFold(opt, "SPECIAL-USE") {
+				s.tagged(tag, "BAD", "Unsupported LIST selection option "+opt)
+				return
+			}
+			onlySpecialUse = true
+		}
+		args = args[end+1:]
+	}
+
 	// Parse reference and mailbox pattern
 	parts := parseIMAPArgs(args)
 	reference, pattern := "", "*"
@@ -737,6 +760,19 @@ func (s *Session) handleList(tag, args, cmd string) {
 		reference, pattern = unquote(parts[0]), unquote(parts[1])
 	} else if len(parts) == 1 {
 		pattern = unquote(parts[0])
+	}
+	if cmd == "LIST" && len(parts) > 2 {
+		ret := parts[2:]
+		if len(ret) != 2 || !strings.EqualFold(ret[0], "RETURN") || !strings.HasPrefix(ret[1], "(") || !strings.HasSuffix(ret[1], ")") {
+			s.tagged(tag, "BAD", "Invalid LIST arguments")
+			return
+		}
+		for _, opt := range strings.Fields(ret[1][1 : len(ret[1])-1]) {
+			if !strings.EqualFold(opt, "SPECIAL-USE") {
+				s.tagged(tag, "BAD", "Unsupported LIST return option "+opt)
+				return
+			}
+		}
 	}
 
 	// Empty pattern = return the hierarchy delimiter and the root name of the
@@ -768,18 +804,15 @@ func (s *Session) handleList(tag, args, cmd string) {
 		if !matchIMAPPattern(pattern, f.Name) {
 			continue
 		}
+		// The role is the store's, reported on every LIST (RFC 6154 §2 allows it
+		// on the ordinary command too); an attribute the RFC does not define is
+		// not reported.
 		attrs := ""
-		switch f.Name {
-		case "INBOX":
-			// no special attributes
-		case "Sent":
-			attrs = `\Sent`
-		case "Drafts":
-			attrs = `\Drafts`
-		case "Trash":
-			attrs = `\Trash`
-		case "Junk":
-			attrs = `\Junk`
+		if specialUses[f.SpecialUse] {
+			attrs = f.SpecialUse
+		}
+		if onlySpecialUse && attrs == "" {
+			continue
 		}
 		s.send(`* %s (%s) "/" %s`, cmd, attrs, encodeMailboxName(f.Name))
 	}

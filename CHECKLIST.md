@@ -649,21 +649,21 @@ Persistent UID assignment remains the backend's responsibility.
 | IMAP-APPENDUID-05 | RFC 4315 §§3, 5 | SHOULD NOT | Disclose APPENDUID for append-only destinations. | n/a: not supported yet; no destination-readability API, as in IMAP-COPY-15. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-APPENDUID-06 | RFC 4315 §3 | Normative | Suppress APPENDUID for UIDNOTSTICKY destinations. | n/a: not supported yet; backend exposes no UIDNOTSTICKY status. Tracked in rest-mail/rest-mail-server#374. |
 
-## RFC 6154: ordinary LIST attributes — partial slice
+## RFC 6154: special-use mailboxes — partial slice
 
-[RFC 6154](https://www.rfc-editor.org/rfc/rfc6154) §2 permits these
-attributes on ordinary LIST. The engine infers roles from exact folder names;
-hosts own their contents. This is not extended LIST support.
+[RFC 6154](https://www.rfc-editor.org/rfc/rfc6154) §2 attributes on LIST, and
+its extended-LIST selection and return options. Each role comes from the host
+on `Folder.SpecialUse`; the engine never infers one from a name.
 
 | ID | Section | Level | Requirement | Tests |
 |----|---------|-------|-------------|-------|
-| IMAP-SPECIALUSE-01 | RFC 6154 §2 | MAY | Identify sent-message storage with `\Sent`; engine maps Sent. | TestSpecialUseOrdinaryList |
-| IMAP-SPECIALUSE-02 | RFC 6154 §2 | MAY | Identify draft storage with `\Drafts`; engine maps Drafts. | TestSpecialUseOrdinaryList |
-| IMAP-SPECIALUSE-03 | RFC 6154 §2 | MAY | Identify discarded-message storage with `\Trash`; engine maps Trash. | TestSpecialUseOrdinaryList |
-| IMAP-SPECIALUSE-04 | RFC 6154 §2 | MAY | Identify junk-message storage with `\Junk`; engine maps Junk. | TestSpecialUseOrdinaryList |
-| IMAP-SPECIALUSE-05 | RFC 6154 §§2–3 | Normative | Ordinary LIST attributes require no capability; omit unsupported SPECIAL-USE and CREATE-SPECIAL-USE capabilities. | TestSpecialUseCapabilityBoundary |
-| IMAP-SPECIALUSE-06 | RFC 6154 §2 | MAY | Mailboxes may have no role; do not invent role folders or infer roles from near matches. | TestSpecialUseDoesNotInventFolders |
-| IMAP-SPECIALUSE-07 | RFC 6154 §2 | MUST | Extended LIST selection filters special-use mailboxes; return option reports attributes. | n/a: not supported yet; extended LIST options are unimplemented. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-SPECIALUSE-01 | RFC 6154 §2 | MAY | Identify sent-message storage with `\Sent`, as the host says. | TestSpecialUseOrdinaryList |
+| IMAP-SPECIALUSE-02 | RFC 6154 §2 | MAY | Identify draft storage with `\Drafts`, as the host says. | TestSpecialUseOrdinaryList |
+| IMAP-SPECIALUSE-03 | RFC 6154 §2 | MAY | Identify discarded-message storage with `\Trash`, as the host says. | TestSpecialUseOrdinaryList |
+| IMAP-SPECIALUSE-04 | RFC 6154 §2 | MAY | Identify junk and archive storage with `\Junk` and `\Archive`, as the host says. | TestSpecialUseOrdinaryList |
+| IMAP-SPECIALUSE-05 | RFC 6154 §2 | MUST | Advertise SPECIAL-USE; omit CREATE-SPECIAL-USE, which CREATE does not support. | TestSpecialUseCapabilityBoundary |
+| IMAP-SPECIALUSE-06 | RFC 6154 §2 | MAY | Mailboxes may have no role; do not invent role folders or infer roles from names. | TestSpecialUseDoesNotInventFolders |
+| IMAP-SPECIALUSE-07 | RFC 6154 §2 | MUST | Extended LIST selection filters special-use mailboxes; return option reports attributes. | TestSpecialUseExtendedList |
 | IMAP-SPECIALUSE-08 | RFC 6154 §3 | MAY | CREATE assigns requested special-use attributes. | n/a: optional and unsupported; no role-assignment backend API. |
 | IMAP-SPECIALUSE-09 | RFC 6154 §4 | MAY | METADATA changes special-use assignments. | n/a: optional and unsupported; no METADATA command or backend API. |
 
