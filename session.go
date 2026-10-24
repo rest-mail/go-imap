@@ -26,6 +26,7 @@ type Session struct {
 	hostname  string
 	tlsConfig *tls.Config
 	limiter   Limiter
+	idlePoll  time.Duration // SetIdlePollInterval; zero is idlePollInterval
 
 	// Session state
 	usingTLS bool
@@ -334,6 +335,11 @@ func (s *Session) sendAutologoutBye() {
 }
 
 // Handle runs the IMAP state machine until the client disconnects or LOGOUTs.
+// SetIdlePollInterval sets how often an idling session re-reads its selected mailbox to
+// report what other sources changed: new messages, expunges and flag changes (RFC 2177;
+// RFC 3501 §§6.4.6, 7). Zero keeps the default, 15 seconds. Call it before Handle.
+func (s *Session) SetIdlePollInterval(d time.Duration) { s.idlePoll = d }
+
 func (s *Session) Handle() {
 	defer func() { _ = s.conn.Close() }()
 	defer s.recoverPanic() // contain any panic from a backend method or handler
@@ -2587,7 +2593,11 @@ func (s *Session) handleIdle(tag string) (terminate bool) {
 	go func() {
 		defer close(stopped)
 		defer s.recoverPanic() // a backend Messages panic here is a separate goroutine; contain it too
-		ticker := time.NewTicker(idlePollInterval)
+		interval := idlePollInterval
+		if s.idlePoll > 0 {
+			interval = s.idlePoll
+		}
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {

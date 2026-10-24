@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `Session.SetIdlePollInterval` and `Server.SetIdlePollInterval` set how often an
+  idling session re-reads its mailbox to report other sources' changes (new
+  messages, expunges, flag changes); the default stays 15 seconds. Checklist
+  rows IMAP-STORE-11 (FLAGS leaves \Recent alone) and IMAP-STORE-12 (another
+  source's flag change is reported whatever .SILENT says) complete the RFC 3501
+  §6.4.6 STORE audit.
 - RFC 6855 UTF8=ACCEPT, for a backend that implements `UTF8Mailbox`:
   - quoted-strings take UTF-8, and typed 8-bit text that is not UTF-8 is
     BAD;

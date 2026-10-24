@@ -17,6 +17,7 @@ type Server struct {
 	backend   Backend
 	tlsConfig *tls.Config
 	limiter   Limiter
+	idlePoll  time.Duration // SetIdlePollInterval
 
 	// shutdown is closed once, by the first Shutdown or Close, to tell the
 	// accept loops to stop.
@@ -34,6 +35,11 @@ type Server struct {
 	conns     map[net.Conn]struct{}
 	closed    bool
 }
+
+// SetIdlePollInterval sets how often the sessions this server starts re-read an idling
+// client's mailbox to report other sources' changes (see Session.SetIdlePollInterval). Zero
+// keeps the default, 15 seconds. Call it before Serve.
+func (s *Server) SetIdlePollInterval(d time.Duration) { s.idlePoll = d }
 
 // NewServer creates an IMAP Server backed by the given [Backend]. hostname is
 // announced in the server greeting. A non-nil tlsConfig enables STARTTLS and
@@ -141,6 +147,7 @@ func (s *Server) acceptLoop(listener net.Listener, implicitTLS bool) {
 			defer s.untrackConn(conn)
 			defer s.limiter.Release(ip)
 			session := NewSession(conn, s.backend, s.hostname, s.tlsConfig, s.limiter)
+			session.SetIdlePollInterval(s.idlePoll)
 			if implicitTLS {
 				session.usingTLS = true
 			}

@@ -142,11 +142,15 @@ example. Flag lists are sets; this engine orders system flags as \Seen,
 | IMAP-STORE-08 | RFC 3501 §§6.4.6, 6.4.8, 9 | Normative | Accept reversed ranges, star, lists and unsigned-32-bit sequence-set bounds; resolve sparse or nonexistent UIDs by mailbox membership and preserve normal/silent flag updates and UID replies. | TestStoreValidSequenceSet |
 | IMAP-STORE-09 | RFC 3501 §§6.4.6, 9 | Normative | STORE and UID STORE reject a malformed flag operand with BAD before backend writes, session flag changes or FETCH responses: unbalanced, nested or repeated parentheses, extra or non-SP separators, quoted strings, and flags that are not an atom with an optional leading `\` (atom-specials, `\*`, non-ASCII or control octets). | TestStoreInvalidFlagList |
 | IMAP-STORE-10 | RFC 3501 §§6.4.6, 9 | Normative | Accept an empty flag-list, bare SP-separated flags, case-insensitive system flags, and keywords or flag-extensions using any ATOM-CHAR, for every action with and without .SILENT. | TestStoreValidFlagList |
+| IMAP-STORE-11 | RFC 3501 §§2.3.2, 6.4.6 | Normative | FLAGS replaces the flags other than \Recent: naming \Recent in a FLAGS, +FLAGS or -FLAGS list sets or clears nothing, and a STORE never answers with \Recent. | TestStoreLeavesRecentAlone |
+| IMAP-STORE-12 | RFC 3501 §6.4.6 | SHOULD | .SILENT suppresses only the STORE's own answer: a flag change from another source the session observes (when an idling session re-reads its mailbox) is still reported with an untagged FETCH carrying the message's flags. | TestStoreSilentStillReportsOtherSourcesChanges |
 
 A NO from a multi-message set reports the first refused write; earlier
 messages in the set keep their applied changes, which RFC 3501 permits.
-Out-of-range message sequence numbers, overlapping UID-set
-semantics and STORE under concurrent sessions remain unaudited.
+Out-of-range message sequence numbers and overlapping UID-set semantics
+remain unaudited. Another source's flag changes are observed while a
+session idles (IMAP-STORE-12); between commands the session does not
+re-read its mailbox.
 
 ## RFC 3501: SEARCH and UID SEARCH — partial criteria slice
 
@@ -762,5 +766,15 @@ inventory is complete.
   items (IMAP-FETCH-*, IMAP-ENV-*, IMAP-BS-*, IMAP-MSG-*). One bug fixed: a line
   with no tag and command was dropped without a reply, so the client waited for
   a completion that never came; it now gets an untagged BAD.
-- Not yet audited line by line, for the next slice: §§6.4.4 SEARCH, 6.4.5 FETCH
-  and 6.4.6 STORE.
+- 2026-10-24: RFC 3501 §6.4.6 STORE read line by line, with the §2.3.2 rule
+  that \Recent is not the client's to change. Every rule maps to a row: the
+  untagged FETCH with the resulting flags (IMAP-STORE-01), FLAGS/+FLAGS/-FLAGS
+  (IMAP-STORE-02), .SILENT (IMAP-STORE-03), NO for a store error (IMAP-STORE-05),
+  BAD for invalid arguments (IMAP-STORE-07, 09), the section's example
+  (TestStoreExample) and two new rows: FLAGS leaves \Recent alone
+  (IMAP-STORE-11), and another source's change is reported whatever .SILENT
+  says (IMAP-STORE-12). No bug found. A session's IDLE poll interval can now
+  be set (Session/Server.SetIdlePollInterval), which IMAP-STORE-12's wire test
+  uses.
+- Not yet audited line by line, for the next slice: §§6.4.4 SEARCH and 6.4.5
+  FETCH.
