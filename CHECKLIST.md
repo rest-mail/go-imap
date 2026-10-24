@@ -38,7 +38,7 @@ with no test, a test naming an unknown item, or a duplicate ID.
 | IMAP-AUTHENTICATE-04 | RFC 3501 §6.2.2 | SHOULD | An unsupported mechanism gets tagged NO without a continuation. | TestAuthenticateCommand |
 | IMAP-AUTHENTICATE-05 | RFC 3501 §§6, 6.2.2 | Normative | A missing mechanism is an invalid argument and gets BAD; rejected credentials get NO; neither changes state, and a later AUTHENTICATE can still succeed. | TestAuthenticateCommand |
 | IMAP-AUTHENTICATE-06 | RFC 3501 §6.2.2; RFC 4616 §2 | Normative | The authorization identity names the user whose privileges are requested. Acting as another user is not supported, so an authzid naming a different user gets NO; an empty authzid or one equal to the authentication identity is accepted. | TestAuthenticateCommand |
-| IMAP-AUTHENTICATE-07 | RFC 3501 §6.2.2 | Normative | RFC 3501 AUTHENTICATE carries no SASL initial response; one on the command line is refused without a continuation. SASL-IR (RFC 4959) is not advertised. | TestAuthenticateCommand |
+| IMAP-AUTHENTICATE-07 | RFC 3501 §6.2.2; RFC 4959 §3 | Normative | RFC 3501 AUTHENTICATE carries no SASL initial response; the server advertises SASL-IR, which adds one (IMAP-SASLIR-01..04). | TestSASLIR |
 | IMAP-AUTHENTICATE-08 | RFC 3501 §6.2.2 | SHOULD | List the supported mechanisms in CAPABILITY (AUTH=PLAIN); the tagged OK of a successful AUTHENTICATE carries a CAPABILITY response code (MAY). | TestAuthenticateCommand |
 | IMAP-AUTHENTICATE-09 | RFC 3501 §6.2.2 | MUST | Implement a configuration that permits no plaintext password mechanism until STARTTLS: with TLS configured, cleartext AUTHENTICATE is refused before any continuation (sites SHOULD NOT run without such protection). | TestStartTLSCleartextCredentialsRefused |
 | IMAP-AUTHENTICATE-10 | RFC 3501 §6.2.2 | SHOULD | Implement additional SASL mechanisms that do not use plaintext passwords, such as GSSAPI or DIGEST-MD5. | n/a: not supported yet; only PLAIN is offered, and Backend.Authenticate takes a user name and password, so a challenge-response mechanism needs a backend design. Tracked in rest-mail/rest-mail-server#374. |
@@ -768,6 +768,15 @@ inventory is complete.
 | IMAP-RESP-CLIENT-01 | RFC 3501 §§7, 7.1, 7.2.1, 7.2.6, 7.3.1, 7.3.2, 7.4.1, 7.4.2 | MUST | Client duties: accept any response at any time; record FLAGS, EXISTS, RECENT, EXPUNGE and FETCH updates; ignore unknown response codes and capability names; show ALERT text to the user. | n/a: client duties; this is a server engine. |
 | IMAP-XCMD-01 | RFC 3501 §6.5 | Normative | An X-prefixed command the server does not define gets a tagged BAD in every state, and the session goes on. | TestExperimentalCommand |
 | IMAP-XCMD-02 | RFC 3501 §6.5 | MUST | A command outside RFC 3501 has an `X` prefix. | n/a: the engine has no private commands; every other command it accepts (ENABLE, IDLE, MOVE, UNSELECT, GETQUOTA, GETQUOTAROOT) is defined by a published RFC. |
+
+## RFC 4959: SASL-IR, the initial client response
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-SASLIR-01 | RFC 4959 §§3, 5 | Normative | SASL-IR is advertised wherever AUTH=PLAIN is, and AUTHENTICATE takes `auth-type [SP (base64 / "=")]`. | TestSASLIR |
+| IMAP-SASLIR-02 | RFC 4959 §§3, 4 | Normative | A PLAIN initial response on the command line is used as the client's first response: the command completes with no continuation, as in the RFC's example. | TestSASLIR |
+| IMAP-SASLIR-03 | RFC 4959 §3 | MUST | Clients that omit the initial response are still supported: the RFC 3501 continuation exchange works unchanged. | TestSASLIR |
+| IMAP-SASLIR-04 | RFC 4959 §3 | MUST | `=` is a zero-length response; one that does not decode as base64, pad inside it or quoted, is handled as any client response that does not decode (NO); an empty or space-separated argument is BAD; none gets a continuation or leaves the session authenticated. | TestSASLIR |
 
 ## RFC 3501 §9: formal syntax — partial slice
 

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 312/361 mapped](https://img.shields.io/badge/partial%20checklist-312%2F361%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 316/365 mapped](https://img.shields.io/badge/partial%20checklist-316%2F365%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -43,6 +43,8 @@ what your type actually implements, so it never over-promises.
 - `IDLE` (RFC 2177), with the poll goroutine fully stopped before each tagged
   completion so responses never interleave, and `QUOTA` (RFC 2087).
 - `UNSELECT` (RFC 3691) and `ENABLE` (RFC 5161) baseline commands.
+- `SASL-IR` (RFC 4959): `AUTHENTICATE PLAIN` may carry its response on the
+  command line, one round trip fewer at sign-in.
 - Optional `UIDPLUS` (RFC 4315) via `UIDPlusMailbox` and atomic server-side
   `MOVE` (RFC 6851) via `Mover` — advertised only when your `Mailbox`
   implements them.

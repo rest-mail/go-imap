@@ -46,7 +46,8 @@ func (s *Session) capabilities() string {
 		caps = append(caps, "LOGINDISABLED")
 	}
 	if s.usingTLS || s.tlsConfig == nil {
-		caps = append(caps, "AUTH=PLAIN")
+		// SASL-IR (RFC 4959): AUTHENTICATE may carry the initial response.
+		caps = append(caps, "SASL-IR", "AUTH=PLAIN")
 	}
 	return strings.Join(caps, " ")
 }
