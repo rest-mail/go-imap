@@ -87,8 +87,9 @@ func binaryData(raw string, path []uint32) (string, error) {
 	if len(path) == 0 {
 		return raw, nil
 	}
-	node, found := messageNode(raw, 0), true
+	node := messageNode(raw, 0)
 	for _, k := range path {
+		var found bool
 		if node, found = node.child(k); !found {
 			return "", nil
 		}
