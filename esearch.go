@@ -9,6 +9,17 @@ import (
 // them.
 var searchReturnOptions = []string{"MIN", "MAX", "ALL", "COUNT"}
 
+// esearchWanted reports whether returns asks for an ESEARCH response: any
+// ESEARCH result option. SAVE alone asks for none (RFC 5182 §2.2, example 1).
+func esearchWanted(returns map[string]bool) bool {
+	for _, opt := range searchReturnOptions {
+		if returns[opt] {
+			return true
+		}
+	}
+	return false
+}
+
 // parseSearchReturn takes SEARCH's optional result options, SP "RETURN" SP "("
 // [search-return-opt *(SP search-return-opt)] ")" before the criteria (RFC
 // 4466 §2.6), off args. returns is nil without them; an empty list asks for
@@ -33,7 +44,7 @@ func parseSearchReturn(args string) (returns map[string]bool, rest string, ok bo
 	}
 	for _, opt := range strings.Split(list, " ") {
 		opt = strings.ToUpper(opt)
-		known := false
+		known := opt == "SAVE" // SEARCHRES (RFC 5182 §2.1)
 		for _, o := range searchReturnOptions {
 			known = known || o == opt
 		}

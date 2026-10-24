@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- SEARCHRES (RFC 5182): `SEARCH RETURN (SAVE) ...` keeps its result, and
+  `$` names it in FETCH, STORE, COPY, MOVE, SEARCH and their UID forms, so a
+  client can search and act on the result without the list of numbers
+  coming back first. Part of IMAP4rev2 (rest-mail/rest-mail-server#718).
 - BINARY (RFC 3516): `FETCH BINARY[part]`, `BINARY.PEEK[part]` and
   `BINARY.SIZE[part]` answer a section with its transfer encoding removed,
   so a client gets an attachment's octets without decoding base64 itself;

@@ -496,6 +496,11 @@ func validSequenceSet(set string) bool {
 	if set == "" {
 		return false
 	}
+	// "$", the saved search result, stands alone as a whole sequence-set
+	// (RFC 5182 §3).
+	if set == "$" {
+		return true
+	}
 	for _, item := range strings.Split(set, ",") {
 		bounds := strings.Split(item, ":")
 		if len(bounds) > 2 {

@@ -70,13 +70,13 @@ func TestESearchNoMatches(t *testing.T) {
 
 // TestESearchRefusals: a RETURN list that is not "(" options ")" followed by
 // one SP and the criteria, or that names an option this server does not offer
-// (SAVE is SEARCHRES, RFC 5182), is BAD with no response.
+// (PARTIAL, RFC 9394), is BAD with no response.
 //
 // checklist: IMAP-ESEARCH-05
 func TestESearchRefusals(t *testing.T) {
 	c := sharedClient(t, esearchMailbox())
 	for _, command := range []string{
-		"SEARCH RETURN (SAVE) ALL",
+		"SEARCH RETURN (FOO) ALL",
 		"SEARCH RETURN (MIN",
 		"SEARCH RETURN (MIN)",
 		"SEARCH RETURN (MIN) ",

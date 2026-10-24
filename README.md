@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 338/389 mapped](https://img.shields.io/badge/partial%20checklist-338%2F389%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 344/395 mapped](https://img.shields.io/badge/partial%20checklist-344%2F395%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -47,6 +47,7 @@ what your type actually implements, so it never over-promises.
 - `STATUS=SIZE` (RFC 8438): `STATUS folder (SIZE)`, the folder's octets.
 - `LIST-STATUS` (RFC 5819): `LIST ... RETURN (STATUS (...))` gives each
   folder's STATUS with its LIST.
+- `SEARCHRES` (RFC 5182): `SEARCH RETURN (SAVE)` and `$` in later commands.
 - `ESEARCH` (RFC 4731): `SEARCH RETURN (MIN MAX ALL COUNT)` answers one
   `ESEARCH` response.
 - `NAMESPACE` (RFC 2342): one personal namespace, `(("" "/"))`.

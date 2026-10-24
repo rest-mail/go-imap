@@ -40,7 +40,11 @@ type Session struct {
 	readOnly bool            // true when the selection was opened via EXAMINE (RFC 3501 §6.3.2)
 	messages []Message       // cached message list for current selection
 	deleted  map[uint32]bool // UIDs flagged \Deleted in this session
-	utf8     bool            // ENABLE UTF8=ACCEPT succeeded (RFC 6855)
+	// saved is the search result variable SEARCH RETURN (SAVE) sets and "$"
+	// names (RFC 5182 §2.1), as UIDs, so an expunge cannot shift it; a UID no
+	// longer in the view matches nothing.
+	saved []uint32
+	utf8  bool // ENABLE UTF8=ACCEPT succeeded (RFC 6855)
 }
 
 type authState struct {
@@ -569,6 +573,7 @@ func (s *Session) Handle() {
 			s.selected = nil
 			s.readOnly = false
 			s.messages = nil
+			s.saved = nil
 			s.deleted = make(map[uint32]bool)
 			s.tagged(tag, "OK", "CLOSE completed")
 		case "EXPUNGE":
@@ -996,6 +1001,7 @@ func (s *Session) handleSelect(tag, args string, readOnly bool) {
 	s.selected = nil
 	s.readOnly = false
 	s.messages = nil
+	s.saved = nil
 	s.deleted = make(map[uint32]bool)
 
 	// SELECT and EXAMINE take exactly one mailbox astring (RFC 3501 §9).
@@ -1203,7 +1209,7 @@ func (s *Session) handleFetch(tag, args string) {
 	}
 
 	// Parse sequence numbers
-	seqNums := parseSequenceSet(seqStr, len(s.messages))
+	seqNums := s.seqNumbers(seqStr)
 
 	for _, seq := range seqNums {
 		if seq < 1 || seq > len(s.messages) {
@@ -1443,19 +1449,28 @@ func (s *Session) search(tag, args string, uid bool) {
 	}
 	criteria, serr := s.parseSearchCriteria(args)
 	if serr != nil {
+		// A SEARCH with SAVE that fails with NO empties the saved result; a BAD
+		// leaves it as it was (RFC 5182 §2.1).
+		if serr.status == "NO" && returns["SAVE"] {
+			s.saved = nil
+		}
 		s.tagged(tag, serr.status, serr.text)
 		return
 	}
 
-	var found []uint32
+	var found, uids []uint32
 	for i, msg := range s.messages {
 		if s.matchesCriteria(msg, criteria, s.rawLoader(msg)) {
+			uids = append(uids, msg.UID)
 			if uid {
 				found = append(found, msg.UID)
 			} else {
 				found = append(found, uint32(i+1))
 			}
 		}
+	}
+	if returns["SAVE"] {
+		s.saved = savedResult(returns, uids)
 	}
 
 	completed := "SEARCH completed"
@@ -1472,7 +1487,9 @@ func (s *Session) search(tag, args string, uid bool) {
 		s.tagged(tag, "OK", completed)
 		return
 	}
-	s.send("%s", esearchResponse(tag, uid, returns, found))
+	if esearchWanted(returns) {
+		s.send("%s", esearchResponse(tag, uid, returns, found))
+	}
 	s.tagged(tag, "OK", completed)
 }
 
@@ -1547,7 +1564,9 @@ func (s *Session) resolveSeqSets(criteria []searchCriterion) {
 }
 
 func (s *Session) resolveSeqSetNode(c *searchCriterion) {
-	if c.kind == "seqset" {
+	if c.kind == "seqset" && c.value == "$" {
+		c.ranges = s.savedRanges()
+	} else if c.kind == "seqset" {
 		total := len(s.messages)
 		for _, seq := range parseSequenceSet(c.value, total) {
 			if seq >= 1 && seq <= total {
@@ -1721,6 +1740,11 @@ func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriter
 	case "UID":
 		if idx+1 >= len(tokens) || !validSequenceSet(tokens[idx+1]) {
 			return searchCriterion{}, idx, badSearch("UID requires a valid sequence set")
+		}
+		// UID $ is the saved result, as $ alone is (RFC 5182 §2.2, example 3);
+		// both resolve with the other sequence sets.
+		if tokens[idx+1] == "$" {
+			return searchCriterion{kind: "seqset", value: "$"}, idx + 2, nil
 		}
 		return searchCriterion{kind: "uid", value: tokens[idx+1], ranges: parseUIDRanges(tokens[idx+1], maxUID)}, idx + 2, nil
 	case "NOT":
@@ -2018,7 +2042,7 @@ func (s *Session) handleStore(tag, args string) {
 		return
 	}
 
-	seqNums := parseSequenceSet(parts[0], len(s.messages))
+	seqNums := s.seqNumbers(parts[0])
 	flags := parseFlags(parts[2])
 
 	for _, seq := range seqNums {
@@ -2195,7 +2219,7 @@ func (s *Session) handleCopy(tag, args string) {
 		return
 	}
 
-	seqNums := parseSequenceSet(seqStr, len(s.messages))
+	seqNums := s.seqNumbers(seqStr)
 
 	code, err := s.copyMessages(seqNums, dest)
 	if err != nil {
@@ -2221,7 +2245,7 @@ func (s *Session) handleMove(tag, args string) {
 		return
 	}
 
-	seqNums := parseSequenceSet(seqStr, len(s.messages))
+	seqNums := s.seqNumbers(seqStr)
 	s.moveMessages(tag, "MOVE", seqNums, dest)
 }
 
@@ -3051,6 +3075,9 @@ func (s *Session) uidToSeq(uid uint32) int {
 
 // parseUIDSet parses a UID set like "1,3:5,*" and returns matching sequence numbers.
 func (s *Session) parseUIDSet(uidSetStr string) []int {
+	if uidSetStr == "$" {
+		return s.savedSeqNumbers()
+	}
 	var seqNums []int
 	for _, part := range strings.Split(uidSetStr, ",") {
 		part = strings.TrimSpace(part)

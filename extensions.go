@@ -29,7 +29,7 @@ func (s *Session) capabilities() string {
 	// SPECIAL-USE (RFC 6154): LIST reports each folder's role, and takes the
 	// SPECIAL-USE selection and return options.
 	// LITERAL- (RFC 7888 §5): non-synchronizing literals up to 4096 octets.
-	caps := []string{"IMAP4rev1", "LITERAL-", "IDLE", "MOVE", "QUOTA", "UNSELECT", "ENABLE", "SPECIAL-USE", "NAMESPACE", "ESEARCH", "LIST-STATUS", "STATUS=SIZE", "BINARY"}
+	caps := []string{"IMAP4rev1", "LITERAL-", "IDLE", "MOVE", "QUOTA", "UNSELECT", "ENABLE", "SPECIAL-USE", "NAMESPACE", "ESEARCH", "LIST-STATUS", "STATUS=SIZE", "BINARY", "SEARCHRES"}
 	if _, ok := s.mailbox.(UIDPlusMailbox); ok {
 		caps = append(caps, "UIDPLUS")
 	}
@@ -259,6 +259,7 @@ func (s *Session) handleUnselect(tag string) {
 	s.selected = nil
 	s.readOnly = false
 	s.messages = nil
+	s.saved = nil
 	s.deleted = make(map[uint32]bool)
 	s.tagged(tag, "OK", "UNSELECT completed")
 }

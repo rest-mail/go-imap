@@ -807,6 +807,17 @@ inventory is complete.
 | IMAP-LISTSTATUS-03 | RFC 5819 §4; RFC 5258 §6 | Normative | `STATUS SP "(" status-att *(SP status-att) ")"`: an empty or unknown item, a missing list, doubled spaces, a second STATUS or an unknown return option is BAD with no response. | TestListStatusRefusals |
 | IMAP-LISTSTATUS-04 | RFC 5819 §2 | MUST NOT | A mailbox that cannot be selected gets no STATUS and is listed `\Noselect`. | n/a: every folder a Mailbox lists is selectable; the only `\Noselect` LIST answer is the empty pattern's root, which takes no STATUS. |
 
+## RFC 5182: SEARCHRES, the saved search result
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-SEARCHRES-01 | RFC 5182 §§2.1, 2.2 | MUST | SEARCHRES is advertised with ESEARCH, which it requires; SEARCH and UID SEARCH take the SAVE result option, which keeps the messages found and, alone, answers nothing untagged. | TestSearchRes |
+| IMAP-SEARCHRES-02 | RFC 5182 §§2.1-2.3, 3 | MUST | `$` names the saved result wherever a sequence-set stands: FETCH, UID FETCH, SEARCH and UID SEARCH UID, alone or inside OR (examples 1 to 4), in message numbers or UIDs as the command takes; a SAVE pipelined with a command using `$` runs first. | TestSearchRes |
+| IMAP-SEARCHRES-03 | RFC 5182 §2.4 | MUST | SAVE with MIN and/or MAX and neither ALL nor COUNT keeps only the messages MIN/MAX name; with ALL or COUNT it keeps every one found; the ESEARCH answer is the same as without SAVE (example 10). | TestSearchResSaveOptions |
+| IMAP-SEARCHRES-04 | RFC 5182 §2.1 | MUST | A SAVE search answered NO empties the result; a BAD one, or a search without SAVE, leaves it; an expunged message leaves it; SELECT, EXAMINE, CLOSE and UNSELECT reset it. | TestSearchResVariable |
+| IMAP-SEARCHRES-05 | RFC 5182 §§2.1, 2.2 | MUST | An empty `$` is a valid set that matches nothing: FETCH, COPY and STORE with it complete OK with no response (example 6). | TestSearchResVariable |
+| IMAP-SEARCHRES-06 | RFC 5182 §3 | Normative | `$` is a whole sequence-set, not a number inside one: `1,$`, `$:5`, `$,2` and `1:$` are BAD. | TestSearchResGrammar |
+
 ## RFC 4731: ESEARCH, SEARCH result options
 
 | ID | Section | Level | Requirement | Tests |
@@ -815,7 +826,7 @@ inventory is complete.
 | IMAP-ESEARCH-02 | RFC 4731 §3.1; RFC 4466 §2.6.2 | MUST | With result options the command answers one untagged ESEARCH, correlated by `(TAG "<tag>")`, instead of SEARCH; without them it answers SEARCH as before. | TestESearch |
 | IMAP-ESEARCH-03 | RFC 4731 §3.1 | MUST | MIN and MAX are the lowest and highest match, ALL every match as a sequence-set, COUNT their number; an empty list is ALL; UID SEARCH's ESEARCH carries the UID indicator and answers in UIDs (the A282-A286 examples). | TestESearch |
 | IMAP-ESEARCH-04 | RFC 4731 §3.1 | MUST | With no match the ESEARCH response is still sent; MIN, MAX and ALL are left out, and COUNT, when asked, is 0. | TestESearchNoMatches |
-| IMAP-ESEARCH-05 | RFC 4466 §2.6; RFC 3501 §9 | Normative | A RETURN list that is malformed, misspaced, not followed by criteria, or names an option the server does not offer (SAVE, PARTIAL) is BAD with no response. | TestESearchRefusals |
+| IMAP-ESEARCH-05 | RFC 4466 §2.6; RFC 3501 §9 | Normative | A RETURN list that is malformed, misspaced, not followed by criteria, or names an option the server does not offer (PARTIAL) is BAD with no response. | TestESearchRefusals |
 
 ## RFC 2342: NAMESPACE
 
