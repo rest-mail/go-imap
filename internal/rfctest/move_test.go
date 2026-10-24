@@ -82,7 +82,7 @@ func TestMoveUIDExample(t *testing.T) {
 	c := expungeClient(t, m)
 	lines, tagged := c.command("a", "UID MOVE 304:319 foo")
 	requireOK(t, tagged, "a")
-	requireExactly(t, lines, "* OK [COPYUID 432432 304,319 1202,1203]", "* 3 EXPUNGE", "* 2 EXPUNGE")
+	requireExactly(t, lines, "* OK [COPYUID 432432 304,319 1202,1203] Moved", "* 3 EXPUNGE", "* 2 EXPUNGE")
 	requireCopies(t, m.copyMailbox, "foo", 304, 319)
 	requireRemaining(t, c, 300, 320)
 
@@ -133,7 +133,7 @@ func TestMoveUIDMapping(t *testing.T) {
 			c := expungeClient(t, m)
 			lines, tagged := c.command("M1", "UID MOVE %s Archive", tc.set)
 			requireOK(t, tagged, "M1")
-			if len(lines) == 0 || lines[0] != "* OK [COPYUID 38505 "+tc.sources+" "+tc.destinations+"]" {
+			if len(lines) == 0 || lines[0] != "* OK [COPYUID 38505 "+tc.sources+" "+tc.destinations+"] Moved" {
 				t.Fatalf("COPYUID %q, want sources %s destinations %s first", lines, tc.sources, tc.destinations)
 			}
 			if len(lines) != 1+len(strings.Split(tc.sources, ",")) {
@@ -168,7 +168,7 @@ func TestMoveBackendFailure(t *testing.T) {
 					} else {
 						want := []string{"* 2 EXPUNGE"}
 						if uidPlus {
-							want = append([]string{"* OK [COPYUID 38505 304 1202]"}, want...)
+							want = append([]string{"* OK [COPYUID 38505 304 1202] Moved"}, want...)
 						}
 						requireExactly(t, lines, want...)
 						requireCopies(t, m.copyMailbox, "Archive", 304, 319)
@@ -337,7 +337,7 @@ func TestMoveUIDInvalidBackendUIDs(t *testing.T) {
 				requireOK(t, tagged, "M1")
 				want := []string{"* 4 EXPUNGE", "* 3 EXPUNGE", "* 2 EXPUNGE"}
 				if tc.copyUID {
-					want = append([]string{"* OK [COPYUID 38505 304,319,320 1202,1203,1204]"}, want...)
+					want = append([]string{"* OK [COPYUID 38505 304,319,320 1202,1203,1204] Moved"}, want...)
 				}
 				requireExactly(t, lines, want...)
 				requireCopies(t, m.copyMailbox, "Archive", 304, 319, 320)

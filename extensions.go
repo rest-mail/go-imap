@@ -193,7 +193,7 @@ func (s *Session) moveMessages(tag, cmdName string, seqNums []int, dest string) 
 	// never sees a message expunged before it learns the copy's UID.
 	if hasMover && len(dstUIDs) > 0 && validCopyUIDs(dstUIDs) {
 		if v, ok := s.uidValidity(dest); ok {
-			s.send("* OK [COPYUID %d %s %s]", v, joinUIDs(srcUIDs), joinUIDs(dstUIDs))
+			s.send("* OK [COPYUID %d %s %s] Moved", v, joinUIDs(srcUIDs), joinUIDs(dstUIDs))
 		}
 	}
 

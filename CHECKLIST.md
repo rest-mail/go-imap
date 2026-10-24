@@ -769,6 +769,20 @@ inventory is complete.
 | IMAP-XCMD-01 | RFC 3501 §6.5 | Normative | An X-prefixed command the server does not define gets a tagged BAD in every state, and the session goes on. | TestExperimentalCommand |
 | IMAP-XCMD-02 | RFC 3501 §6.5 | MUST | A command outside RFC 3501 has an `X` prefix. | n/a: the engine has no private commands; every other command it accepts (ENABLE, IDLE, MOVE, UNSELECT, GETQUOTA, GETQUOTAROOT) is defined by a published RFC. |
 
+## RFC 3501 §9: formal syntax — partial slice
+
+§9's grammar for the arguments of each command is in that command's rows above
+(sequence sets, astrings, flag lists, dates, fetch items, search keys). Rows
+here cover the rules every command line and response shares.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-SYNTAX-01 | RFC 3501 §9 (resp-text, text) | Normative | A status response never ends at its response code: SP and at least one character of text follow it, on SELECT's and EXAMINE's UNSEEN, UIDVALIDITY, UIDNEXT and PERMANENTFLAGS lines, on MOVE's COPYUID line and on every tagged completion. | TestResponseCodesCarryText |
+| IMAP-SYNTAX-02 | RFC 3501 §9 (tag) | Normative | A tag is one or more ASTRING-CHARs other than `+`: SP, CTL, 8-bit octets, `(`, `)`, `{`, `%`, `*`, DQUOTE, backslash and `+` make the line an untagged BAD whose command does not run; `]` and other ATOM-CHARs are accepted. | TestTagGrammar, TestTaggedCompletion |
+| IMAP-SYNTAX-03 | RFC 3501 §9 (command-any, command-nonauth, command-select, SP); RFC 2177; RFC 3691 | Normative | CAPABILITY, LOGOUT, NOOP, STARTTLS, CHECK, CLOSE, EXPUNGE, IDLE and UNSELECT end at their name: anything after it, even one trailing space, gets BAD and the command does not run. | TestCommandsWithoutArguments |
+| IMAP-SYNTAX-04 | RFC 3501 §§6.2.3, 9 (login, astring) | Normative | LOGIN takes exactly userid SP password, each an astring: an atom with an atom-special or an 8-bit octet, a quoted string with any escape but `\"` and `\\`, an unterminated or adjoined quote, or a missing, extra or doubled separator gets BAD without the credentials being checked. | TestLoginArguments |
+| IMAP-SYNTAX-05 | RFC 3501 §9 (notes 1-3) | MUST | Command names and keywords are accepted in any case; SP is exactly one space, so a doubled space or a TAB gets BAD; a NUL gets BAD. | TestCaseAndSpacing |
+
 ## RFC 3501 audit record
 
 - 2026-10-22: RFC 3501 §§6.3.3 CREATE, 6.3.4 DELETE, 6.3.5 RENAME, 6.3.6
@@ -865,6 +879,18 @@ inventory is complete.
   are the IMAP-LITERAL and grammar rows; binary strings (§4.3.1) get NO rather than
   raw NUL octets (IMAP-ENV-12, IMAP-BS-10); NIL as an nstring is the ENVELOPE and
   BODYSTRUCTURE rows. One new row, a mailbox named NIL (IMAP-NIL-01); no bug.
-- Every section of RFC 3501 from §2 to §7 has now been read line by line. Not
-  yet audited line by line, for the next slices: §9's formal syntax beyond the
-  grammar rows above, then RFC 9051 (IMAP4rev2).
+- Every section of RFC 3501 from §2 to §7 has now been read line by line.
+- 2026-10-24: RFC 3501 §9, the rules every line shares: its three notes (case,
+  SP, NUL), tag, resp-text, and the commands that take no arguments, with
+  LOGIN's arguments. Five deviations fixed (IMAP-SYNTAX-01..05 above): SELECT,
+  EXAMINE and MOVE sent response codes with no text after them, which the
+  grammar requires; tags with `*`, `%`, `+`, DQUOTE or backslash were accepted;
+  CAPABILITY, NOOP, LOGOUT and CLOSE accepted a trailing space or arguments;
+  LOGIN took any number of arguments, invalid escapes and atom-specials.
+  Probed and already right: doubled SP and TAB, NUL, case, sequence-set and
+  number limits, partial ranges, section parts, dates, empty lists, flag
+  atoms, STATUS items and FETCH macros. Left for the next §9 slice: 8-bit
+  octets in quoted strings before UTF8=ACCEPT are let through, because a
+  spliced literal arrives as a quoted string (validAstring); telling the two
+  apart needs the literal reader to keep its own token. Then RFC 9051
+  (IMAP4rev2).

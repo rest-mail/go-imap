@@ -31,7 +31,7 @@ func TestKeywordsNotAdvertised(t *testing.T) {
 	lines, tagged := c.command("S1", "SELECT INBOX")
 	requireOK(t, tagged, "S1")
 	requireLine(t, lines, `* FLAGS (\Seen \Answered \Flagged \Deleted \Draft)`)
-	requireLine(t, lines, `* OK [PERMANENTFLAGS (\Seen \Answered \Flagged \Deleted \Draft)]`)
+	requireLine(t, lines, `* OK [PERMANENTFLAGS (\Seen \Answered \Flagged \Deleted \Draft)] Limited`)
 	for _, l := range lines {
 		if strings.Contains(l, `\*`) {
 			t.Fatalf("selection advertises keyword creation: %q", l)
@@ -65,7 +65,7 @@ func TestKeywordsNotAdvertised(t *testing.T) {
 
 	lines, tagged = c.command("S2", "SELECT INBOX")
 	requireOK(t, tagged, "S2")
-	requireLine(t, lines, `* OK [PERMANENTFLAGS (\Seen \Answered \Flagged \Deleted \Draft)]`)
+	requireLine(t, lines, `* OK [PERMANENTFLAGS (\Seen \Answered \Flagged \Deleted \Draft)] Limited`)
 	lines, tagged = c.command("F2", "FETCH 1:* FLAGS")
 	requireOK(t, tagged, "F2")
 	requireExactly(t, lines, want...)
