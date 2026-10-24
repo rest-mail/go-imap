@@ -466,6 +466,9 @@ func (s *Session) Handle() {
 				return
 			}
 		case "NOOP":
+			// NOOP is the preferred way to poll for new messages and status
+			// updates (RFC 3501 §6.1.2): report what other sources changed.
+			s.pollSelected()
 			s.tagged(tag, "OK", "NOOP completed")
 		case "CHECK":
 			// CHECK is a Selected State command (RFC 3501 §6.4.1): reject it when
@@ -479,6 +482,9 @@ func (s *Session) Handle() {
 				s.tagged(tag, "BAD", "CHECK takes no arguments")
 				break
 			}
+			// With no housekeeping to do, "CHECK is equivalent to NOOP" (RFC
+			// 3501 §6.4.1).
+			s.pollSelected()
 			s.tagged(tag, "OK", "CHECK completed")
 		case "CLOSE":
 			if args != "" {
@@ -2661,7 +2667,7 @@ func (s *Session) handleIdle(tag string) (terminate bool) {
 				if err != nil {
 					continue
 				}
-				s.reconcileIdle(messages)
+				s.reconcile(messages)
 			}
 		}
 	}()
@@ -2707,20 +2713,38 @@ func (s *Session) handleIdle(tag string) (terminate bool) {
 	return false
 }
 
-// reconcileIdle diffs a freshly-read message set against the cached one and
-// pushes the untagged responses RFC 2177 requires the server to volunteer while
-// a client is idling (RFC 3501 §7): "* n EXPUNGE" for messages removed from the
+// pollSelected re-reads the selected mailbox and reports what other sources
+// changed since the session last looked (RFC 3501 §5.2): a server "MUST send
+// mailbox size updates automatically if a mailbox size change is observed" and
+// "SHOULD send message flag updates automatically". A failed read reports
+// nothing and keeps the cached set. NOOP and CHECK call it; FETCH, STORE and
+// SEARCH never do, since no EXPUNGE may be sent while they run (§7.4.1).
+func (s *Session) pollSelected() {
+	if s.selected == nil {
+		return
+	}
+	messages, err := s.mailbox.Messages(s.selected.name)
+	if err != nil {
+		return
+	}
+	s.reconcile(messages)
+}
+
+// reconcile diffs a freshly-read message set against the cached one and pushes
+// the untagged responses that report other sources' changes (RFC 3501 §§5.2,
+// 7; RFC 2177 while idling): "* n EXPUNGE" for messages removed from the
 // mailbox by another session, "* n EXISTS" for new arrivals, and
 // "* n FETCH (FLAGS ...)" when a surviving message's flags changed. The pre-fix
 // poll only ever announced growth, so an external expunge was never reported and
 // the cached message set (which backs sequence-number resolution for every later
 // command) went stale.
 //
-// It runs solely in the IDLE poll goroutine, which owns s.writer, s.messages and
-// s.selected for the duration of IDLE — the main goroutine only reads DONE and
-// does not touch them until the poll goroutine has stopped — so these mutations
-// need no further synchronisation.
-func (s *Session) reconcileIdle(messages []Message) {
+// During IDLE it runs in the poll goroutine, which owns s.writer, s.messages
+// and s.selected for the duration of IDLE — the main goroutine only reads DONE
+// and does not touch them until the poll goroutine has stopped. Otherwise NOOP
+// and CHECK run it on the main goroutine. Either way these mutations need no
+// further synchronisation.
+func (s *Session) reconcile(messages []Message) {
 	if s.selected == nil {
 		return
 	}
