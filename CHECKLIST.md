@@ -648,6 +648,7 @@ them by sequence number as §5.5 allows.
 | IMAP-UPDATE-03 | RFC 3501 §5.3 | MUST | No untagged response is sent while no command is in progress, even after an idle poll interval, so §5.3's flow-control rule has no unsolicited write to govern; the changes wait for the next command. | TestNoUntaggedResponseWithoutCommand |
 | IMAP-UPDATE-04 | RFC 3501 §5.5 | MUST | Commands sent without waiting run to completion in the order given: FETCH + STORE + FETCH + SEARCH + CHECK of the same message answer in order, each seeing the one before. | TestPipelinedCommandsRunInOrder |
 | IMAP-AUTOLOGOUT-01 | RFC 3501 §5.4 | MUST | An inactivity autologout timer lasts at least 30 minutes, and any command resets it. | n/a: the timer is internal and not settable through Session, so the root package proves it: TestAutologoutIsAtLeastThirtyMinutes and TestSession_CommandActivityResetsAutologout. |
+| IMAP-STATE-01 | RFC 3501 §§3.4, 7.1.5 | MUST | The server does not close a connection unilaterally without an untagged BYE that gives the reason: when the Server stops, a session waiting for a command or idling sends BYE at once, and one running a command finishes it, then sends BYE. | n/a: Server-level, so the root package proves it: TestShutdownSaysByeToIdleSessions and TestShutdownWaitsForInflightSession. The autologout, panic and refusal BYEs are IMAP-RESP-14's. |
 
 ## RFC 6855: UTF8=ACCEPT — partial slice
 
@@ -850,7 +851,15 @@ inventory is complete.
   IMAP-AUTOLOGOUT-01; no EXPUNGE during FETCH, STORE or SEARCH was already
   IMAP-RESP-12. Client duties (record size updates, do not pipeline ambiguous
   commands) are not server rules.
-- Every command section (§6), response section (§7) and §5 has now been read
-  line by line. Not yet audited line by line, for the next slices: §§2–4 (the
-  message model, states and data formats), §9's formal syntax beyond the
-  grammar rows above, then RFC 9051 (IMAP4rev2).
+- 2026-10-24: RFC 3501 §§2–3 read line by line. One deviation fixed here: a
+  stopping Server closed every connection without the BYE §3.4 requires
+  (IMAP-STATE-01); Shutdown now has each session say BYE, at once when it is
+  waiting or idling. Two found in the host's part, and filed for REST Mail:
+  UIDNEXT falls when the newest message is expunged, which needs the store's
+  UID history (rest-mail/rest-mail-server#804, IMAP-SELECT-09 and
+  IMAP-STATUS-08 stay n/a), and REST Mail listed messages by date rather than
+  UID (rest-mail/rest-mail-server#805). §2.3.1.2's ascending order, §2.3.2's
+  flags and \Recent, and §3's state rules are the rows already above.
+- Every section of RFC 3501 from §2 to §7 has now been read line by line. Not
+  yet audited line by line, for the next slices: §4 (data formats) and §9's
+  formal syntax beyond the grammar rows above, then RFC 9051 (IMAP4rev2).

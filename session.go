@@ -27,6 +27,10 @@ type Session struct {
 	tlsConfig *tls.Config
 	limiter   Limiter
 	idlePoll  time.Duration // SetIdlePollInterval; zero is idlePollInterval
+	// stop is the Server's shutdown channel, closed when it begins to stop; nil for a
+	// Session no Server started.
+	stop    <-chan struct{}
+	saidBye bool // an untagged BYE has been sent
 
 	// Session state
 	usingTLS bool
@@ -314,6 +318,23 @@ var autologoutTimeout = 30 * time.Minute
 // that warrants sending a "* BYE" before closing, since a disconnected peer can
 // receive nothing. A net.Conn (and net.Pipe) read past its deadline returns
 // os.ErrDeadlineExceeded, which readLine surfaces unwrapped.
+// stopping reports whether the Server that started this session has begun to stop.
+func (s *Session) stopping() bool {
+	select {
+	case <-s.stop:
+		return true
+	default:
+		return false
+	}
+}
+
+// sendShutdownBye announces that the server is shutting down (RFC 3501 §§3.4, 7.1.5),
+// under the same write grace as the autologout BYE.
+func (s *Session) sendShutdownBye() {
+	_ = s.conn.SetWriteDeadline(time.Now().Add(autologoutByeGrace))
+	s.send("* BYE Server shutting down")
+}
+
 func isAutologout(err error) bool {
 	return errors.Is(err, os.ErrDeadlineExceeded)
 }
@@ -342,6 +363,14 @@ func (s *Session) SetIdlePollInterval(d time.Duration) { s.idlePoll = d }
 
 func (s *Session) Handle() {
 	defer func() { _ = s.conn.Close() }()
+	// "A server MUST NOT unilaterally close the connection without sending an untagged
+	// BYE response that contains the reason" (RFC 3501 §3.4): a session the Server's
+	// shutdown ends in the middle of a command still says why.
+	defer func() {
+		if s.stopping() && !s.saidBye {
+			s.sendShutdownBye()
+		}
+	}()
 	defer s.recoverPanic() // contain any panic from a backend method or handler
 
 	slog.Info("imap: new connection", "remote", s.conn.RemoteAddr())
@@ -353,10 +382,22 @@ func (s *Session) Handle() {
 	s.send("* OK [CAPABILITY %s] %s IMAP4rev1 ready", s.capabilities(), s.hostname)
 
 	for {
+		// A Server that begins to stop interrupts the read below; checking again after
+		// setting the deadline, which replaces the one that interrupted it, closes the
+		// window between the two.
+		if s.stopping() {
+			return
+		}
 		_ = s.conn.SetDeadline(time.Now().Add(autologoutTimeout))
+		if s.stopping() {
+			return
+		}
 
 		line, tooLong, nonSyncLiteral, err := s.readCommandLine()
 		if err != nil {
+			if s.stopping() {
+				return
+			}
 			if isAutologout(err) {
 				// Inactivity autologout (RFC 3501 §5.4): announce the close with an
 				// untagged BYE (§7.1.5) before the deferred Close drops the socket,
@@ -2676,7 +2717,7 @@ func (s *Session) handleIdle(tag string) (terminate bool) {
 	// the main loop uses (RFC 3501 §5.4).
 	_ = s.conn.SetDeadline(time.Now().Add(autologoutTimeout))
 	var readErr error
-	for {
+	for !s.stopping() {
 		line, tooLong, err := s.readLine()
 		if err != nil {
 			readErr = err
@@ -2695,6 +2736,10 @@ func (s *Session) handleIdle(tag string) (terminate bool) {
 	close(done)
 	<-stopped
 
+	if s.stopping() {
+		// The Server is stopping: the caller says BYE and closes.
+		return true
+	}
 	if readErr != nil {
 		// The read ended in error rather than a DONE. On an inactivity autologout
 		// announce the close with an untagged BYE (RFC 3501 §5.4/§7.1.5) before the
@@ -3029,6 +3074,9 @@ func (s *Session) handleUIDSearch(tag, args string) {
 // ── Output helpers ────────────────────────────────────────────────────
 
 func (s *Session) send(format string, args ...interface{}) {
+	if strings.HasPrefix(format, "* BYE") {
+		s.saidBye = true
+	}
 	s.writeString(fmt.Sprintf(format, args...) + "\r\n")
 }
 
