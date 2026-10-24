@@ -779,6 +779,15 @@ inventory is complete.
 | IMAP-SASLIR-03 | RFC 4959 §3 | MUST | Clients that omit the initial response are still supported: the RFC 3501 continuation exchange works unchanged. | TestSASLIR |
 | IMAP-SASLIR-04 | RFC 4959 §3 | MUST | `=` is a zero-length response; one that does not decode as base64, pad inside it or quoted, is handled as any client response that does not decode (NO); an empty or space-separated argument is BAD; none gets a continuation or leaves the session authenticated. | TestSASLIR |
 
+## RFC 5819: LIST-STATUS
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-LISTSTATUS-01 | RFC 5819 §§2, 4 | MUST | LIST-STATUS is advertised; LIST's `STATUS (items)` return option follows each listed selectable mailbox's LIST with an untagged STATUS carrying the requested items in the order asked (the A01 example), beside SPECIAL-USE and in any case; without it no STATUS is sent. | TestListStatus |
+| IMAP-LISTSTATUS-02 | RFC 5819 §2 | MAY | A mailbox whose STATUS the store cannot read is still listed, its STATUS dropped, and the command completes OK. | TestListStatus |
+| IMAP-LISTSTATUS-03 | RFC 5819 §4; RFC 5258 §6 | Normative | `STATUS SP "(" status-att *(SP status-att) ")"`: an empty or unknown item, a missing list, doubled spaces, a second STATUS or an unknown return option is BAD with no response. | TestListStatusRefusals |
+| IMAP-LISTSTATUS-04 | RFC 5819 §2 | MUST NOT | A mailbox that cannot be selected gets no STATUS and is listed `\Noselect`. | n/a: every folder a Mailbox lists is selectable; the only `\Noselect` LIST answer is the empty pattern's root, which takes no STATUS. |
+
 ## RFC 4731: ESEARCH, SEARCH result options
 
 | ID | Section | Level | Requirement | Tests |

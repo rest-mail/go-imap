@@ -817,8 +817,10 @@ func (s *Session) handleList(tag, args, cmd string) {
 	// selection option before the reference, LIST (SPECIAL-USE) "" "*", which
 	// lists only the folders with a role, and a return option after the
 	// pattern, RETURN (SPECIAL-USE), which reports roles, as every LIST does.
-	// Those are the only options this server knows; any other is refused.
+	// RFC 5819's STATUS return option adds each folder's STATUS. Those are the
+	// only options this server knows; any other is refused.
 	onlySpecialUse := false
+	var status []string
 	args = strings.TrimSpace(args)
 	if cmd == "LIST" && strings.HasPrefix(args, "(") {
 		end := strings.IndexByte(args, ')')
@@ -850,11 +852,10 @@ func (s *Session) handleList(tag, args, cmd string) {
 			s.tagged(tag, "BAD", "Invalid LIST arguments")
 			return
 		}
-		for _, opt := range strings.Fields(ret[1][1 : len(ret[1])-1]) {
-			if !strings.EqualFold(opt, "SPECIAL-USE") {
-				s.tagged(tag, "BAD", "Unsupported LIST return option "+opt)
-				return
-			}
+		var refusal string
+		if status, refusal = listReturnOptions(ret[1][1 : len(ret[1])-1]); refusal != "" {
+			s.tagged(tag, "BAD", refusal)
+			return
 		}
 	}
 
@@ -901,8 +902,47 @@ func (s *Session) handleList(tag, args, cmd string) {
 			continue
 		}
 		s.send(`* %s (%s) "/" %s`, cmd, attrs, encodeMailboxName(wire))
+		// Each listed folder is selectable, so its STATUS follows its LIST; one
+		// the store cannot count has its STATUS dropped (RFC 5819 §2).
+		if status != nil {
+			if data, err := s.statusData(f.Name, status); err == nil {
+				s.send(`* STATUS %s (%s)`, encodeMailboxName(wire), data)
+			}
+		}
 	}
 	s.tagged(tag, "OK", cmd+" completed")
+}
+
+// listReturnOptions reads LIST's return options, the inside of RETURN's
+// parentheses (RFC 5258 §6): SPECIAL-USE (RFC 6154), which every LIST reports
+// anyway, and STATUS with a list of STATUS items (RFC 5819 §4), which it gives
+// back. refusal is the BAD text for anything else.
+func listReturnOptions(list string) (status []string, refusal string) {
+	for list != "" {
+		var opt string
+		opt, list, _ = strings.Cut(list, " ")
+		switch {
+		case strings.EqualFold(opt, "SPECIAL-USE"):
+		case strings.EqualFold(opt, "STATUS") && status == nil:
+			end := strings.IndexByte(list, ')')
+			items, ok := parseStatusItems(list[:end+1])
+			for _, item := range items {
+				ok = ok && statusItems[item]
+			}
+			if end < 0 || !ok {
+				return nil, "Invalid STATUS return option"
+			}
+			status, list = items, list[end+1:]
+			if list != "" {
+				if list, ok = strings.CutPrefix(list, " "); !ok || list == "" {
+					return nil, "Invalid LIST return options"
+				}
+			}
+		default:
+			return nil, "Unsupported LIST return option " + opt
+		}
+	}
+	return status, ""
 }
 
 // handleSubscribe implements SUBSCRIBE (RFC 3501 §6.3.6) and handleUnsubscribe
@@ -1055,9 +1095,7 @@ func (s *Session) handleStatus(tag, args string) {
 	// Validate every requested item up front so an unknown one is a BAD syntax
 	// error before any untagged response is emitted.
 	for _, item := range items {
-		switch item {
-		case "MESSAGES", "RECENT", "UNSEEN", "UIDNEXT", "UIDVALIDITY":
-		default:
+		if !statusItems[item] {
 			s.tagged(tag, "BAD", "Unknown STATUS item: "+item)
 			return
 		}
@@ -1070,12 +1108,25 @@ func (s *Session) handleStatus(tag, args string) {
 		return
 	}
 
-	// STATUS must not change the selected mailbox or touch flags: read the
-	// folder's messages fresh, independent of any selected-folder cache.
-	messages, err := s.mailbox.Messages(folder)
+	data, err := s.statusData(folder, items)
 	if err != nil {
 		s.tagged(tag, "NO", "Failed to get status")
 		return
+	}
+	s.send(`* STATUS %s (%s)`, encodeMailboxName(s.wireName(folder)), data)
+	s.tagged(tag, "OK", "STATUS completed")
+}
+
+// statusItems are the STATUS data items (RFC 3501 §6.3.10).
+var statusItems = map[string]bool{"MESSAGES": true, "RECENT": true, "UNSEEN": true, "UIDNEXT": true, "UIDVALIDITY": true}
+
+// statusData is the inside of a STATUS response's parentheses for folder: the
+// requested items, in the order asked, read fresh from the store so neither
+// the selected mailbox nor any flag changes.
+func (s *Session) statusData(folder string, items []string) (string, error) {
+	messages, err := s.mailbox.Messages(folder)
+	if err != nil {
+		return "", err
 	}
 
 	total := len(messages)
@@ -1116,9 +1167,7 @@ func (s *Session) handleStatus(tag, args string) {
 			fmt.Fprintf(&b, "UIDVALIDITY %d", s.resolveUIDValidity(folder))
 		}
 	}
-
-	s.send(`* STATUS %s (%s)`, encodeMailboxName(s.wireName(folder)), b.String())
-	s.tagged(tag, "OK", "STATUS completed")
+	return b.String(), nil
 }
 
 func (s *Session) handleFetch(tag, args string) {

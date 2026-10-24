@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- LIST-STATUS (RFC 5819): `LIST "" * RETURN (STATUS (MESSAGES UNSEEN))`
+  follows each folder's LIST with its STATUS, so a client fills its folder
+  list's counts in one command instead of a STATUS per folder. Part of
+  IMAP4rev2 (rest-mail/rest-mail-server#718).
 - ESEARCH (RFC 4731): `SEARCH RETURN (MIN MAX ALL COUNT) ...` and the UID
   form answer one `* ESEARCH (TAG "...")` with the lowest and highest match,
   every match as a sequence-set, or their count, so a client can find the
