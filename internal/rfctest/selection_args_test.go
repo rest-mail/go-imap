@@ -70,7 +70,8 @@ func TestSelectionMailboxAstrings(t *testing.T) {
 			{"inBoX", "INBOX"}, {`"inBoX"`, "INBOX"},
 			{`"Project Archive"`, "Project Archive"}, {`" padded "`, " padded "},
 			{`"Back\\slash\"quote"`, `Back\slash"quote`},
-			{`"wild*%cards"`, "wild*%cards"}, {"a]b+c/d&-_=", "a]b+c/d&-_="},
+			{`"wild*%cards"`, "wild*%cards"}, {"a]b+c/d&-_=", "a]b+c/d&_="},
+			{"caf&AOk-", "café"}, {`"&U,BTFw-/&ZeVnLIqe-"`, "台北/日本語"},
 			{`""`, ""},
 		} {
 			t.Run(command+"/"+tc.wire, func(t *testing.T) {
@@ -93,13 +94,16 @@ func TestSelectionMailboxAstrings(t *testing.T) {
 func TestSelectionLiteralMailbox(t *testing.T) {
 	for _, command := range []string{"SELECT", "EXAMINE"} {
 		for _, sync := range []bool{false, true} {
-			for _, name := range []string{"inBoX", "Project Archive", " padded ", "Back\\slash\"quote", "caf\xc3\xa9", "line\r\nname", ""} {
+			// A literal name is modified UTF-7 too (RFC 3501 §5.1.3): é, CR and
+			// LF travel in its base64.
+			for _, tc := range []struct{ name, want string }{
+				{"inBoX", "INBOX"}, {"Project Archive", "Project Archive"}, {" padded ", " padded "},
+				{"Back\\slash\"quote", "Back\\slash\"quote"}, {"caf&AOk-", "café"},
+				{"line&AA0ACg-name", "line\r\nname"}, {"", ""},
+			} {
+				name, want := tc.name, tc.want
 				t.Run(fmt.Sprintf("%s/sync=%t/%q", command, sync, name), func(t *testing.T) {
 					box := newStatusMailbox()
-					want := name
-					if strings.EqualFold(name, "INBOX") {
-						want = "INBOX"
-					}
 					box.folders[want] = []imap.Message{{UID: 42, Seen: true}}
 					c := selectionClient(t, box)
 					marker := "+"

@@ -258,10 +258,16 @@ func TestStatusMailboxStrings(t *testing.T) {
 		})
 	}
 	for _, sync := range []bool{false, true} {
-		for _, folder := range []string{"Work \"box\\", "caf\xc3\xa9", "line\r\nbreak", "bad\x00name"} {
+		// The literal carries the modified UTF-7 name (RFC 3501 §5.1.3), the
+		// backend gets it decoded, and STATUS answers with the name as sent.
+		for _, tc := range []struct{ folder, stored string }{
+			{"Work \"box\\", "Work \"box\\"}, {"caf&AOk-", "café"},
+			{"line&AA0ACg-break", "line\r\nbreak"}, {"bad\x00name", ""},
+		} {
+			folder, stored := tc.folder, tc.stored
 			t.Run(fmt.Sprintf("literal/%t/%q", sync, folder), func(t *testing.T) {
 				box := newStatusMailbox()
-				box.folders[folder] = nil
+				box.folders[stored] = nil
 				c := selectionClient(t, box)
 				payload := folder + " (MESSAGES)\r\nN1 NOOP\r\n"
 				if sync {
@@ -281,10 +287,7 @@ func TestStatusMailboxStrings(t *testing.T) {
 						t.Fatalf("NUL reached backend: %q", box.reads)
 					}
 				} else {
-					want := `* STATUS "Work \"box\\" (MESSAGES 0)`
-					if strings.ContainsAny(folder, "\r\n") || strings.Contains(folder, "\xc3") {
-						want = fmt.Sprintf("* STATUS {%d}\r\n%s (MESSAGES 0)", len(folder), folder)
-					}
+					want := fmt.Sprintf("* STATUS %q (MESSAGES 0)", folder)
 					// Read the exact wire bytes, including any response literal.
 					got := make([]byte, len(want)+2)
 					if _, err := io.ReadFull(c.r, got); err != nil {
@@ -294,8 +297,8 @@ func TestStatusMailboxStrings(t *testing.T) {
 						t.Fatalf("literal response: %q, want %q", got, want)
 					}
 					requireOK(t, c.line(), "S1")
-					if !reflect.DeepEqual(box.reads, []string{folder}) {
-						t.Fatalf("literal backend name: %q", box.reads)
+					if !reflect.DeepEqual(box.reads, []string{stored}) {
+						t.Fatalf("literal backend name: %q, want %q", box.reads, stored)
 					}
 				}
 				requireOK(t, c.line(), "N1")

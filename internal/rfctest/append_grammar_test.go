@@ -15,6 +15,8 @@ import (
 //
 // checklist: IMAP-APPEND-23
 func TestAppendGrammarCombinations(t *testing.T) {
+	// A literal name is modified UTF-7 like any other (RFC 3501 §5.1.3): CR, LF
+	// and é travel in its base64, and the backend gets them decoded.
 	for _, name := range []struct {
 		wire, decoded string
 		literal, sync bool
@@ -24,8 +26,8 @@ func TestAppendGrammarCombinations(t *testing.T) {
 		{wire: `""`},
 		{decoded: "", literal: true, sync: true},
 		{decoded: "", literal: true},
-		{decoded: "a\r\nb\x80", literal: true, sync: true},
-		{decoded: "a\r\nb\x80", literal: true},
+		{wire: "a&AA0ACg-b&AOk-", decoded: "a\r\nbé", literal: true, sync: true},
+		{wire: "a&AA0ACg-b&AOk-", decoded: "a\r\nbé", literal: true},
 	} {
 		for _, optional := range []string{"", "() ", `"17-Jul-1996 02:44:25 -0700" `, `(\Seen \Draft) "17-Jul-1996 02:44:25 -0700" `} {
 			for _, raw := range []string{"", "a\x80\r\nN1 LOGOUT\r\n"} {
@@ -35,9 +37,9 @@ func TestAppendGrammarCombinations(t *testing.T) {
 						c := selectionClient(t, box)
 						wire := "A1 APPEND "
 						if name.literal {
-							marker := fmt.Sprintf("{%d+}\r\n", len(name.decoded))
+							marker := fmt.Sprintf("{%d+}\r\n", len(name.wire))
 							if name.sync {
-								marker = fmt.Sprintf("{%d}\r\n", len(name.decoded))
+								marker = fmt.Sprintf("{%d}\r\n", len(name.wire))
 							}
 							wire += marker
 							if name.sync {
@@ -47,7 +49,7 @@ func TestAppendGrammarCombinations(t *testing.T) {
 								}
 								wire = ""
 							}
-							wire += name.decoded
+							wire += name.wire
 						} else {
 							wire += name.wire
 						}
@@ -97,7 +99,9 @@ func TestAppendGrammarCombinations(t *testing.T) {
 
 // TestAppendQuotedMailboxOctets independently expands RFC 3501's QUOTED-CHAR
 // grammar, including permitted ASCII controls and escaped quoted-specials.
-// CR and LF are framing and are covered by the command-line/literal tests.
+// CR and LF are framing and are covered by the command-line/literal tests. A
+// control, DELETE or a lone "&" is a valid quoted-string but not modified UTF-7
+// (§5.1.3), so it names no mailbox and the APPEND is NO.
 //
 // checklist: IMAP-APPEND-23
 func TestAppendQuotedMailboxOctets(t *testing.T) {
@@ -114,11 +118,18 @@ func TestAppendQuotedMailboxOctets(t *testing.T) {
 			box := &appendMailbox{}
 			c := selectionClient(t, box)
 			valid := octet > 0 && octet < 128
-			if !valid {
+			// A control, DELETE or a lone "&" is a valid quoted-string but not
+			// modified UTF-7 (RFC 3501 §5.1.3), so it names no mailbox: NO.
+			mutf7 := octet >= 0x20 && octet <= 0x7e && octet != '&'
+			if !valid || !mutf7 {
 				lines, tagged := c.command("A1", "APPEND %s {3}", wire)
 				requireExactly(t, lines)
-				if !strings.HasPrefix(tagged, "A1 BAD ") {
-					t.Fatalf("invalid octet: %q", tagged)
+				want := "A1 BAD "
+				if valid {
+					want = "A1 NO "
+				}
+				if !strings.HasPrefix(tagged, want) {
+					t.Fatalf("octet %02x: %q, want %q", octet, tagged, want)
 				}
 			} else {
 				_, tagged := appendCommand(t, c, wire, "msg")
@@ -128,7 +139,7 @@ func TestAppendQuotedMailboxOctets(t *testing.T) {
 					t.Fatalf("records: %+v, want %q", box.records, want)
 				}
 			}
-			if !valid && len(box.records) != 0 {
+			if (!valid || !mutf7) && len(box.records) != 0 {
 				t.Fatalf("invalid name stored: %+v", box.records)
 			}
 			_, tagged := c.command("N1", "NOOP")

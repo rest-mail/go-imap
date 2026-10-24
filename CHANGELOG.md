@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** mailbox names are modified UTF-7 on the wire (RFC 3501
+  §5.1.3), and a `Mailbox` names its folders in UTF-8. Until a client enables
+  UTF8=ACCEPT, LIST, LSUB, STATUS and QUOTAROOT write a name holding non-ASCII
+  or `&` in modified UTF-7. Every command decodes the names it carries before
+  they reach the `Mailbox`. CREATE and RENAME refuse, with NO, a name that is
+  not valid modified UTF-7 or (without UTF8=ACCEPT) is 8-bit, and other
+  commands answer NO for such a name. After ENABLE UTF8=ACCEPT names are UTF-8
+  both ways, as before. A host that stored names exactly as clients sent them
+  holds modified UTF-7 text, which is now listed with `&` as `&-`; rename such
+  folders to their decoded names. Checklist rows IMAP-MUTF7-01 to -05,
+  `FuzzModifiedUTF7` (rest-mail/go-imap#145).
+
 ### Added
 
 - `Session.SetIdlePollInterval` and `Server.SetIdlePollInterval` set how often an

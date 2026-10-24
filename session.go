@@ -806,8 +806,11 @@ func (s *Session) handleList(tag, args, cmd string) {
 		return
 	}
 
+	// The reference and pattern are in the client's form, so they are matched
+	// against each name as this session writes it.
 	for _, f := range folders {
-		if !matchIMAPPattern(pattern, f.Name) {
+		wire := s.wireName(f.Name)
+		if !matchIMAPPattern(pattern, wire) {
 			continue
 		}
 		// The role is the store's, reported on every LIST (RFC 6154 §2 allows it
@@ -820,7 +823,7 @@ func (s *Session) handleList(tag, args, cmd string) {
 		if onlySpecialUse && attrs == "" {
 			continue
 		}
-		s.send(`* %s (%s) "/" %s`, cmd, attrs, encodeMailboxName(f.Name))
+		s.send(`* %s (%s) "/" %s`, cmd, attrs, encodeMailboxName(wire))
 	}
 	s.tagged(tag, "OK", cmd+" completed")
 }
@@ -848,6 +851,10 @@ func (s *Session) handleSubscription(tag, args, cmd string) {
 	mailbox := unquote(strings.TrimSpace(args))
 	if mailbox == "" {
 		s.tagged(tag, "BAD", cmd+" requires a mailbox name")
+		return
+	}
+	if _, ok := s.mailboxName(mailbox); !ok {
+		s.tagged(tag, "NO", "Invalid mailbox name")
 		return
 	}
 	s.tagged(tag, "OK", cmd+" completed")
@@ -882,7 +889,11 @@ func (s *Session) handleSelect(tag, args string, readOnly bool) {
 		s.tagged(tag, "BAD", "SELECT/EXAMINE requires one mailbox name")
 		return
 	}
-	folder = canonicalizeInbox(folder)
+	folder, ok = s.folderName(folder)
+	if !ok {
+		s.tagged(tag, "NO", "No such mailbox")
+		return
+	}
 
 	// Fetch messages for this folder
 	messages, err := s.mailbox.Messages(folder)
@@ -962,8 +973,6 @@ func (s *Session) handleStatus(tag, args string) {
 		s.tagged(tag, "BAD", "STATUS requires a non-empty parenthesized item list")
 		return
 	}
-	// INBOX is case-insensitive; other names retain their spelling.
-	folder = canonicalizeInbox(folder)
 	// Validate every requested item up front so an unknown one is a BAD syntax
 	// error before any untagged response is emitted.
 	for _, item := range items {
@@ -973,6 +982,13 @@ func (s *Session) handleStatus(tag, args string) {
 			s.tagged(tag, "BAD", "Unknown STATUS item: "+item)
 			return
 		}
+	}
+
+	// INBOX is case-insensitive; other names retain their spelling.
+	folder, ok = s.folderName(folder)
+	if !ok {
+		s.tagged(tag, "NO", "No such mailbox")
+		return
 	}
 
 	// STATUS must not change the selected mailbox or touch flags: read the
@@ -1022,7 +1038,7 @@ func (s *Session) handleStatus(tag, args string) {
 		}
 	}
 
-	s.send(`* STATUS %s (%s)`, encodeMailboxName(folder), b.String())
+	s.send(`* STATUS %s (%s)`, encodeMailboxName(s.wireName(folder)), b.String())
 	s.tagged(tag, "OK", "STATUS completed")
 }
 
@@ -2111,6 +2127,14 @@ func (s *Session) handleCreate(tag, args string) {
 		s.tagged(tag, "NO", "Missing folder name")
 		return
 	}
+	// A name with "&" must be modified UTF-7 without superfluous shifts or
+	// encoded ASCII (RFC 3501 §5.1.3), and an 8-bit name is refused unless the
+	// server takes UTF-8 (§5.1, RFC 6855 §3).
+	folder, ok := s.mailboxName(folder)
+	if !ok {
+		s.tagged(tag, "NO", "Invalid folder name")
+		return
+	}
 	// INBOX always exists and is case-insensitive (RFC 3501 §5.1, §6.3.3), so
 	// CREATE of any-case "INBOX" must fail rather than silently succeed.
 	if strings.EqualFold(folder, "INBOX") {
@@ -2152,7 +2176,11 @@ func (s *Session) handleDelete(tag, args string) {
 	// "INBOX" is case-insensitive (RFC 3501 §5.1): fold to canonical so any-case
 	// spelling ("inbox", "InBoX") hits the standard-folder guard below rather
 	// than bypassing it. Other standard names stay case-sensitive.
-	folder = canonicalizeInbox(folder)
+	folder, ok := s.folderName(folder)
+	if !ok {
+		s.tagged(tag, "NO", "No such folder")
+		return
+	}
 
 	// Prevent deleting standard folders
 	standard := map[string]bool{"INBOX": true, "Sent": true, "Drafts": true, "Trash": true}
@@ -2188,6 +2216,13 @@ func (s *Session) handleRename(tag, args string) {
 
 	if oldName == "" || newName == "" {
 		s.tagged(tag, "BAD", "RENAME requires old and new name")
+		return
+	}
+	var oldOK, newOK bool
+	oldName, oldOK = s.mailboxName(oldName)
+	newName, newOK = s.mailboxName(newName)
+	if !oldOK || !newOK {
+		s.tagged(tag, "NO", "Invalid folder name")
 		return
 	}
 	// The new name follows CREATE's UTF8=ACCEPT rules (RFC 6855 §3).
@@ -2325,7 +2360,11 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 	}
 	// "INBOX" is case-insensitive (RFC 3501 §5.1): fold to canonical so an any-case
 	// destination delivers to the one real INBOX, not a phantom "inbox" mailbox.
-	folder = canonicalizeInbox(folder)
+	folder, ok = s.folderName(folder)
+	if !ok {
+		s.tagged(tag, "NO", "No such mailbox")
+		return false
+	}
 
 	// Optional flag-list: (\Seen \Draft ...) immediately after the mailbox. Taking
 	// it positionally — rather than scanning for the first '(' — avoids matching a
@@ -2556,6 +2595,11 @@ func (s *Session) handleGetQuotaRoot(tag, args string) {
 		s.tagged(tag, "BAD", "Missing mailbox name")
 		return
 	}
+	folder, ok := s.folderName(mailbox)
+	if !ok {
+		s.tagged(tag, "NO", "No such mailbox")
+		return
+	}
 
 	used, limit, err := s.mailbox.Quota()
 	if err != nil {
@@ -2563,7 +2607,7 @@ func (s *Session) handleGetQuotaRoot(tag, args string) {
 		return
 	}
 
-	s.send("* QUOTAROOT %s \"\"", encodeMailboxName(mailbox))
+	s.send("* QUOTAROOT %s \"\"", encodeMailboxName(s.wireName(folder)))
 	s.send("* QUOTA \"\" (STORAGE %d %d)", used/1024, limit/1024)
 	s.tagged(tag, "OK", "GETQUOTAROOT completed")
 }

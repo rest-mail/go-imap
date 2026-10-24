@@ -10,7 +10,9 @@ import (
 // TestAppendUnquotedMailboxGrammar enumerates the RFC 3501 §9 ASTRING-CHAR
 // octet grammar through Session. CR/LF are command framing, so they are tested
 // by the existing command-line tests rather than inserted in a mailbox token.
-// ASTRING-CHAR adds ']' back to ATOM-CHAR; '}' and '+' are also legal.
+// ASTRING-CHAR adds ']' back to ATOM-CHAR; '}' and '+' are also legal. A lone
+// '&' is an ASTRING-CHAR but not modified UTF-7 (§5.1.3), so "a&b" names no
+// mailbox: NO before the continuation rather than BAD.
 //
 // checklist: IMAP-APPEND-30
 func TestAppendUnquotedMailboxGrammar(t *testing.T) {
@@ -37,9 +39,13 @@ func TestAppendUnquotedMailboxGrammar(t *testing.T) {
 					if _, err := fmt.Fprintf(c.conn, "A1 APPEND %s%s %s\r\n", folder, flags, marker); err != nil {
 						t.Fatal(err)
 					}
-					if !valid {
-						if line := c.line(); !strings.HasPrefix(line, "A1 BAD ") {
-							t.Fatalf("invalid mailbox: %q, want BAD before continuation", line)
+					if !valid || octet == '&' {
+						want := "A1 BAD "
+						if valid {
+							want = "A1 NO "
+						}
+						if line := c.line(); !strings.HasPrefix(line, want) {
+							t.Fatalf("invalid mailbox: %q, want %q before continuation", line, want)
 						}
 						if nonSync {
 							if line := c.line(); !strings.HasPrefix(line, "* BYE ") {

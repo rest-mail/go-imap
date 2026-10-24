@@ -86,7 +86,7 @@ with the examples; they do not prove independent Recent tracking.
 | IMAP-SELECT-09 | RFC 3501 §§2.3.1.1, 6.3.1 | MUST | UIDNEXT must track past UID assignments even after messages are expunged; UIDVALIDITY must reflect persistent mailbox identity. | n/a: not supported yet for the base Mailbox interface; UIDNEXT is derived from current messages and UIDVALIDITY defaults to 1 without UIDPlusMailbox. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-SELECT-10 | RFC 3501 §6.3.1 | MUST | SELECT must return READ-ONLY when access permits reading but forbids modification. | n/a: not supported yet; Mailbox exposes no per-folder write permission. Host can refuse Messages with an error but cannot select read-only through SELECT. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-SELECT-11 | RFC 3501 §§6.3.1, 6.3.2, 9 | Normative | SELECT/EXAMINE require exactly one mailbox astring: missing, malformed, extra or improperly separated arguments receive BAD without metadata reads or writes; a failed selection drops prior selection and deletion marks without expunging, and a later valid selection recovers. | TestSelectionInvalidArguments, TestSelectionInvalidLiteralArguments |
-| IMAP-SELECT-12 | RFC 3501 §§4.3, 5.1, 6.3.1, 6.3.2, 9 | Normative | Decode bare, quoted and counted-literal mailbox names without trimming significant spaces, preserve escaped quoted-specials and quoted wildcard characters, canonicalize only INBOX, and preserve command framing for synchronizing and LITERAL+ names. An explicit empty string reaches the backend unchanged rather than selecting INBOX. | TestSelectionMailboxAstrings, TestSelectionLiteralMailbox |
+| IMAP-SELECT-12 | RFC 3501 §§4.3, 5.1, 6.3.1, 6.3.2, 9 | Normative | Decode bare, quoted and counted-literal mailbox names without trimming significant spaces, preserve escaped quoted-specials and quoted wildcard characters, canonicalize only INBOX, and preserve command framing for synchronizing and LITERAL+ names. An explicit empty string reaches the backend unchanged rather than selecting INBOX. Names are modified UTF-7, decoded before they reach the backend (IMAP-MUTF7-02). | TestSelectionMailboxAstrings, TestSelectionLiteralMailbox |
 | IMAP-SELECT-13 | RFC 3501 §§6.3.1, 6.3.2 | MUST | Before tagged OK to SELECT or EXAMINE, send every REQUIRED response: FLAGS, EXISTS, RECENT, and OK PERMANENTFLAGS, UIDNEXT and UIDVALIDITY, with OK UNSEEN when an unseen message exists. The RECENT value itself is IMAP-SELECT-08. | TestSelectionExamples |
 | IMAP-EXAMINE-01 | RFC 3501 §6.3.2 | MUST | Successful EXAMINE starts tagged OK text with READ-ONLY and reports no permanent flags. | TestSelectionExamples |
 | IMAP-EXAMINE-02 | RFC 3501 §6.3.2 | Normative | EXAMINE forbids permanent writes through STORE, EXPUNGE and MOVE (including UID variants) and CLOSE; a later SELECT restores writable access. | TestExaminePreventsPermanentWrites |
@@ -94,8 +94,7 @@ with the examples; they do not prove independent Recent tracking.
 
 The argument rows check complete astring tokens after literal materialization.
 Raw quoted and literal octets share that representation, so strict wire-form
-validation (including raw quoted 8-bit octets), modified UTF-7 mailbox semantics,
-permanent keyword support, UID exhaustion, backend error/fallback behavior and
+validation (including raw quoted 8-bit octets), permanent keyword support, UID exhaustion, backend error/fallback behavior and
 concurrent sessions remain unaudited. These rows do not claim full
 §§6.3.1/6.3.2 conformance.
 
@@ -113,15 +112,14 @@ from selected-folder metadata and use mailbox-specific UIDVALIDITY values.
 | IMAP-STATUS-03 | RFC 3501 §§6.3.10, 9 | Normative | Reject malformed mailbox astrings, missing/unknown/quoted/non-ASCII items, non-SP or doubled/leading/trailing separators, unbalanced/nested lists and trailing arguments with BAD before metadata/content reads or flag changes; keep the session reusable. | TestStatusInvalidArguments |
 | IMAP-STATUS-04 | RFC 3501 §6.3.10 | Normative | Successful and failed STATUS leave the selected mailbox, cached flags and SELECT/EXAMINE access mode unchanged; in the authenticated state STATUS does not select a mailbox or read message content. | TestStatusInvalidArguments, TestStatusPreservesSelection |
 | IMAP-STATUS-05 | RFC 3501 §§3, 6.3.10 | Normative | Refuse STATUS before authentication without metadata access; backend lookup failure returns NO without an untagged STATUS, and a later valid query succeeds. | TestStatusPreservesSelection |
-| IMAP-STATUS-06 | RFC 3501 §§4.3, 6.3.10, 7.2.4, 9 | Normative | Decode quoted and counted-literal mailbox astrings, echo names with escaped quotes/backslashes or exact counted literals, treat quoted wildcard characters as part of a name, and reject NUL without dispatching literal payload as commands. | TestStatusMailboxStrings |
+| IMAP-STATUS-06 | RFC 3501 §§4.3, 6.3.10, 7.2.4, 9 | Normative | Decode quoted and counted-literal mailbox astrings, echo the name in modified UTF-7 with escaped quotes/backslashes, treat quoted wildcard characters as part of a name, and reject NUL without dispatching literal payload as commands. | TestStatusMailboxStrings |
 | IMAP-STATUS-07 | RFC 3501 §§2.3.2, 6.3.10 | Normative | RECENT reports independent Recent state and STATUS preserves it. | n/a: not supported yet; Message has no Recent field and STATUS approximates RECENT as unseen, as in IMAP-SELECT-08. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-STATUS-08 | RFC 3501 §§2.3.1.1, 6.3.10 | MUST | UIDNEXT tracks past UID assignments and UIDVALIDITY reflects persistent mailbox identity. | n/a: not supported yet for the base Mailbox interface; UIDNEXT is current maximum plus one and UIDVALIDITY defaults to 1 without UIDPlusMailbox, as in IMAP-SELECT-09. UID exhaustion and UIDValidity backend-error fallback remain unaudited. Tracked in rest-mail/rest-mail-server#374. |
 
 This is not a complete STATUS or mailbox-name audit. Literal arguments are
 materialized as quoted strings before parsing, so raw quoted 8-bit/control
 octets cannot be distinguished from literal contents here; strict wire-form
-validation, modified UTF-7 mailbox semantics, concurrent updates and UID
-exhaustion remain outside this slice. RECENT syntax remains accepted without a
+validation, concurrent updates and UID exhaustion remain outside this slice. RECENT syntax remains accepted without a
 claim that its current unread approximation conforms.
 
 ## RFC 3501: STORE and UID STORE — partial flag-update slice
@@ -347,7 +345,7 @@ not advertise LITERAL+ and this slice does not claim full extension support.
 | IMAP-APPEND-27 | RFC 3501 §§4.3, 9 | Normative | Reject NUL in a counted APPEND message literal with BAD, without calling the backend; after consuming its terminator, keep the next command framed for both synchronizing and non-synchronizing literals. | TestAppendRejectsNULMessageOctet |
 | IMAP-APPEND-28 | RFC 3501 §9 | Normative | Decode quoted APPEND mailbox names with escaped DQUOTE or backslash, and reject any other escape, NUL or 8-bit octet before a message-literal continuation. | TestAppendQuotedMailboxGrammar |
 | IMAP-APPEND-29 | RFC 3501 §§6.3.11, 9 | Normative | Accept fixed-width, DQUOTE-delimited date-times with space-padded or two-digit days and preserve explicit dates at DateAppender, including Go's zero time; reject malformed fields, escapes and invalid calendar/time/zone values before continuation or backend writes, preserving synchronizing recovery and non-synchronizing BYE refusal. | TestAppendInvalidDateTime, TestAppendValidDateTime |
-| IMAP-APPEND-30 | RFC 3501 §§4.3, 9 | Normative | Unquoted APPEND mailbox names contain only ASTRING-CHAR octets (including `]`); reject controls, non-ASCII octets, wildcards and quoted-specials before a continuation or backend call, preserving synchronizing recovery and closing on unread non-synchronizing literals. | TestAppendUnquotedMailboxGrammar, TestAppendRejectedNonSynchronizing |
+| IMAP-APPEND-30 | RFC 3501 §§4.3, 9 | Normative | Unquoted APPEND mailbox names contain only ASTRING-CHAR octets (including `]`); reject controls, non-ASCII octets, wildcards and quoted-specials before a continuation or backend call (a lone `&` is ASTRING-CHAR but not modified UTF-7, so NO: IMAP-MUTF7-03), preserving synchronizing recovery and closing on unread non-synchronizing literals. | TestAppendUnquotedMailboxGrammar, TestAppendRejectedNonSynchronizing |
 | IMAP-APPEND-31 | RFC 3501 §6.3.11 | MUST | 8-bit APPEND data is preserved: the counted octets reach the backend unchanged, with no conversion. Storing them faithfully is the backend's duty. | TestAppendLiteralOctets |
 
 Early APPEND refusals with a valid `{n+}` marker choose RFC 7888 §4's
@@ -618,14 +616,32 @@ its enable callback, not a complete RFC 6855 audit. IDLE polling notifications,
 concurrent mailbox changes, timeout policy, RFC 9051 IMAP4rev2 differences and
 the remaining core/extension requirements still need a complete inventory.
 
+## RFC 3501 §5.1: mailbox naming
+
+A `Mailbox` names its folders in UTF-8 and the server converts at the wire:
+until the client enables UTF8=ACCEPT, every mailbox name in a command or
+response is modified UTF-7 (§5.1.3); after, it is UTF-8 (RFC 6855 §3). The
+tests use the RFC's own examples, and FuzzModifiedUTF7, run in CI, checks the
+converter against an independent regexp of the grammar and its round trip. §5.1.1's single hierarchy separator is "/",
+the delimiter every LIST and LSUB reply names; §5.1.2's "#" namespaces are not
+offered, and names starting with "#" are ordinary names.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-MUTF7-01 | RFC 3501 §§5.1, 5.1.3 | MUST | Without UTF8=ACCEPT enabled, LIST, LSUB, STATUS and QUOTAROOT write a store name holding non-ASCII or `&` in modified UTF-7 (`~peter/mail/&U,BTFw-/&ZeVnLIqe-`, `&` as `&-`, controls in base64), leave other names alone and return no 8-bit name; LIST patterns match the names as written. | TestMailboxNamesAreWrittenInModifiedUTF7 |
+| IMAP-MUTF7-02 | RFC 3501 §§5.1, 5.1.3 | MUST | Names in SELECT, EXAMINE, STATUS, COPY, UID COPY, MOVE, APPEND, DELETE and RENAME are decoded from modified UTF-7 before they reach the store; the modified BASE64 is kept exactly and compared case-sensitively, while INBOX stays case-insensitive. | TestMailboxNamesAreDecodedFromModifiedUTF7 |
+| IMAP-MUTF7-03 | RFC 3501 §5.1.3 | SHOULD | CREATE and RENAME refuse with NO a name that is not correctly modified UTF-7: no shift back (`&Jjo!`), a superfluous shift (`&U,BTFw-&ZeVnLIqe-`), base64 for printable ASCII, odd octets, unpaired surrogates, nonzero padding bits, `/` in base64 or a lone `&`; their correct forms are taken; any other command answers NO for such a name without asking the store. | TestInvalidModifiedUTF7NamesAreRefused |
+| IMAP-MUTF7-04 | RFC 3501 §5.1; RFC 6855 §3 | SHOULD | Without UTF8=ACCEPT, CREATE refuses an 8-bit name with NO and no command finds a folder by one; a UTF8=ACCEPT server takes a UTF-8 name before ENABLE but still writes names in modified UTF-7 until then. | TestEightBitNamesBeforeUTF8 |
+| IMAP-MUTF7-05 | RFC 6855 §3 | MUST | After ENABLE UTF8=ACCEPT, names travel as UTF-8 both ways: LIST writes the store's names as they are and command names reach the store unchanged, with no modified UTF-7 decoding. | TestUTF8AcceptNamesAreUTF8 |
+
 ## RFC 6855: UTF8=ACCEPT — partial slice
 
 These rows apply to a session whose backend implements `UTF8Mailbox`, so the
 server advertises UTF8=ACCEPT ([RFC 6855](https://www.rfc-editor.org/rfc/rfc6855));
 ENABLE itself is IMAP-ENABLE-01 to -06. A backend without it keeps RFC 3501
-behaviour. Mailbox names in responses stay literals when they carry 8-bit
-octets, which RFC 6855 §3 permits in either mode; sending them as UTF-8
-quoted-strings after ENABLE is a MAY left undone. NFC normalisation of mailbox
+behaviour. Mailbox names in responses are modified UTF-7 until the client
+enables UTF-8 (IMAP-MUTF7-01), then literals when they carry 8-bit octets;
+sending them as UTF-8 quoted-strings after ENABLE is a MAY left undone. NFC normalisation of mailbox
 names (RFC 5198 §2, a SHOULD) is the backend's: this package has no Unicode
 normalisation tables. UTF8=ONLY, CATENATE and downgrading (§§6–7) are not
 implemented.
@@ -804,7 +820,15 @@ inventory is complete.
   message that starts with its blank line (IMAP-FETCH-24). Static items not
   changing is the host's to keep: the engine derives them from the stored
   message and metadata, which it never rewrites.
+- 2026-10-24: RFC 3501 §5.1 mailbox naming (§§5.1.1–5.1.3) read line by line,
+  with RFC 6855 §3's rules for names. One deviation fixed (rest-mail/go-imap#145):
+  the server did no modified UTF-7 at all, so a UTF-8 store's names went out as
+  8-bit octets to clients that had not enabled UTF-8, and a client's modified
+  UTF-7 name reached the store undecoded. New rows IMAP-MUTF7-01..05. INBOX is
+  IMAP-CREATE-01, IMAP-DELETE-01, IMAP-LIST-03 and IMAP-STATUS-02; client-only
+  duties (avoid 8-bit names, atom-specials, wildcards) are not server rules.
 - Every command section (§6) and response section (§7) has now been read line
-  by line. Not yet audited line by line, for the next slices: §§2–5 (the
-  message model, states, data formats and operational rules), §9's formal
-  syntax beyond the grammar rows above, then RFC 9051 (IMAP4rev2).
+  by line, and §5.1. Not yet audited line by line, for the next slices:
+  §§5.2–5.5 (unsolicited updates, flow control, autologout, pipelining), §§2–4
+  (the message model, states and data formats), §9's formal syntax beyond the
+  grammar rows above, then RFC 9051 (IMAP4rev2).
