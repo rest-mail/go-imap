@@ -73,7 +73,7 @@ func TestListStatusRefusals(t *testing.T) {
 		"(STATUS (MESSAGES  UNSEEN))",
 		"(STATUS (MESSAGES) STATUS (UNSEEN))",
 		"(STATUS (MESSAGES) )",
-		"(CHILDREN)",
+		"(MYRIGHTS)",
 	} {
 		lines, tagged := c.command("B1", `LIST "" * RETURN %s`, ret)
 		if !strings.HasPrefix(tagged, "B1 BAD ") || len(lines) != 0 {
