@@ -12,6 +12,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   identity/password, extra NUL delimiters, invalid UTF-8 and embedded CR in
   base64 responses. Both initial-response and continuation exchanges can retry
   safely; 255-octet UTF-8 credential fields remain supported.
+- Refuse negative or overflowing mailbox SIZE metadata instead of emitting
+  invalid unsigned 63-bit STATUS data; preserve ordinary metadata requests.
+- LIST-STATUS now resolves metadata before LIST, marks a vanished mailbox
+  Noselect, omits STATUS for recursive-only parents, and deduplicates repeated
+  STATUS options while validating every occurrence.
 
 ### Added
 
@@ -20,6 +25,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   against lost sections or invalid requirement references. New wire proofs cover
   ENABLE pipelining, RFC7888's exact LOGIN example, server literal framing and
   IDLE mailbox updates. The wider RFC checklist remains partial.
+- A grouped source/section audit for five mailbox discovery/status RFCs, with
+  structural loss/drift guards and explicit host/client/unsupported boundaries.
+  Wire regressions cover SIZE boundaries, LIST-STATUS disappearance, recursion,
+  duplicate options and all seven standardized special-use attributes.
 
 ## [0.13.0] - 2026-10-26
 

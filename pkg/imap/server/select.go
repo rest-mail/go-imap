@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/rest-mail/go-imap/pkg/imap"
@@ -182,6 +183,7 @@ func (s *Session) statusData(folder string, items []string) (string, error) {
 	var unseen int
 	var maxUID uint32
 	var size int64
+	sizeValid := true
 	for _, m := range messages {
 		if !m.Seen {
 			unseen++
@@ -189,7 +191,13 @@ func (s *Session) statusData(folder string, items []string) (string, error) {
 		if m.UID > maxUID {
 			maxUID = m.UID
 		}
-		size += int64(m.Size)
+		// RFC8438 SIZE is an unsigned 63-bit sum. Do not let invalid host
+		// metadata produce a negative value or wrap below the real total.
+		if m.Size < 0 || int64(m.Size) > math.MaxInt64-size {
+			sizeValid = false
+		} else {
+			size += int64(m.Size)
+		}
 	}
 
 	// Emit exactly the requested items, in the order the client asked for them.
@@ -217,6 +225,9 @@ func (s *Session) statusData(folder string, items []string) (string, error) {
 			// else the legacy constant 1 — matching SELECT/EXAMINE.
 			fmt.Fprintf(&b, "UIDVALIDITY %d", s.resolveUIDValidity(folder))
 		case "SIZE":
+			if !sizeValid {
+				return "", fmt.Errorf("invalid mailbox message sizes")
+			}
 			// The sum of the messages' RFC822.SIZE, which FETCH gives as the
 			// stored size (RFC 8438 §3).
 			fmt.Fprintf(&b, "SIZE %d", size)
