@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Reject malformed SASL PLAIN payloads before backend authentication: empty
+  identity/password, extra NUL delimiters, invalid UTF-8 and embedded CR in
+  base64 responses. Both initial-response and continuation exchanges can retry
+  safely; 255-octet UTF-8 credential fields remain supported.
+
+### Added
+
+- A grouped section audit of seven negotiation/session extension RFCs, with
+  pinned source indexes, explicit host/client/unsupported boundaries and guards
+  against lost sections or invalid requirement references. New wire proofs cover
+  ENABLE pipelining, RFC7888's exact LOGIN example, server literal framing and
+  IDLE mailbox updates. The wider RFC checklist remains partial.
+
 ## [0.13.0] - 2026-10-26
 
 ### Changed (breaking)

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"log/slog"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/rest-mail/go-imap/pkg/imap/internal/wire"
 )
@@ -139,12 +140,16 @@ func (s *Session) handleAuthenticate(tag, args string) {
 	// An initial response's decoding errors are handled as any client
 	// response's (RFC 4959 §3).
 	decoded, err := wire.DecodeBase64(line)
-	if err != nil {
+	if err != nil || strings.ContainsAny(line, "\r\n") {
 		s.tagged(tag, "NO", "Invalid base64")
 		return
 	}
-	parts := strings.SplitN(string(decoded), "\x00", 3)
-	if len(parts) != 3 {
+	// RFC 4616 section 2: exactly two NUL delimiters, nonempty authcid and
+	// password, and UTF-8 throughout. SplitN would admit a NUL in the password.
+	// Validate before calling even a permissive authentication backend; string
+	// preparation and comparison against stored credentials remain its job.
+	parts := strings.Split(string(decoded), "\x00")
+	if len(parts) != 3 || !utf8.Valid(decoded) || parts[1] == "" || parts[2] == "" {
 		s.tagged(tag, "NO", "Invalid PLAIN data")
 		return
 	}
