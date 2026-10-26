@@ -1007,6 +1007,7 @@ here cover the rules every command line and response shares.
 | IMAP-SYNTAX-05 | RFC 3501 §9 (notes 1-3) | MUST | Command names and keywords are accepted in any case; SP is exactly one space, so a doubled space or a TAB gets BAD; a NUL gets BAD. | TestCaseAndSpacing |
 | IMAP-SYNTAX-06 | RFC 3501 §9; RFC 6855 §3 | MUST | Without UTF8=ACCEPT, reject typed 8-bit atoms and quoted strings with BAD before soliciting a synchronizing literal, including APPEND and command continuations. Literal octets remain exempt; unread non-synchronizing payloads require BYE and closure. | TestUnsupportedUTF8CommandText, TestUnsupportedUTF8AppendText |
 | IMAP-SYNTAX-07 | RFC 3501 §9; RFC 6855 §5 | MUST | Do not extend LOGIN to typed UTF-8 credentials. Reject quoted or atom 8-bit username/password text before backend authentication; SASL AUTHENTICATE PLAIN can carry UTF-8 credentials. | TestUTF8CredentialsRequireAuthenticate |
+| IMAP-SYNTAX-08 | RFC 3501 §§6.4.5–6.4.7, 9 (nz-number, seq-range) | Normative | Preserve unsigned 32-bit range endpoints on 32-bit and 64-bit hosts: forward and reversed ranges above signed-int maximum select the same existing messages, while ranges wholly above the snapshot and absent single numbers select none. FETCH, STORE and COPY dispatch only the selected messages. | TestWideSequenceDispatch |
 
 ## RFC 9051: core inventory (sections 2–5; first pass)
 

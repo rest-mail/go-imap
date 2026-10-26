@@ -75,6 +75,13 @@ The main checklist remains PARTIAL until non-keyword prose and the remaining sup
 
 ## Audit receipt
 
+- 2026-10-27: checked the rev1 unsigned sequence endpoints on 386 as well as
+  arm64. Signed-int parsing changed valid endpoints above 2147483647 to zero,
+  selecting incorrect messages in SEARCH, FETCH, STORE and COPY. Endpoints
+  now stay unsigned until bounded by the snapshot; IMAP-SYNTAX-08 proves
+  forward/reversed ranges and absent targets through the public wire API.
+  The 386 test step retains this architecture-specific proof. This is one
+  value constraint, not completion of the grammar inventory or rev2 support.
 - 2026-10-26: read both complete section-9 grammar blocks and their comments; 148 rev1 and 232 rev2 base productions, plus the one rev2 sequence-set incremental alternative. Embedded core ABNF names are retained in the rev2 index. No production body is imported as runtime code.
 - The QUOTA extension had no requirement table. Its full RFC2087 audit and new wire tests found ignored GETQUOTA arguments, fabricated root/mailbox success and broken escaped mailbox names. Those have focused baseline reproductions and corrections in this branch. Numeric responses now refuse backend data outside the advertised rev1 number grammar before any partial response.
 - NAMESPACE already rejected extra arguments on current main. Its additional trailing-space regression passes without a runtime change.
