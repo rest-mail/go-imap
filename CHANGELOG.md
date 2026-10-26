@@ -28,7 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `NewServer` is renamed `server.New`, to read well with its package name.
   `NewSession` keeps its name as `server.NewSession`.
 
-The protocol is unchanged: every command answers as it did in v0.12.0.
+Apart from the fix below, every command answers as it did in v0.12.0.
 
 Migration: replace the import, then the names.
 
@@ -38,6 +38,23 @@ Migration: replace the import, then the names.
 | `imap.NewServer(hostname, backend, tlsConfig, limiter)` | `server.New(hostname, backend, tlsConfig, limiter)` |
 | `imap.Server`, `imap.Ports`, `imap.Session`, `imap.NewSession`, `imap.MaxCommandLineLength`, `imap.MaxLiteralSize` | `server.Server`, `server.Ports`, `server.Session`, `server.NewSession`, `server.MaxCommandLineLength`, `server.MaxLiteralSize` |
 | `imap.Backend`, `imap.Mailbox`, `imap.Message`, `imap.Address`, `imap.Folder`, `imap.FlagUpdate`, `imap.SpecialUse*`, `imap.UIDPlusMailbox`, `imap.UTF8Mailbox`, `imap.Mover`, `imap.DateAppender`, `imap.ErrNoSuchMailbox`, `imap.Limiter`, `imap.NopLimiter` | unchanged, now from `.../pkg/imap` |
+
+### Added
+
+- A first pass over IMAP4rev2 (RFC 9051) in the checklist: 214 requirement
+  rows, a crosswalk of all 30 Appendix E changes, and wire tests for them.
+  The server does not advertise IMAP4rev2.
+
+### Fixed
+
+- 8-bit text outside a literal now gets `BAD` when the backend does not support
+  UTF8=ACCEPT (RFC 3501 §9; rest-mail/go-imap#150). RFC 3501's CHAR is 7-bit,
+  so a client must send 8-bit data in a literal, and that now holds for LOGIN
+  before authentication and at both of APPEND's literal boundaries too. A
+  synchronizing literal is refused before the continuation; an unread
+  non-synchronizing literal ends the session with `BYE`, so its octets cannot
+  run as commands. A UTF8=ACCEPT backend still takes UTF-8 in quoted strings,
+  and UTF-8 credentials work through AUTHENTICATE PLAIN.
 
 ## [0.12.0] - 2026-10-24
 
