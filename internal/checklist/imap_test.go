@@ -8,11 +8,11 @@ import (
 	"testing"
 )
 
-// TestIMAPChecklist checks the real checklist against internal/rfctest, then
+// TestIMAPChecklist checks the real checklist against pkg/imap/rfctest, then
 // proves that breaking any row's mapping from either side fails the check.
 func TestIMAPChecklist(t *testing.T) {
 	root := filepath.Join("..", "..")
-	rfctest := filepath.Join(root, "internal", "rfctest")
+	rfctest := filepath.Join(root, "pkg", "imap", "rfctest")
 	var out bytes.Buffer
 	if code := run([]string{"-file", filepath.Join(root, "CHECKLIST.md"), rfctest}, &out, &out); code != 0 {
 		t.Fatalf("real checklist: exit %d:\n%s", code, &out)
