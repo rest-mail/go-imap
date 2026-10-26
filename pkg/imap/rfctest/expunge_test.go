@@ -182,6 +182,7 @@ func TestExpungeBackendFailure(t *testing.T) {
 // Only marked messages within that range are removed; other marks survive.
 //
 // checklist: IMAP-UIDEXPUNGE-01 IMAP-EXPUNGE-02
+// checklist: IMAP2-CMD-166
 func TestUIDExpungeSubset(t *testing.T) {
 	m := newExpungeMailbox(0)
 	for _, uid := range []uint32{10, 20, 3000, 3001, 3002, 4000} {
@@ -215,6 +216,7 @@ func TestUIDExpungeSubset(t *testing.T) {
 // states, and verifies CLOSE has the same selected-state requirement.
 //
 // checklist: IMAP-EXPUNGE-04 IMAP-CLOSE-01
+// checklist: IMAP2-CORE-22
 func TestExpungeRequiresSelection(t *testing.T) {
 	for _, login := range []bool{false, true} {
 		t.Run(fmt.Sprint(login), func(t *testing.T) {

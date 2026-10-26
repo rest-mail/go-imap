@@ -68,6 +68,7 @@ func TestUIDPlusAdvertisement(t *testing.T) {
 // message is synthetic, since this proof concerns the completion metadata.
 //
 // checklist: IMAP-APPENDUID-01 IMAP-APPENDUID-02
+// checklist: IMAP2-RESP-174
 func TestAppendUIDResponse(t *testing.T) {
 	for _, selected := range []bool{false, true} {
 		for _, dated := range []bool{false, true} {

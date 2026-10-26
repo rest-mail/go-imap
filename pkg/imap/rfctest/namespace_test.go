@@ -13,6 +13,8 @@ import (
 // there is no namespace to report.
 //
 // checklist: IMAP-NAMESPACE-01 IMAP-NAMESPACE-02
+// checklist: IMAP2-CORE-32 IMAP2-CORE-33
+// checklist: IMAP2-RESP-188
 func TestNamespace(t *testing.T) {
 	c := dial(t)
 	c.line()

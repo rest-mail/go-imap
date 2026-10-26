@@ -50,6 +50,7 @@ func decodeSearchMailbox() *fetchMailbox {
 // spanned, and malformed or absent encodings are searched as stored.
 //
 // checklist: IMAP-SEARCH-10
+// checklist: IMAP2-CMD-143 IMAP2-CMD-145
 func TestSearchDecodesMIME(t *testing.T) {
 	encoded10 := base64.StdEncoding.EncodeToString([]byte("Viele Grüße aus Köln"))
 	for _, selection := range []string{"SELECT", "EXAMINE"} {
@@ -78,8 +79,8 @@ func TestSearchDecodesMIME(t *testing.T) {
 				{`NOT BODY "grüße"`, "2 4 5", "20 40 50"},
 			} {
 				t.Run(tc.query, func(t *testing.T) {
-					requireSearch(t, c, "SEARCH CHARSET UTF-8 "+tc.query, strings.TrimSpace("* SEARCH "+tc.seqs))
-					requireSearch(t, c, "UID SEARCH CHARSET UTF-8 "+tc.query, strings.TrimSpace("* SEARCH "+tc.uids))
+					requireLiteralSearch(t, c, "SEARCH CHARSET UTF-8 "+tc.query, strings.TrimSpace("* SEARCH "+tc.seqs))
+					requireLiteralSearch(t, c, "UID SEARCH CHARSET UTF-8 "+tc.query, strings.TrimSpace("* SEARCH "+tc.uids))
 				})
 			}
 			lines, tagged := c.command("F1", "FETCH 1:* FLAGS")

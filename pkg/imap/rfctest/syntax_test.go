@@ -61,6 +61,7 @@ func TestResponseCodesCarryText(t *testing.T) {
 // continuation.
 //
 // checklist: IMAP-SYNTAX-02
+// checklist: IMAP2-CORE-05
 func TestTagGrammar(t *testing.T) {
 	c := dial(t)
 	c.line()
@@ -94,6 +95,7 @@ func TestTagGrammar(t *testing.T) {
 // selection, IDLE sends no continuation.
 //
 // checklist: IMAP-SYNTAX-03
+// checklist: IMAP2-CORE-05
 func TestCommandsWithoutArguments(t *testing.T) {
 	box := &sharedMailbox{messages: []imap.Message{{UID: 1}}}
 	c := sharedClient(t, box)
@@ -118,6 +120,7 @@ func TestCommandsWithoutArguments(t *testing.T) {
 // in.
 //
 // checklist: IMAP-SYNTAX-04
+// checklist: IMAP2-CORE-05
 func TestLoginArguments(t *testing.T) {
 	c := dial(t)
 	c.line()
@@ -154,6 +157,8 @@ func TestLoginArguments(t *testing.T) {
 // space, a TAB or a NUL gets BAD.
 //
 // checklist: IMAP-SYNTAX-05
+// checklist: IMAP2-CORE-05
+// checklist: IMAP2-SEC-218 IMAP2-SEC-219
 func TestCaseAndSpacing(t *testing.T) {
 	box := &sharedMailbox{messages: []imap.Message{{UID: 1}}}
 	c := dialMailbox(t, box)

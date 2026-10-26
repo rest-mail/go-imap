@@ -42,8 +42,8 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 	// The mailbox name may be a UTF-8 quoted-string on a UTF8=ACCEPT server;
 	// any other 8-bit octets in the typed line are BAD (RFC 6855 §3).
 	utf8OK := s.utf8Accept()
-	if utf8OK && !wire.ValidCommandUTF8(args) {
-		s.tagged(tag, "BAD", "Invalid UTF-8 in command")
+	if reason := s.commandTextError(args); reason != "" {
+		s.tagged(tag, "BAD", reason)
 		return
 	}
 
@@ -93,8 +93,8 @@ func (s *Session) handleAppend(tag, args string) (closeConn bool) {
 		}
 		_, _, synchronizing, literal = wire.SplitTrailingLiteral(cont)
 		rejectNonSync = literal && !synchronizing
-		if utf8OK && !wire.ValidCommandUTF8(cont) {
-			s.tagged(tag, "BAD", "Invalid UTF-8 in command")
+		if reason := s.commandTextError(cont); reason != "" {
+			s.tagged(tag, "BAD", reason)
 			return
 		}
 		// A literal is CHAR8, which excludes NUL (RFC 3501 §9).

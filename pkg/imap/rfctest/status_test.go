@@ -80,6 +80,7 @@ func TestStatusExample(t *testing.T) {
 // asserted: the backend has no independent Recent field.
 //
 // checklist: IMAP-STATUS-01 IMAP-STATUS-02
+// checklist: IMAP2-SEC-227
 func TestStatusRequestedItems(t *testing.T) {
 	for _, tc := range []struct{ args, response string }{
 		{`INBOX (MESSAGES)`, `"INBOX" (MESSAGES 2)`},
@@ -180,6 +181,7 @@ func assertStatusSelection(t *testing.T, c *client, mode string) {
 // mailbox. The fixture distinguishes current backend metadata from selection.
 //
 // checklist: IMAP-STATUS-04 IMAP-STATUS-05
+// checklist: IMAP2-CMD-122
 func TestStatusPreservesSelection(t *testing.T) {
 	for _, mode := range []string{"unauthenticated", "authenticated", "SELECT", "EXAMINE"} {
 		t.Run(mode, func(t *testing.T) {

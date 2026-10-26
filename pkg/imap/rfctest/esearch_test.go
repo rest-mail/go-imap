@@ -27,6 +27,8 @@ func esearchMailbox() *sharedMailbox {
 // UIDs. The RFC's A282-A286 examples, against this mailbox.
 //
 // checklist: IMAP-ESEARCH-01 IMAP-ESEARCH-02 IMAP-ESEARCH-03
+// checklist: IMAP2-CMD-135 IMAP2-CMD-141 IMAP2-CMD-142 IMAP2-CMD-165
+// checklist: IMAP2-RESP-194 IMAP2-RESP-196
 func TestESearch(t *testing.T) {
 	c := sharedClient(t, esearchMailbox())
 	requireCaps(t, c.capabilities("C1"), []string{"ESEARCH"}, nil)
@@ -55,6 +57,8 @@ func TestESearch(t *testing.T) {
 // §3.1).
 //
 // checklist: IMAP-ESEARCH-04
+// checklist: IMAP2-CMD-137 IMAP2-CMD-138 IMAP2-CMD-140 IMAP2-CMD-141 IMAP2-CMD-142
+// checklist: IMAP2-RESP-192 IMAP2-RESP-193 IMAP2-RESP-195 IMAP2-RESP-196
 func TestESearchNoMatches(t *testing.T) {
 	c := sharedClient(t, esearchMailbox())
 	for _, tc := range []struct{ command, want string }{
@@ -73,6 +77,7 @@ func TestESearchNoMatches(t *testing.T) {
 // (PARTIAL, RFC 9394), is BAD with no response.
 //
 // checklist: IMAP-ESEARCH-05
+// checklist: IMAP2-CMD-135
 func TestESearchRefusals(t *testing.T) {
 	c := sharedClient(t, esearchMailbox())
 	for _, command := range []string{

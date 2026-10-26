@@ -99,6 +99,7 @@ func TestMailboxCommandsNeedAuthentication(t *testing.T) {
 // deleting INBOX, in any case, is an error answered with tagged NO.
 //
 // checklist: IMAP-CREATE-01 IMAP-DELETE-01
+// checklist: IMAP2-SEC-227
 func TestInboxCannotBeCreatedOrDeleted(t *testing.T) {
 	c := dialMailbox(t, hierarchyMailbox{})
 	c.line()
@@ -189,6 +190,7 @@ func (m *movingMailbox) takeMoves() string {
 // with it while leaving a near name that only shares the prefix untouched.
 //
 // checklist: IMAP-DELETE-03 IMAP-RENAME-02
+// checklist: IMAP2-CMD-88
 func TestDeleteRenameHierarchy(t *testing.T) {
 	box := &movingMailbox{}
 	c := dialMailbox(t, box)

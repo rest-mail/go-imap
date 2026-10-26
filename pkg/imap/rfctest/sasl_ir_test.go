@@ -18,6 +18,7 @@ import (
 // continuation, and a refusal leaves the session not authenticated.
 //
 // checklist: IMAP-SASLIR-01 IMAP-SASLIR-02 IMAP-SASLIR-03 IMAP-SASLIR-04 IMAP-AUTHENTICATE-07
+// checklist: IMAP2-CMD-52 IMAP2-CMD-53 IMAP2-CMD-54 IMAP2-CMD-56 IMAP2-CMD-59
 func TestSASLIR(t *testing.T) {
 	c := dial(t)
 	c.line()

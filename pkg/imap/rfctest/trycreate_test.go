@@ -67,6 +67,7 @@ func (m *trycreateUIDMailbox) MoveUID(uid uint32, dest string) (uint32, error) {
 // engine creates nothing and moves nothing, and that any other backend error
 // keeps a plain NO, since TRYCREATE would send the client to CREATE in vain.
 // checklist: IMAP-APPEND-18 IMAP-COPY-13 IMAP-MOVE-11 IMAP-RESP-09
+// checklist: IMAP2-CMD-157 IMAP2-CMD-163
 func TestTryCreateMissingDestination(t *testing.T) {
 	for _, uidPlus := range []bool{false, true} {
 		box := func() (*trycreateMailbox, imap.Mailbox) {

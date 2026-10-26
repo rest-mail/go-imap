@@ -31,6 +31,7 @@ func (sizedFolder) Messages(folder string) ([]imap.Message, error) {
 // to 44421. An empty mailbox is SIZE 0, and LIST-STATUS takes SIZE too.
 //
 // checklist: IMAP-STATUSSIZE-01
+// checklist: IMAP2-CMD-124
 func TestStatusSize(t *testing.T) {
 	c := selectionClient(t, sizedFolder{})
 	requireCaps(t, c.capabilities("C1"), []string{"STATUS=SIZE"}, nil)

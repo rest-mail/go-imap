@@ -58,6 +58,8 @@ func sharedClient(t *testing.T, box imap.Mailbox) *client {
 // reports nothing.
 //
 // checklist: IMAP-UPDATE-01
+// checklist: IMAP2-CORE-35
+// checklist: IMAP2-CMD-172
 func TestNoopReportsOtherSourcesChanges(t *testing.T) {
 	shared := &sharedMailbox{messages: []imap.Message{{UID: 5001}, {UID: 5002}, {UID: 5003}}}
 	box := &failingShared{sharedMailbox: shared}
@@ -124,6 +126,9 @@ func TestCheckReportsLikeNoop(t *testing.T) {
 // BYE is written under a deadline.)
 //
 // checklist: IMAP-UPDATE-03
+// checklist: IMAP2-CORE-37
+// checklist: IMAP2-CMD-168
+// checklist: IMAP2-RESP-199
 func TestNoUntaggedResponseWithoutCommand(t *testing.T) {
 	shared := &sharedMailbox{messages: []imap.Message{{UID: 1}}}
 	c := dialConfigured(t, shared, nil, nil, func(s *server.Session) { s.SetIdlePollInterval(10 * time.Millisecond) })
@@ -156,6 +161,7 @@ func TestNoUntaggedResponseWithoutCommand(t *testing.T) {
 // order and each sees the one before.
 //
 // checklist: IMAP-UPDATE-04
+// checklist: IMAP2-CORE-40
 func TestPipelinedCommandsRunInOrder(t *testing.T) {
 	shared := &sharedMailbox{messages: []imap.Message{{UID: 1}, {UID: 2}}}
 	c := sharedClient(t, shared)
