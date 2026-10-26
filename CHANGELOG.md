@@ -17,6 +17,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - LIST-STATUS now resolves metadata before LIST, marks a vanished mailbox
   Noselect, omits STATUS for recursive-only parents, and deduplicates repeated
   STATUS options while validating every occurrence.
+- Canonicalize bare CR/LF in supported ASCII-compatible BINARY text leaves after
+  CTE decoding and before size/partial octet calculations. Preserve stored BODY
+  bytes, existing CRLF, missing final newlines and opaque binary/UTF-16 payloads.
 
 ### Added
 
@@ -29,6 +32,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   structural loss/drift guards and explicit host/client/unsupported boundaries.
   Wire regressions cover SIZE boundaries, LIST-STATUS disappearance, recursion,
   duplicate options and all seven standardized special-use attributes.
+- A grouped six-spec search/message source audit with independent section-loss
+  guards and explicit backend/client/unsupported boundaries. New wire proofs cover
+  textual/opaque BINARY data, encoded headers, saved-search COPY/STORE/UID EXPUNGE,
+  non-SAVE refusal state, MOVE side effects and negotiated UTF8 mailbox output.
 
 ## [0.13.0] - 2026-10-26
 

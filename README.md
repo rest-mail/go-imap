@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 488/674 mapped](https://img.shields.io/badge/partial%20checklist-488%2F674%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 495/702 mapped](https://img.shields.io/badge/partial%20checklist-495%2F702%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap/pkg/imap/server)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -359,6 +359,11 @@ discovery/status specifications with source pins, narrow wire proofs and explici
 host/client/unsupported boundaries. It records the SIZE numeric guard and
 LIST-STATUS race, recursive-selection and duplicate-option corrections; wider
 core/search/message reconciliation remains.
+
+[RFC-MESSAGE-EXTENSIONS.md](RFC-MESSAGE-EXTENSIONS.md) groups six search/message
+specifications with source pins, BINARY text canonicalization, saved-search/UID
+pipeline and UTF8 output proofs, and explicit host/client/unsupported boundaries.
+Core non-keyword/alternative and complete conformance work remains.
 
 The checklist is a Markdown file of tables with this header:
 

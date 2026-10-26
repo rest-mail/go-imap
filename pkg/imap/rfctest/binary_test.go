@@ -46,7 +46,7 @@ func binaryMailbox() *fetchMailbox {
 
 // TestBinaryFetch: with BINARY advertised (RFC 3516 §4.1), FETCH BINARY,
 // BINARY.PEEK and BINARY.SIZE answer a section with its transfer encoding
-// removed (§§4.2-4.3): quoted-printable and base64 decoded, 7bit as stored,
+// removed (§§4.2-4.3): quoted-printable and base64 decoded, canonical 7bit text,
 // BINARY[] the whole message. Data holding a NUL comes as a literal8, other
 // data as a literal; a partial counts decoded octets and labels the origin;
 // BINARY.SIZE is the decoded length BINARY sends; a part that does not exist
@@ -114,7 +114,7 @@ func TestBinaryUnknownCTE(t *testing.T) {
 	}
 }
 
-// TestBinaryGrammar: section-binary is "[" [section-part] "]" (RFC 3516 §6):
+// TestBinaryGrammar: section-binary is "[" [section-part] "]" (RFC 3516 §7):
 // no HEADER, TEXT, MIME or zero part, and BINARY.SIZE takes no partial; each
 // is BAD with no response.
 //

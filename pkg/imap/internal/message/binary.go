@@ -73,7 +73,7 @@ func binaryData(raw string, path []uint32) (string, error) {
 	}
 	switch cte {
 	case "7BIT", "8BIT", "BINARY":
-		return node.body, nil
+		return canonicalBinaryText(node, node.body), nil
 	case "BASE64":
 		compact := strings.Map(func(r rune) rune {
 			if r == ' ' || r == '\t' || r == '\r' || r == '\n' {
@@ -85,13 +85,53 @@ func binaryData(raw string, path []uint32) (string, error) {
 		if err != nil {
 			return "", ErrUnknownCTE
 		}
-		return string(b), nil
+		return canonicalBinaryText(node, string(b)), nil
 	case "QUOTED-PRINTABLE":
 		b, err := io.ReadAll(quotedprintable.NewReader(strings.NewReader(node.body)))
 		if err != nil {
 			return "", ErrUnknownCTE
 		}
-		return string(b), nil
+		return canonicalBinaryText(node, string(b)), nil
 	}
 	return "", ErrUnknownCTE
+}
+
+// canonicalBinaryText applies RFC3516 section 6 before BINARY.SIZE and partial
+// offsets are calculated. Only ASCII-compatible textual leaves are changed;
+// opaque bytes, UTF-16/unknown charsets and container representations stay with
+// the host's canonical-storage contract. Whole messages are handled above.
+func canonicalBinaryText(node mimeNode, data string) string {
+	mt, params := node.mediaType()
+	if !strings.HasPrefix(mt, "text/") || strings.ContainsRune(data, 0) {
+		return data
+	}
+	switch strings.ToLower(params["charset"]) {
+	case "", "us-ascii", "utf-8", "iso-8859-1":
+	default:
+		return data
+	}
+	// Allocate only when a bare CR or LF needs repair. Already canonical
+	// sections return their existing representation without another full copy.
+	var out strings.Builder
+	start := 0
+	for i := 0; i < len(data); i++ {
+		if data[i] == '\r' && i+1 < len(data) && data[i+1] == '\n' {
+			i++
+			continue
+		}
+		if data[i] != '\r' && data[i] != '\n' {
+			continue
+		}
+		if out.Cap() == 0 {
+			out.Grow(len(data))
+		}
+		out.WriteString(data[start:i])
+		out.WriteString("\r\n")
+		start = i + 1
+	}
+	if start == 0 {
+		return data
+	}
+	out.WriteString(data[start:])
+	return out.String()
 }
