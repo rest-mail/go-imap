@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Canonicalize bare CR/LF in supported ASCII-compatible BINARY text leaves after
+  CTE decoding and before size/partial octet calculations. Preserve stored BODY
+  bytes, existing CRLF, missing final newlines and opaque binary/UTF-16 payloads.
+
+### Added
+
+- A grouped six-spec search/message source audit with independent section-loss
+  guards and explicit backend/client/unsupported boundaries. New wire proofs cover
+  textual/opaque BINARY data, encoded headers, saved-search COPY/STORE/UID EXPUNGE,
+  non-SAVE refusal state, MOVE side effects and negotiated UTF8 mailbox output.
+
 ## [0.13.0] - 2026-10-26
 
 ### Changed (breaking)
