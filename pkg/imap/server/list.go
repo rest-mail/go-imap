@@ -103,10 +103,10 @@ func listReturnOptions(list string, returns map[string]bool) (status []string, r
 	for list != "" {
 		var opt string
 		opt, list, _ = strings.Cut(list, " ")
-		switch up := strings.ToUpper(opt); {
-		case up == "SUBSCRIBED", up == "CHILDREN", up == "SPECIAL-USE":
+		switch up := strings.ToUpper(opt); up {
+		case "SUBSCRIBED", "CHILDREN", "SPECIAL-USE":
 			returns[up] = true
-		case up == "STATUS":
+		case "STATUS":
 			end := strings.IndexByte(list, ')')
 			items, ok := wire.ParseStatusItems(list[:end+1])
 			for _, item := range items {
