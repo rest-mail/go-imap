@@ -41,6 +41,7 @@ var (
 // parts; a non-multipart message has only part 1.
 //
 // checklist: IMAP-FETCH-14
+// checklist: IMAP2-CMD-152
 func TestFetchNumericSections(t *testing.T) {
 	for _, tc := range []struct{ section, label, payload string }{
 		{"HEADER", "HEADER", sectionHeader},
@@ -97,6 +98,7 @@ func TestFetchNumericSections(t *testing.T) {
 // part is 1 (its body), and a partial of a numeric section.
 //
 // checklist: IMAP-FETCH-14
+// checklist: IMAP2-CMD-152
 func TestFetchNumericSectionSingle(t *testing.T) {
 	raw := crlf("Subject: one\nContent-Type: text/plain\n\nhello world\n")
 	for _, tc := range []struct{ item, label, payload string }{

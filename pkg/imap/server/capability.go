@@ -112,3 +112,23 @@ func (s *Session) utf8Accept() bool {
 	_, ok := s.mailbox.(imap.UTF8Mailbox)
 	return ok
 }
+
+// commandTextError enforces the typed-text encoding for the current session.
+// RFC3501 CHAR is 7-bit; 8-bit data must be sent in a literal. RFC6855 extends
+// quoted text only after authentication reveals a UTF8=ACCEPT backend. LOGIN
+// is never extended for UTF-8 credentials; AUTHENTICATE carries them instead.
+// Callers pass original line segments, never materialized literal contents.
+func (s *Session) commandTextError(text string) string {
+	if s.utf8Accept() {
+		if !wire.ValidCommandUTF8(text) {
+			return "Invalid UTF-8 in command"
+		}
+		return ""
+	}
+	for i := range len(text) {
+		if text[i] >= 0x80 {
+			return "8-bit text must be sent as a literal"
+		}
+	}
+	return ""
+}

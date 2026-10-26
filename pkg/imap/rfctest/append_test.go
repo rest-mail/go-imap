@@ -25,6 +25,7 @@ type appendRecord struct {
 // message must leave the next command framed correctly.
 //
 // checklist: IMAP-APPEND-27
+// checklist: IMAP2-SEC-219
 func TestAppendRejectsNULMessageOctet(t *testing.T) {
 	for _, raw := range []string{"\x00abc", "ab\x00cd", "abc\x00"} {
 		for _, nonSync := range []bool{false, true} {
@@ -256,6 +257,7 @@ func TestAppendFlagsAndDate(t *testing.T) {
 }
 
 // checklist: IMAP-APPEND-07 IMAP-APPEND-08
+// checklist: IMAP2-CMD-131
 func TestAppendSelectedMailbox(t *testing.T) {
 	for _, mode := range []string{"SELECT", "EXAMINE"} {
 		for _, dest := range []string{"INBOX", "Archive"} {

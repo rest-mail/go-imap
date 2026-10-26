@@ -48,7 +48,7 @@ func sendLiteral(t *testing.T, c *client, line, octets, after string) {
 // BAD to any 8-bit octet sequence that is not UTF-8, whether or not UTF-8 has
 // been enabled. A synchronizing literal is refused before its continuation;
 // literal octets themselves are not held to UTF-8. A backend without UTF8=ACCEPT
-// keeps its existing behaviour.
+// requires literal framing for every 8-bit argument.
 //
 // checklist: IMAP-UTF8-01
 func TestUTF8QuotedStrings(t *testing.T) {
@@ -86,8 +86,8 @@ func TestUTF8QuotedStrings(t *testing.T) {
 	}
 
 	base := selectionClient(t, &appendMailbox{})
-	if _, st := base.command("b1", "SUBSCRIBE \"\xff\""); strings.HasPrefix(st, "b1 BAD ") {
-		t.Fatalf("base backend SUBSCRIBE: %q, want its existing answer", st)
+	if _, st := base.command("b1", "SUBSCRIBE \"\xff\""); !strings.HasPrefix(st, "b1 BAD ") {
+		t.Fatalf("base backend SUBSCRIBE: %q, want BAD without UTF8=ACCEPT", st)
 	}
 }
 

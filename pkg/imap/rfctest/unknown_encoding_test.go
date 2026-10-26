@@ -55,7 +55,7 @@ func TestUnknownTransferEncoding(t *testing.T) {
 				// transform an unknown encoding. Stored octets remain searchable.
 				requireSearch(t, c, `SEARCH BODY "needle"`, "* SEARCH")
 				requireSearch(t, c, `SEARCH TEXT "needle"`, "* SEARCH")
-				requireSearch(t, c, `SEARCH CHARSET UTF-8 BODY "café"`, "* SEARCH")
+				requireLiteralSearch(t, c, `SEARCH CHARSET UTF-8 BODY "café"`, "* SEARCH")
 				stored := "caf"
 				if strings.Contains(tc.body, depthLeafBody) {
 					stored = depthLeafBody

@@ -13,7 +13,14 @@ a coverage badge. A mapped row means its named wire test
 in `pkg/imap/rfctest` asserts the stated behavior through the public
 `server.Session`; it does not prove the entire referenced section.
 
-Requirements below paraphrase [RFC 3501](https://www.rfc-editor.org/rfc/rfc3501.txt).
+The first-pass RFC 9051 inventory below also records shared rev1 proofs,
+unsupported rev2 behavior, host-backend obligations and client-only duties.
+It is not yet an exhaustive inventory: a production-by-production ABNF audit,
+non-keyword protocol rules and the remaining extension specifications still
+need reconciliation. The engine continues to advertise IMAP4rev1 only.
+
+Requirements below paraphrase [RFC 3501](https://www.rfc-editor.org/rfc/rfc3501.txt)
+and [RFC 9051](https://www.rfc-editor.org/rfc/rfc9051.txt).
 `Normative` denotes protocol text without an explicit RFC 2119 keyword.
 CI runs `go run ./internal/checklist pkg/imap/rfctest`, which fails on an item
 with no test, a test naming an unknown item, or a duplicate ID.
@@ -666,7 +673,7 @@ implemented.
 
 | ID | Section | Level | Requirement | Tests |
 |----|---------|-------|-------------|-------|
-| IMAP-UTF8-01 | RFC 6855 §3 | MUST | Take UTF-8 in quoted-strings and answer BAD to typed 8-bit octet sequences that are not well-formed UTF-8 (bare, truncated, surrogate, overlong), before a synchronizing literal's continuation; literal octets are exempt, and a backend without UTF8=ACCEPT is unchanged. | TestUTF8QuotedStrings |
+| IMAP-UTF8-01 | RFC 6855 §3 | MUST | Take UTF-8 in quoted-strings and answer BAD to typed 8-bit octet sequences that are not well-formed UTF-8 (bare, truncated, surrogate, overlong), before a synchronizing literal's continuation; literal octets are exempt, and a backend without UTF8=ACCEPT requires 8-bit arguments to use literals (IMAP-SYNTAX-06). | TestUTF8QuotedStrings |
 | IMAP-UTF8-02 | RFC 6855 §3 | MUST | CREATE and RENAME refuse, with NO, mailbox names that are not UTF-8 or contain C0 or C1 controls, DELETE, LINE SEPARATOR or PARAGRAPH SEPARATOR, quoted or literal, and accept other UTF-8 names. | TestUTF8MailboxNames |
 | IMAP-UTF8-03 | RFC 6855 §3 | SHOULD | After ENABLE UTF8=ACCEPT, SEARCH and UID SEARCH with a CHARSET are BAD; before it, CHARSET is accepted as before. | TestUTF8SearchCharset |
 | IMAP-UTF8-04 | RFC 6855 §4; RFC 4466 §2.2 | Normative | APPEND takes the message as "UTF8 (" literal8 ")", synchronizing or not, into a UTF-8 quoted mailbox; a missing ")" is BAD before the backend, and a backend without UTF8=ACCEPT refuses the data item with BAD. | TestUTF8AppendDataItem |
@@ -753,7 +760,7 @@ inventory is complete.
 | IMAP-RESP-01 | RFC 3501 §§7, 7.1 | Normative | Server data and status responses are untagged lines starting `* `; a completion carries the command's own tag. | TestTaggedCompletion, TestUntaggedBadForUndeterminedCommand |
 | IMAP-RESP-02 | RFC 3501 §§7.1, 7.1.1 | MAY | The greeting's CAPABILITY response code lists IMAP4rev1 and matches the list a CAPABILITY command then returns. | TestGreetingCapabilityCode |
 | IMAP-RESP-03 | RFC 3501 §7.1.3 | Normative | A line from which no tag and command can be read gets an untagged BAD, and the session goes on to the next command. | TestUntaggedBadForUndeterminedCommand |
-| IMAP-RESP-04 | RFC 3501 §7.1 | SHOULD | Response codes an implementation defines for itself carry an `X` prefix. | n/a: the engine defines none. Every code it sends is registered: CAPABILITY, PERMANENTFLAGS, READ-ONLY, READ-WRITE, UIDNEXT, UIDVALIDITY, UNSEEN and BADCHARSET (RFC 3501), APPENDUID and COPYUID (RFC 4315), AUTHENTICATIONFAILED and PRIVACYREQUIRED (RFC 5530); checked against session.go and extensions.go on 2026-10-22. |
+| IMAP-RESP-04 | RFC 3501 §7.1 | SHOULD | Response codes an implementation defines for itself carry an `X` prefix. | n/a: the engine defines none. Every code it sends is registered: CAPABILITY, PERMANENTFLAGS, READ-ONLY, READ-WRITE, UIDNEXT, UIDVALIDITY, UNSEEN and BADCHARSET (RFC 3501), APPENDUID and COPYUID (RFC 4315), AUTHENTICATIONFAILED and PRIVACYREQUIRED (RFC 5530); checked against session.go and extensions.go (now in pkg/imap/server) on 2026-10-22. |
 | IMAP-RESP-05 | RFC 3501 §7.1 | Normative | ALERT text is a special alert for the user. | n/a: the engine sends no ALERT; presenting one is a client duty (IMAP-RESP-CLIENT-01). |
 | IMAP-RESP-06 | RFC 3501 §§6.4.4, 7.1 | Normative | A SEARCH in an unsupported charset fails with NO and a BADCHARSET code listing the supported charsets. | TestSearchCharsets |
 | IMAP-RESP-07 | RFC 3501 §7.1 | Normative | PARSE reports a failure to parse a message's RFC 2822 or MIME headers. | n/a: optional and unsupported; malformed headers are answered as IMAP-ENV-12 and IMAP-MSG-08 describe, without a PARSE warning. |
@@ -873,6 +880,380 @@ here cover the rules every command line and response shares.
 | IMAP-SYNTAX-03 | RFC 3501 §9 (command-any, command-nonauth, command-select, SP); RFC 2177; RFC 3691 | Normative | CAPABILITY, LOGOUT, NOOP, STARTTLS, CHECK, CLOSE, EXPUNGE, IDLE and UNSELECT end at their name: anything after it, even one trailing space, gets BAD and the command does not run. | TestCommandsWithoutArguments |
 | IMAP-SYNTAX-04 | RFC 3501 §§6.2.3, 9 (login, astring) | Normative | LOGIN takes exactly userid SP password, each an astring: an atom with an atom-special or an 8-bit octet, a quoted string with any escape but `\"` and `\\`, an unterminated or adjoined quote, or a missing, extra or doubled separator gets BAD without the credentials being checked. | TestLoginArguments |
 | IMAP-SYNTAX-05 | RFC 3501 §9 (notes 1-3) | MUST | Command names and keywords are accepted in any case; SP is exactly one space, so a doubled space or a TAB gets BAD; a NUL gets BAD. | TestCaseAndSpacing |
+| IMAP-SYNTAX-06 | RFC 3501 §9; RFC 6855 §3 | MUST | Without UTF8=ACCEPT, reject typed 8-bit atoms and quoted strings with BAD before soliciting a synchronizing literal, including APPEND and command continuations. Literal octets remain exempt; unread non-synchronizing payloads require BYE and closure. | TestUnsupportedUTF8CommandText, TestUnsupportedUTF8AppendText |
+| IMAP-SYNTAX-07 | RFC 3501 §9; RFC 6855 §5 | MUST | Do not extend LOGIN to typed UTF-8 credentials. Reject quoted or atom 8-bit username/password text before backend authentication; SASL AUTHENTICATE PLAIN can carry UTF-8 credentials. | TestUTF8CredentialsRequireAuthenticate |
+
+## RFC 9051: core inventory (sections 2–5; first pass)
+
+The rev2 inventory is separate from the rev1 proofs above. A shared rule can be
+tested through the current engine, but that does not make IMAP4rev2 available:
+the engine still advertises only IMAP4rev1. Unsupported rev2 behavior is stated
+as such, with its existing implementation issue, rather than checked off.
+The sections below are a first pass through explicit requirement-keyword
+paragraphs, with an Appendix E crosswalk. Full ABNF and non-keyword behavior
+still need reconciliation. Backend contracts and root-package proofs stay
+distinct from this Session harness; the overall checklist remains PARTIAL.
+
+Client-only duties in §§2.2, 2.3.2, 4.3, 5.2 and 5.5 (unique generated tags,
+continuation ordering, response caching, keyword UI behavior, literal waits,
+and sequence-number pipeline precautions) do not apply to this server engine.
+RFC 2119 definitions in §1.2 are not protocol implementation requirements.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP2-CORE-02 | RFC 9051 §2.2.1 | MUST | Accept reuse of a command tag; a reused tag still identifies each completion across authentication, selection and a BAD command. | TestReusedCommandTags |
+| IMAP2-CORE-05 | RFC 9051 §2.2.2 | SHOULD | Reject malformed command framing and arguments with BAD, retaining a usable connection for the next well-formed command. | TestCaseAndSpacing, TestTagGrammar, TestCommandsWithoutArguments, TestLoginArguments |
+| IMAP2-CORE-07 | RFC 9051 §2.3.1.1 | MUST NOT | Reuse a mailbox-name/UIDVALIDITY/UID identity for a different message, including after a mailbox is recreated. | n/a: UID allocation and persistent mailbox identity belong to the host backend; the engine cannot enforce identity across backend replacements. The base-interface UIDVALIDITY fallback remains IMAP-SELECT-09, tracked in rest-mail/rest-mail-server#374. |
+| IMAP2-CORE-08 | RFC 9051 §2.3.1.1 | MUST | Keep each message UID stable within a session; a UID change between sessions must change UIDVALIDITY, and SHOULD NOT happen. | n/a: persistence is the host backend contract, not enforced by the engine; it accepts each Messages snapshot and UIDPlusMailbox metadata. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP2-CORE-09 | RFC 9051 §2.3.1.1 | MUST | Change UIDNEXT whenever messages are assigned new UIDs, including subsequently expunged messages, and never change it without new assignments. | n/a: not supported by the base interface; current maximum plus one loses assignment history after expunge. Same gap as IMAP-SELECT-09 and IMAP-STATUS-08; rest-mail/rest-mail-server#374. |
+| IMAP2-CORE-10 | RFC 9051 §2.3.1.1 | MUST | Increase UIDVALIDITY when UIDs from a previous session no longer persist. | n/a: the host supplies UIDVALIDITY through UIDPlusMailbox; the engine does not maintain the persistent counter. Its fallback is documented in IMAP-SELECT-09; rest-mail/rest-mail-server#374. |
+| IMAP2-CORE-11 | RFC 9051 §2.3.1.1 | SHOULD | Persist UIDs across sessions whenever possible. | n/a: storage lifetime and UID persistence are backend responsibilities; the Session engine has no persistent store. |
+| IMAP2-CORE-12 | RFC 9051 §2.3.1.1 | MUST | Keep assigned UIDs strictly ascending in mailbox order; regenerate their identity when external reordering breaks that order. | n/a: the engine uses backend message order and does not validate or repair UID allocation. Backend identity enforcement remains rest-mail/rest-mail-server#374. |
+| IMAP2-CORE-13 | RFC 9051 §2.3.1.1 | MUST | Keep internal date, message size, envelope, structure and text immutable for a UID identity, and never reuse an expunged UID under the same UIDVALIDITY. | n/a: these immutable values are supplied by the host backend, which the engine cannot prevent from replacing data. This is a backend contract, not a conformance claim for arbitrary backends. |
+| IMAP2-CORE-14 | RFC 9051 §2.3.1.2 | MUST | Number messages from one in ascending UID order and assign the next sequence number when a new message arrives. | n/a: the engine numbers its backend snapshot in slice order; ascending UID order is assumed, not enforced. See IMAP2-CORE-12; rest-mail/rest-mail-server#374. |
+| IMAP2-CORE-15 | RFC 9051 §2.3.2 | SHOULD | Preserve and search the recommended $MDNSent, $Forwarded, $Junk, $NotJunk and $Phishing keywords through APPEND, COPY and MOVE. | n/a: not supported yet. FlagUpdate has no keyword storage and APPEND/COPY cannot preserve arbitrary keywords. Existing IMAP-STORE-06 honestly withholds keyword creation; rest-mail/rest-mail-server#374 and #718. |
+| IMAP2-CORE-19 | RFC 9051 §2.3.3 | SHOULD | Preserve the source internal date on COPY/MOVE and honor APPEND arrival-date semantics; SMTP delivery dates come from final delivery. | n/a: the host assigns delivery dates, Copy/Move do not carry metadata, and explicit APPEND dates require DateAppender. Same gaps as IMAP-COPY-12 and IMAP-APPEND-20; rest-mail/rest-mail-server#374. |
+| IMAP2-CORE-20 | RFC 9051 §2.3.4 | SHOULD | Report the number of octets in the complete message representation returned by BODY[], not a character count or rendered text length. | TestFetchSizeMatchesBodyOctets |
+| IMAP2-CORE-21 | RFC 9051 §3.1 | MUST | Require authentication before authenticated and selected-state commands are permitted. | TestGreeting |
+| IMAP2-CORE-22 | RFC 9051 §3.2 | MUST | Require a selected mailbox before message commands, including after authentication has succeeded. | TestFetchRequiresSelection, TestCopyRequiresSelection, TestMoveRequiresSelection, TestSearchRequiresSelection, TestExpungeRequiresSelection |
+| IMAP2-CORE-23 | RFC 9051 §3.4 | MUST | On LOGOUT send an untagged BYE and tagged OK before closing the connection. | TestLogout |
+| IMAP2-CORE-24 | RFC 9051 §3.4 | SHOULD NOT | Close a connection unilaterally without first sending BYE with its reason; peer EOF may omit BYE. | n/a: Server shutdown, autologout and panic handling are outside the public Session wire harness. Root tests are named by IMAP-STATE-01, IMAP-RESP-14 and IMAP-AUTOLOGOUT-01; this inventory adds no new claim about those paths. |
+| IMAP2-CORE-26 | RFC 9051 §4.3 | MUST NOT | Send non-synchronizing literals server-to-client; accept client non-synchronizing literals only within the 4096-octet baseline limit and send no continuation for them. | TestLiteralMinus, TestLiteralMinusLimit, TestFetchSizeMatchesBodyOctets |
+| IMAP2-CORE-29 | RFC 9051 §4.3 | MUST | Accept well-formed UTF-8 in quoted strings without NUL, CR or LF as a rev2 baseline rather than an optional extension. | n/a: IMAP4rev2 mode is not implemented (#718). Optional UTF8=ACCEPT is tested by IMAP-UTF8-01, but is not the rev2 baseline. Rev1 typed-text refusal and literal framing are proved by IMAP-SYNTAX-06 and IMAP-SYNTAX-07 (rest-mail/go-imap#150). |
+| IMAP2-CORE-30 | RFC 9051 §4.3.1 | MUST | Encode binary data outside BINARY/BINARY.PEEK literal8 responses into a textual transfer encoding before transmission. | n/a: transfer encoding belongs to the host message representation; the engine does not rewrite BODY[] content. Rev2 baseline and compatibility need rest-mail/rest-mail-server#718; existing BINARY rows cover only the offered extension. |
+| IMAP2-CORE-31 | RFC 9051 §5.1 | MUST | Require Net-Unicode mailbox names, rejecting invalid creation names or normalizing and consistently resolving accepted decomposed UTF-8 names. | n/a: rev2 naming is not implemented (#718); UTF8=ACCEPT validation is an optional rev1 extension and does not establish NFC normalization or rev2 default naming. |
+| IMAP2-CORE-32 | RFC 9051 §5.1.1 | MUST | Use a single ASCII hierarchy delimiter consistently in left-to-right hierarchical mailbox names. | TestListReference, TestNamespace |
+| IMAP2-CORE-33 | RFC 9051 §5.1.2 | MUST | Place INBOX in the personal namespace; normally expose only one personal namespace. | TestNamespace |
+| IMAP2-CORE-34 | RFC 9051 §5.1.2 | MUST | Require an explicit grant before exposing another user's personal namespace; normally expose at most one other-users namespace. | n/a: other-users namespaces are not offered. NAMESPACE reports NIL for that class (IMAP-NAMESPACE-01); authentication and mailbox access control belong to the host backend. |
+| IMAP2-CORE-35 | RFC 9051 §5.2 | MUST | Report observed mailbox size changes automatically during a command, and SHOULD report observed message flag changes without explicit flag requests. | TestNoopReportsOtherSourcesChanges |
+| IMAP2-CORE-37 | RFC 9051 §5.3 | MUST | If sending unsolicited responses while no command is in progress, use nonblocking writes or respect available transport window capacity. | TestNoUntaggedResponseWithoutCommand |
+| IMAP2-CORE-38 | RFC 9051 §5.4 | MUST | Allow at least thirty minutes before authenticated inactivity autologout and reset its timer on any received command. | n/a: root-package timer behavior, beyond the public Session harness; IMAP-AUTOLOGOUT-01 names TestAutologoutIsAtLeastThirtyMinutes and TestSession_CommandActivityResetsAutologout. No new timer claim is inferred. |
+| IMAP2-CORE-40 | RFC 9051 §5.5 | MUST | When pipelined commands could be ambiguous, complete them in the order the client supplied. | TestPipelinedCommandsRunInOrder |
+
+## RFC 9051: command inventory (sections 6.1–6.3.6; first pass)
+
+Continuation of the rev2 requirement audit. The older RFC and extension rows
+remain intact; a test reference proves the described shared behavior, not rev2
+capability negotiation. Client-only recommendations for TLS capability caching,
+avoiding insecure LOGIN and selecting ENABLE arguments are outside this engine.
+Required-response lists in the command synopsis are accounted for by the
+corresponding command rows rather than counted as separate behavior.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP2-CMD-44 | RFC 9051 §6.1.1 | MUST | Return exactly one untagged CAPABILITY containing IMAP4rev2 before successful completion. | n/a: IMAP4rev2 is not offered yet. The current engine advertises IMAP4rev1 only; rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-45 | RFC 9051 §6.1.1 | MUST | Implement STARTTLS and LOGINDISABLED on cleartext ports, and AUTH=PLAIN with the protected authentication configuration. | TestStartTLSExample, TestStartTLSRefusals |
+| IMAP2-CMD-47 | RFC 9051 §6.1.3 | MUST | Return BYE before the tagged LOGOUT completion and then close the transport. | TestLogout |
+| IMAP2-CMD-48 | RFC 9051 §6.2.1 | MUST | Answer STARTTLS on an already protected connection with BAD, keeping it usable. | TestStartTLSRefusals |
+| IMAP2-CMD-49 | RFC 9051 §6.2.1 | MUST | Begin TLS after the STARTTLS OK CRLF, without executing plaintext pipelined after STARTTLS inside the protected session. | TestStartTLSExample, TestStartTLSDiscardsPipelinedPlaintext, TestStartTLSFailedNegotiation |
+| IMAP2-CMD-50 | RFC 9051 §6.2.1 | SHOULD NOT | Continue advertising STARTTLS after TLS has started. | TestStartTLSExample |
+| IMAP2-CMD-51 | RFC 9051 §6.2.2 | SHOULD | Reject an unsupported SASL mechanism with tagged NO rather than starting an exchange. | TestAuthenticateCommand |
+| IMAP2-CMD-52 | RFC 9051 §6.2.2 | MUST | Frame the SASL exchange with base64 continuations; reject cancellation and invalid base64 with BAD while preserving unauthenticated state. | TestAuthenticateCommand, TestSASLIR |
+| IMAP2-CMD-53 | RFC 9051 §6.2.2 | MUST | Require the initial response as an unquoted base64 token, with a single equals sign representing an empty response. | TestSASLIR |
+| IMAP2-CMD-54 | RFC 9051 §6.2.2 | MUST | Reject malformed initial-response base64, including misplaced padding, with tagged BAD. | TestSASLIR |
+| IMAP2-CMD-55 | RFC 9051 §6.2.2 | MUST | Reject an initial response when the chosen mechanism cannot take one. | n/a: the only offered SASL mechanism is PLAIN, which permits an initial response. Other mechanisms are not offered (IMAP-AUTHENTICATE-10). |
+| IMAP2-CMD-56 | RFC 9051 §6.2.2 | MUST | Implement AUTHENTICATE and at least the PLAIN mechanism; additional SASL mechanisms and security layers are not mandatory. | TestAuthenticateCommand, TestSASLIR |
+| IMAP2-CMD-57 | RFC 9051 §6.2.2 | MUST | Provide a configuration that refuses plaintext password mechanisms until TLS protects the connection. | TestStartTLSCleartextCredentialsRefused |
+| IMAP2-CMD-57-02 | RFC 9051 §6.2.2 | SHOULD | Offer additional non-plaintext SASL mechanisms such as GSSAPI, SCRAM-SHA-256 or EXTERNAL. | n/a: only PLAIN is offered; the backend supplies password authentication, not a challenge-response or TLS identity interface. See IMAP-AUTHENTICATE-10; rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-58 | RFC 9051 §6.2.2 | SHOULD | List offered authentication mechanisms in CAPABILITY. | TestAuthenticateCommand, TestStartTLSExample |
+| IMAP2-CMD-59 | RFC 9051 §6.2.2 | MUST | Support the continuation exchange when a client omits its optional SASL initial response. | TestAuthenticateCommand, TestSASLIR |
+| IMAP2-CMD-62 | RFC 9051 §6.2.3 | MUST | Provide a protected deployment configuration that advertises LOGINDISABLED and refuses LOGIN before TLS. | TestStartTLSExample, TestStartTLSCleartextCredentialsRefused |
+| IMAP2-CMD-63 | RFC 9051 §6.3.1 | MUST | Ignore ENABLE arguments that name unknown extensions. | TestEnableUnknownAndCapabilityStability, TestEnableAdditiveAndPersistent |
+| IMAP2-CMD-64 | RFC 9051 §6.3.1 | MUST | Ignore known capabilities that cannot be enabled with ENABLE. | TestEnableUnknownAndCapabilityStability |
+| IMAP2-CMD-65 | RFC 9051 §6.3.1 | MUST | Enable a supported enableable extension for the connection, without a way to disable it later. | TestEnableAdditiveAndPersistent |
+| IMAP2-CMD-66 | RFC 9051 §6.3.1 | MUST | Send ENABLED on every successful ENABLE, including when no extension was enabled. | TestEnableUnknownAndCapabilityStability, TestEnableAdditiveAndPersistent |
+| IMAP2-CMD-69 | RFC 9051 §6.3.1 | SHOULD | Make successive ENABLE commands additive and report only extensions newly enabled by that command. | TestEnableAdditiveAndPersistent |
+| IMAP2-CMD-70 | RFC 9051 §6.3.1 | MUST NOT | Change the CAPABILITY list as a consequence of ENABLE. | TestEnableUnknownAndCapabilityStability, TestEnableAdditiveAndPersistent |
+| IMAP2-CMD-72 | RFC 9051 §6.3.2–6.3.3 | MUST | Before successful SELECT or EXAMINE return FLAGS, EXISTS, LIST, PERMANENTFLAGS, UIDNEXT and UIDVALIDITY. | n/a: rev1 selection returns the older required set without the rev2 LIST response. UID persistence also has the base-backend gap in IMAP-SELECT-09; rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-73 | RFC 9051 §6.3.2 | MUST | Return accurate selected-mailbox LIST attributes, and OLDNAME when accepting a normalized form of the supplied UTF-8 name. | n/a: selected-mailbox LIST and OLDNAME normalization responses are not implemented; rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-74 | RFC 9051 §6.3.2 | MUST | Deselect the old mailbox before attempting another SELECT, leaving no selection on failure, and announce closure with CLOSED. | n/a: the deselection/state behavior is tested by IMAP-SELECT-07, but the rev2 CLOSED response code is not implemented; rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-75 | RFC 9051 §6.3.2 | SHOULD | Identify a successful writable SELECT with READ-WRITE in its tagged completion. | TestSelectionExamples |
+| IMAP2-CMD-76 | RFC 9051 §6.3.2 | MUST | When access permits reading but not writing, SELECT the mailbox read-only and announce READ-ONLY. | n/a: only EXAMINE explicitly makes a selection read-only; the backend cannot report read-only permissions to SELECT (IMAP-SELECT-10). Tracked in rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-78 | RFC 9051 §6.3.3 | MUST | Begin the successful EXAMINE tagged response text with READ-ONLY. | TestSelectionExamples |
+| IMAP2-CMD-79 | RFC 9051 §6.3.4 | MUST | Only acknowledge CREATE after creating a new mailbox; refuse extant names and invalid Net-Unicode, or normalize and report OLDNAME. | n/a: no backend mailbox-creation operation or Unicode normalization interface exists. CREATE can acknowledge an extant name (IMAP-CREATE-02); rest-mail/rest-mail-server#374 and #718. |
+| IMAP2-CMD-80 | RFC 9051 §6.3.4 | MUST | Include Subscribed when an unsolicited LIST announces a newly created mailbox that was automatically subscribed. | n/a: the engine neither auto-subscribes created mailboxes nor sends unsolicited LIST responses. |
+| IMAP2-CMD-81 | RFC 9051 §6.3.4 | MUST | Treat a trailing hierarchy delimiter as a declaration and create the name without that delimiter. | n/a: no durable backend CREATE exists; the trailing declaration is not implemented as a mailbox-creation operation (IMAP-CREATE-03). Tracked in rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-82 | RFC 9051 §6.3.4 | SHOULD | Create necessary superior hierarchy names during CREATE. | n/a: no backend CREATE operation exists (IMAP-CREATE-03); rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-83 | RFC 9051 §6.3.4 | MUST | Avoid reusing a deleted incarnation's UIDs unless the recreated mailbox has a different UIDVALIDITY. | n/a: allocation and persistent UID identity belong to the host backend (IMAP-CREATE-04); rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-84 | RFC 9051 §6.3.5 | MUST NOT | Remove inferior hierarchy names when deleting their parent; refuse deleting a Noselect parent that has inferiors. | n/a: preservation of inferior messages is tested by IMAP-DELETE-03, but the engine cannot distinguish Noselect parents when deleting; its backend has no durable DELETE operation. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-85 | RFC 9051 §6.3.5 | SHOULD | When refusing deletion because a mailbox has inferiors, return NO with HASCHILDREN. | n/a: the current engine does not refuse this case and offers no backend hierarchy-deletion policy; rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-86 | RFC 9051 §6.3.5 | MUST | Preserve the deleted mailbox's highest UID or change UIDVALIDITY on recreation. | n/a: persistent UID allocation is a host-backend obligation (IMAP-DELETE-05); rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-87 | RFC 9051 §6.3.5 | SHOULD | When normalizing a DELETE name, report the normalized mailbox and OLDNAME with NonExistent. | n/a: the engine does not normalize mailbox names or offer OLDNAME responses; rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-88 | RFC 9051 §6.3.6 | MUST | Rename the inferior hierarchy along with its parent, preserving unrelated prefix matches. | TestDeleteRenameHierarchy |
+| IMAP2-CMD-89 | RFC 9051 §6.3.6 | SHOULD | Create necessary superior hierarchy names for a RENAME target. | n/a: the backend has no durable rename/create interface and implicit folders are not materialized (IMAP-RENAME-01); rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-90 | RFC 9051 §6.3.6 | MUST | Preserve the old name's highest assigned UID when renaming, unless a later incarnation uses another UIDVALIDITY. | n/a: UID allocation is the host's persistent-store responsibility (IMAP-RENAME-04); rest-mail/rest-mail-server#374. |
+
+## RFC 9051: subscription, listing and APPEND inventory (first pass)
+
+Continuation through section 6.3.13. Client-only hierarchy-browser assumptions, CHILDINFO race handling, inferred attributes and namespace choices are outside this server engine. Existing rev1/extension proofs remain separate from the rev2 differences recorded here.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP2-CMD-91 | RFC 9051 §6.3.6 | SHOULD | Report OLDNAME when RENAME normalizes either supplied name. | n/a: Unicode normalization and OLDNAME responses are not implemented; rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-92 | RFC 9051 §6.3.6 | MUST | Include Subscribed in unsolicited LIST responses for renamed mailboxes that were automatically subscribed. | n/a: the engine does not auto-subscribe renamed mailboxes or send unsolicited rename LIST responses. |
+| IMAP2-CMD-93 | RFC 9051 §6.3.7 | SHOULD NOT | Remove a subscribed name merely because the corresponding mailbox no longer exists. | n/a: a durable subscription list is not implemented. Existing folders are treated as subscribed and SUBSCRIBE/UNSUBSCRIBE do not persist changes (IMAP-SUBSCRIBE-01); rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-94 | RFC 9051 §6.3.9 | SHOULD | Avoid unnecessary message/count/content work for LIST when STATUS data was not requested. | TestListMetadataDoesNotReadMessages |
+| IMAP2-CMD-94-02 | RFC 9051 §6.3.9 | SHOULD | Return large mailbox listings without undue delay, including hierarchy processing. | n/a: bounded hierarchy-processing cost has not been established. list.go scans the full entry list for descendants for each result, even without CHILDREN. The metadata-only proof above does not prove latency or linear complexity; rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-95 | RFC 9051 §6.3.9 | MUST | Return only mailbox names matching the canonical patterns in the supplied reference context. | TestListReference, TestListMultiplePatterns |
+| IMAP2-CMD-97 | RFC 9051 §6.3.9 | SHOULD | Keep an included reference prefix in its original form so clients can recognize the naming context. | TestListReference |
+| IMAP2-CMD-99 | RFC 9051 §6.3.9 | MUST | Complete a valid pattern with no accepted matches as OK with no LIST data. | TestListReference |
+| IMAP2-CMD-100 | RFC 9051 §6.3.9 | MUST NOT | Add mailbox names merely because return options were supplied; retain the pattern and selection criteria. | TestListExtendedChildren, TestListExtendedRecursiveMatch, TestListMultiplePatterns |
+| IMAP2-CMD-101 | RFC 9051 §6.3.9 | MUST | Support initial LIST options, reject unknown options with BAD, and treat repeated options as occurring once regardless of order. | n/a: duplicate STATUS return options are deliberately rejected by parseList/listReturnOptions and TestListStatusRefusals, unlike this rev2 rule. Selection options and other return options are deduplicated; rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-102 | RFC 9051 §6.3.9.1 | MUST | SUBSCRIBED selection returns exactly subscribed names matching the patterns, including subscribed nonexistent mailboxes. | n/a: no persistent subscription list exists; all existing folders are treated as subscribed, so nonexistent subscriptions and unsubscription cannot be represented. See IMAP-SUBSCRIBE-01; rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-103 | RFC 9051 §6.3.9.1 | MUST | Compute Subscribed accurately when SUBSCRIBED selection is requested. | n/a: true subscription state is not stored. The offered extension marks every existing folder subscribed; rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-104 | RFC 9051 §6.3.9.1 | MUST | Compute Remote accurately when REMOTE is requested; local mailboxes are not labeled remote. | TestListExtendedChildren |
+| IMAP2-CMD-105 | RFC 9051 §6.3.9.1 | MUST | Reject RECURSIVEMATCH alone, or combined only with REMOTE, with tagged BAD. | TestListExtendedRefusals |
+| IMAP2-CMD-107 | RFC 9051 §6.3.9.2 | MUST | Compute subscription state and every other attribute accurately under the SUBSCRIBED return option. | n/a: persistent subscription state is not supported; current shared LIST attributes are tested, but all folders are treated as subscribed. See IMAP2-CMD-102; rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-108 | RFC 9051 §6.3.9.2 | MUST | For matching selectable mailboxes, follow each LIST with the requested STATUS response. | TestListStatus, TestListExtendedChildren |
+| IMAP2-CMD-109 | RFC 9051 §6.3.9.2 | MUST NOT | Send STATUS when its lookup cannot select the listed mailbox, and mark that LIST result Noselect instead. | n/a: the current engine omits failed STATUS but sends LIST before reading statusData, so it cannot add Noselect on failure. The existing RFC5819 fixture preserves that behavior; rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-111 | RFC 9051 §6.3.9.5 | MUST | Return HasChildren or HasNoChildren when the CHILDREN return option was requested, including non-mailbox hierarchy levels. | TestListExtendedChildren |
+| IMAP2-CMD-112 | RFC 9051 §6.3.9.5 | SHOULD NOT | Advertise children when none are accessible to the authenticated user; prefer HasNoChildren in that case. | n/a: the host supplies the accessible folder view and enforces access. The engine has no separate ACL or hidden-child information to audit this distinction. |
+| IMAP2-CMD-113 | RFC 9051 §6.3.9.6 | MUST NOT | Return CHILDINFO unless RECURSIVEMATCH was requested. | TestListExtendedRecursiveMatch, TestListExtendedChildren |
+| IMAP2-CMD-114 | RFC 9051 §6.3.9.6 | SHOULD | Use NonExistent with HasChildren for an absent parent of a matching descendant when CHILDINFO is unavailable. | TestListExtendedChildren |
+| IMAP2-CMD-115 | RFC 9051 §6.3.9.6 | SHOULD | Suppress redundant CHILDINFO when the matching child is itself returned. | TestListExtendedRecursiveMatch |
+| IMAP2-CMD-116 | RFC 9051 §6.3.9.7 | SHOULD | Return OLDNAME when a supplied mailbox name differs from the normalized name used by SELECT, EXAMINE, CREATE, RENAME or DELETE. | n/a: mailbox normalization and OLDNAME are not implemented; rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-119 | RFC 9051 §6.3.10 | SHOULD | Use the authenticated user identifier as the hierarchy level beneath an other-users namespace prefix. | n/a: no other-users namespace is offered; NAMESPACE returns NIL for it, as tested in IMAP-NAMESPACE-01. |
+| IMAP2-CMD-120 | RFC 9051 §6.3.10 | SHOULD NOT | List other users whose personal mailboxes have not been shared with the authenticated user. | n/a: no other-users namespace or user-directory listing is offered; mailbox authorization is the backend's responsibility. |
+| IMAP2-CMD-122 | RFC 9051 §6.3.11 | MUST | Execute STATUS on the selected mailbox without disturbing its selection. | TestStatusPreservesSelection |
+| IMAP2-CMD-124 | RFC 9051 §6.3.11 | MUST | Report a mailbox SIZE at least as large as the sum of its messages' RFC822.SIZE values. | TestStatusSize |
+| IMAP2-CMD-125 | RFC 9051 §6.3.12 | MUST | Preserve 8-bit APPEND messages or reversibly encode them when necessary. | n/a: the rev2 baseline accepting UTF-8 headers is not implemented; current rev1 requires ENABLE UTF8=ACCEPT for 8-bit headers and otherwise refuses them (IMAP-UTF8-05). Body octets are preserved; rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-126 | RFC 9051 §6.3.12 | SHOULD | Apply requested APPEND flags, defaulting to an empty list when omitted. | n/a: FlagUpdate cannot carry arbitrary keywords or Deleted through APPEND, although supported flags are tested. See IMAP-APPEND-19; rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-127 | RFC 9051 §6.3.12 | SHOULD | Honor an explicit APPEND internal date, otherwise use the current arrival time. | n/a: explicit dates require DateAppender and fallback backends drop them; default arrival metadata belongs to the backend. See IMAP-APPEND-20; rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-128 | RFC 9051 §6.3.12 | MUST | On APPEND failure restore the mailbox to its previous state, apart from a possible UIDNEXT advance. | n/a: atomic persistence is the host Append/AppendUID contract. The engine sends one complete payload but has no rollback API if a backend writes partially before returning an error. |
+| IMAP2-CMD-129 | RFC 9051 §6.3.12 | MUST | Refuse APPEND to a nonexistent mailbox without creating it, using TRYCREATE unless creation is known impossible. | n/a: the engine relies on the backend to refuse a missing destination; generic Append backends may create implicitly. Typed ErrNoSuchMailbox is supported, but does not establish the rev2 guarantee for every backend; rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-130 | RFC 9051 §6.3.12 | MUST NOT | Disclose APPENDUID to a caller that can append but cannot read the destination. | n/a: destination readability is not exposed by the backend (IMAP-APPENDUID-05); rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-131 | RFC 9051 §6.3.12 | SHOULD | Notify a selected mailbox of newly appended mail using EXISTS. | TestAppendSelectedMailbox |
+| IMAP2-CMD-132 | RFC 9051 §6.3.12 | SHOULD | Report OLDNAME when APPEND normalizes the destination mailbox name. | n/a: mailbox normalization and OLDNAME are not implemented; rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-133 | RFC 9051 §6.3.13 | MUST | Include UID in unsolicited FETCH updates sent during IDLE. | n/a: current IDLE flag updates contain FLAGS without UID. Rev2 unsolicited FETCH rules are not implemented; rest-mail/rest-mail-server#718. |
+
+## RFC 9051: selected-state command inventory (first pass)
+
+The supported ESEARCH and SEARCHRES extensions have shared proofs, while the rev2 defaults are recorded separately. Client duties about ignoring legacy SEARCH responses, result ordering, sending commands during IDLE, and synchronizing request continuations do not apply to this engine. Backend atomicity and persistent message data are not inferred from dispatch fixtures.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP2-CMD-134 | RFC 9051 §6.3.13 | MUST | Finish IDLE promptly after DONE, then accept the next command without interleaved polling replies. | TestIdleDoneAndNextCommand |
+| IMAP2-CMD-135 | RFC 9051 §6.4.4 | MUST | Reject unimplemented SEARCH result options with BAD; result-option ordering is insignificant. | TestESearchRefusals, TestESearch |
+| IMAP2-CMD-135-02 | RFC 9051 §6.4.4 | Normative | Use ESEARCH with ALL by default when SEARCH has no result-options list. | n/a: without RETURN the current rev1 engine sends SEARCH, not ESEARCH. RETURN () already means ALL; the rev2 default awaits rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-137 | RFC 9051 §6.4.4 | MUST NOT | Include MIN when no messages match; still send the ESEARCH response. | TestESearchNoMatches |
+| IMAP2-CMD-138 | RFC 9051 §6.4.4 | MUST NOT | Include MAX when no messages match; still send the ESEARCH response. | TestESearchNoMatches |
+| IMAP2-CMD-140 | RFC 9051 §6.4.4 | MUST NOT | Include ALL when no messages match; still send the ESEARCH response. | TestESearchNoMatches |
+| IMAP2-CMD-141 | RFC 9051 §6.4.4 | MUST | Include the requested COUNT result even when its value is zero. | TestESearch, TestESearchNoMatches |
+| IMAP2-CMD-142 | RFC 9051 §6.4.4 | MUST | Return a single ESEARCH response for the baseline MIN, MAX, ALL and COUNT options, alone or combined. | TestESearch, TestESearchNoMatches |
+| IMAP2-CMD-143 | RFC 9051 §6.4.4 | MUST | Decode MIME transfer encodings and encoded header words before comparing SEARCH strings, and support US-ASCII and UTF-8. | TestSearchDecodesMIME, TestSearchCharsets |
+| IMAP2-CMD-143-02 | RFC 9051 §6.4.4 | MUST | Assume UTF-8 when CHARSET is omitted in rev2. | n/a: rev2 search defaults are not implemented. The optional rev1 UTF8=ACCEPT path and explicit CHARSET handling are separate; rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-144 | RFC 9051 §6.4.4 | MUST | Return NO rather than BAD for an unsupported search CHARSET, with BADCHARSET and supported alternatives where supplied. | TestSearchCharsets |
+| IMAP2-CMD-145 | RFC 9051 §6.4.4 | SHOULD | Compare ASCII search text case-insensitively and use substring matching, including empty HEADER strings as field-presence tests. | TestSearchDecodesMIME, TestSearchHeaderKeys |
+| IMAP2-CMD-146 | RFC 9051 §6.4.4.1 | MUST NOT | Change the saved-search variable for a search that does not successfully replace it, including a BAD command or a search without SAVE. | TestSearchResVariable |
+| IMAP2-CMD-147 | RFC 9051 §6.4.4.1 | MUST | Remove expunged messages from the saved result and preserve its correct message identities after sequence renumbering. | TestSearchResVariable |
+| IMAP2-CMD-148 | RFC 9051 §6.4.4.2 | MUST | Run a pipelined SAVE search and a following command using its saved result in arrival order. | TestSearchRes |
+| IMAP2-CMD-149 | RFC 9051 §6.4.4.3 | MUST | If refusing to save a search result because of resource limits, return NO with NOTSAVED and clear the saved result. | n/a: this implementation has no configured saved-result resource limit and no NOTSAVED refusal. Backend NO clears the result as tested in IMAP-SEARCHRES-04; resource-limit refusal remains rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-150 | RFC 9051 §6.4.5 | MUST NOT | Change static message attributes for one UID identity. | n/a: immutable message content and metadata are host-backend obligations, not enforced against a backend that replaces its data. See IMAP2-CORE-13. |
+| IMAP2-CMD-151 | RFC 9051 §6.4.5 | SHOULD | Report flag changes caused by implicit Seen setting in FETCH responses. | TestFetchSections, TestUIDFetchExample |
+| IMAP2-CMD-152 | RFC 9051 §6.4.5.1 | MUST | Number MIME parts consecutively and address nested multipart/message parts using period-separated part numbers. | TestFetchNumericSections, TestFetchNumericSectionSingle |
+| IMAP2-CMD-153 | RFC 9051 §6.4.5.1 | MUST | Permit HEADER/TEXT selectors only at the root or on encapsulated RFC822/GLOBAL messages, and require a numeric prefix for MIME selectors. | n/a: RFC822 section syntax is tested by IMAP-FETCH-14 and invalid-section proofs, but MESSAGE/GLOBAL traversal is not implemented. Full rev2 message-type support awaits rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-154 | RFC 9051 §6.4.6 | SHOULD | Suppress a STORE command's own untagged flag reply when SILENT is used. | TestStoreSilent |
+| IMAP2-CMD-155 | RFC 9051 §6.4.6 | SHOULD | Report observed external flag changes even when a previous STORE used SILENT. | TestStoreSilentStillReportsOtherSourcesChanges |
+| IMAP2-CMD-156 | RFC 9051 §6.4.7 | SHOULD | Preserve flags and internal date during COPY. | n/a: host Copy/CopyUID owns persistence and the interface cannot carry session-local Deleted or keywords (IMAP-COPY-12); rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-157 | RFC 9051 §6.4.7 | MUST | Refuse a destination the backend identifies as nonexistent with NO and TRYCREATE, without engine-side creation. | TestTryCreateMissingDestination |
+| IMAP2-CMD-157-02 | RFC 9051 §6.4.7 | MUST NOT | Have the host COPY operation implicitly create a nonexistent destination mailbox. | n/a: destination existence and durable creation policy are host-backend obligations. The engine has no create operation and maps ErrNoSuchMailbox, but cannot prevent a host Copy from auto-creating. |
+| IMAP2-CMD-158 | RFC 9051 §6.4.7 | MUST | Restore the destination after any failed COPY of a message set, except for a possible UIDNEXT advance. | n/a: multi-message COPY iterates backend calls and has no transaction or rollback interface; earlier copies can remain after a later failure. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-159 | RFC 9051 §6.4.7 | MUST NOT | Disclose COPYUID when the caller may copy to the destination but cannot read it. | n/a: destination-read permissions are not exposed by the backend (IMAP-COPY-15); rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-160 | RFC 9051 §6.4.8 | SHOULD | Preserve flags and internal date during MOVE. | n/a: the host Move/MoveUID owns persistence and metadata preservation; dispatch fixtures do not prove it (IMAP-MOVE-10); rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-161 | RFC 9051 §6.4.8 | MUST NOT | Generate STORE responses or set Deleted as intermediate MOVE steps. | TestMoveExample, TestMoveUIDExample |
+| IMAP2-CMD-162 | RFC 9051 §6.4.8 | MUST | Make each message move atomic or leave it unaffected; never lose a message and avoid leaving duplicates even on partial command failure. | n/a: per-message atomicity is trusted to the host Move or Mover implementation and cannot be established by the dispatch fixture. Same boundary as IMAP-MOVE-10; rest-mail/rest-mail-server#374. |
+| IMAP2-CMD-163 | RFC 9051 §6.4.8 | MUST | Refuse a backend-reported missing MOVE destination with NO and TRYCREATE, without engine-side creation. | TestTryCreateMissingDestination |
+| IMAP2-CMD-163-02 | RFC 9051 §6.4.8 | MUST NOT | Have the host MOVE operation auto-create a missing destination. | n/a: the host controls destination existence and creation policy; the engine maps ErrNoSuchMailbox but has no separate durable existence/creation interface. |
+| IMAP2-CMD-164 | RFC 9051 §6.4.8 | REQUIRED | Send COPYUID in an untagged OK before MOVE expunge responses. | n/a: this is conditional on optional UIDPLUS and valid backend UID metadata in the current rev1 engine. The ordering is tested by IMAP-MOVE-02, but unconditional rev2 UID metadata is not implemented; rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-165 | RFC 9051 §6.4.9 | MUST | Mark an ESEARCH response caused by UID SEARCH as UID and return UIDs rather than sequence numbers. | TestESearch |
+| IMAP2-CMD-166 | RFC 9051 §6.4.9 | MUST | Keep FETCH/EXPUNGE prefixes as sequence numbers and include UID in FETCH responses caused by UID commands. | TestUIDFetchExample, TestUIDStoreReportsUID, TestUIDExpungeSubset |
+| IMAP2-CMD-167 | RFC 9051 §6.5 | MUST | Associate non-core commands with an advertised capability. | n/a: the offered commands follow the rev1 and extension vocabulary, including commands deprecated by rev2. Rev2 mode and the revised command set are not implemented; rest-mail/rest-mail-server#718. |
+| IMAP2-CMD-168 | RFC 9051 §6.5 | MUST NOT | Send added extension responses unless the client requested the associated command or ENABLE behavior. | TestEnableUnknownAndCapabilityStability, TestNoUntaggedResponseWithoutCommand |
+| IMAP2-CMD-172 | RFC 9051 §7 | SHOULD | Report observed concurrent flag changes and expunges alongside mailbox-size updates. | TestNoopReportsOtherSourcesChanges |
+
+## RFC 9051: response inventory (first pass)
+
+Server responses are checked independently of clients' caching, unknown-code handling, ALERT presentation and BODYSTRUCTURE extension tolerance. Registered extension tags and capability names are specification/IANA concerns; this engine defines no private ones. The listed shared proofs do not imply that the engine negotiates rev2.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP2-RESP-174 | RFC 9051 §7.1 | MUST NOT | Use a UID set or range in APPENDUID for a single appended message. | TestAppendUIDResponse |
+| IMAP2-RESP-175 | RFC 9051 §7.1 | MUST | Remove the keyword-creation wildcard from PERMANENTFLAGS when the keyword limit has been reached. | n/a: arbitrary keyword creation and a configurable keyword limit are not offered. PERMANENTFLAGS never includes the wildcard (IMAP-STORE-06). |
+| IMAP2-RESP-176 | RFC 9051 §7.1 | SHOULD NOT | Use nonpersistent UID stores represented by UIDNOTSTICKY. | n/a: the engine has no UIDNOTSTICKY store metadata; persistent UID allocation is a host responsibility. The fallback UID identity gap is IMAP-SELECT-09; rest-mail/rest-mail-server#374. |
+| IMAP2-RESP-178 | RFC 9051 §7.1.4 | SHOULD | Only use PREAUTH on a connection protected by TLS or another confidentiality layer. | n/a: the engine does not offer PREAUTH; every connection begins not authenticated with OK, as tested by IMAP-GREET-01. |
+| IMAP2-RESP-180 | RFC 9051 §7.2.2 | MUST | Include IMAP4rev2 in a rev2 CAPABILITY response. | n/a: the engine currently advertises only IMAP4rev1; rest-mail/rest-mail-server#718. |
+| IMAP2-RESP-181 | RFC 9051 §7.2.2 | MUST | Provide AUTH=PLAIN and the cleartext-port STARTTLS/LOGINDISABLED capabilities with protected authentication. | TestStartTLSExample, TestStartTLSRefusals |
+| IMAP2-RESP-182 | RFC 9051 §7.2.2 | Normative | When LOGINDISABLED is advertised, refuse LOGIN with NO without checking supplied credentials. | TestStartTLSExample, TestStartTLSCleartextCredentialsRefused |
+| IMAP2-RESP-183 | RFC 9051 §7.2.2 | MUST | Select the correct rev1/rev2 baseline response behavior from advertised capabilities and ENABLE negotiation. | n/a: dual-mode negotiation and ENABLE IMAP4rev2 are not implemented; rest-mail/rest-mail-server#718. |
+| IMAP2-RESP-184 | RFC 9051 §7.2.2 | SHOULD NOT | Offer unregistered capability names; register newly defined names through IANA. | n/a: no new/private capability name is defined here. extensions.go lists published IMAP4rev1 and extension capabilities; registration is a specification-author action rather than engine behavior. |
+| IMAP2-RESP-186 | RFC 9051 §7.3.1 | SHOULD NOT | Expose child existence through HasChildren when none of the children are accessible. | n/a: the host supplies the authorized folder view; the engine has no hidden-child ACL information, as in IMAP2-CMD-112. |
+| IMAP2-RESP-187 | RFC 9051 §7.3.1 | MUST NOT | Combine Marked, Unmarked and Noselect attributes on one LIST result; omit unknown interest metadata. | TestListHierarchyLevels, TestListExtendedChildren |
+| IMAP2-RESP-188 | RFC 9051 §7.3.1 | MUST | Use the same hierarchy separator for all children of a top-level hierarchy node. | TestListReference, TestNamespace |
+| IMAP2-RESP-189 | RFC 9051 §7.3.1 | MUST | Return mailbox names that can be reused as unambiguous command arguments unless marked Noselect or NonExistent. | TestMailboxNamesAreWrittenInModifiedUTF7, TestMailboxNamesAreDecodedFromModifiedUTF7, TestMailboxNamedNIL |
+| IMAP2-RESP-190 | RFC 9051 §7.3.1 | MUST | Use registered LIST extended-data tags; clients must ignore unrecognized extended fields. | n/a: no private extended-data tag is defined. CHILDINFO is registered by RFC5258; OLDNAME is not implemented. Client unknown-field handling does not apply to the server engine. |
+| IMAP2-RESP-191 | RFC 9051 §7.3.4 | SHOULD | Return each ESEARCH result item only once, including when requested options repeat. | TestESearchDuplicateResultOptions |
+| IMAP2-RESP-192 | RFC 9051 §7.3.4 | MUST NOT | Include MIN on an empty ESEARCH result, but still send the response. | TestESearchNoMatches |
+| IMAP2-RESP-193 | RFC 9051 §7.3.4 | MUST NOT | Include MAX on an empty ESEARCH result, but still send the response. | TestESearchNoMatches |
+| IMAP2-RESP-194 | RFC 9051 §7.3.4 | MUST | Return complete matching sequence/UID sets without ranges that include nonexistent or nonmatching UIDs. | TestESearch |
+| IMAP2-RESP-195 | RFC 9051 §7.3.4 | MUST NOT | Include ALL on an empty ESEARCH result, but still send the response. | TestESearchNoMatches |
+| IMAP2-RESP-196 | RFC 9051 §7.3.4 | MUST | Include a requested COUNT item even when the result count is zero. | TestESearch, TestESearchNoMatches |
+| IMAP2-RESP-199 | RFC 9051 §7.5.1 | MUST NOT | Send EXPUNGE with no command in progress, during argument continuation negotiation, or while answering FETCH/STORE/SEARCH. | TestNoExpungeWhileLiteralPending, TestNoUntaggedResponseWithoutCommand, TestNoExpungeDuringFetchStoreSearch |
+| IMAP2-RESP-201 | RFC 9051 §7.5.2 | SHOULD | Use a normal string for decoded 8-bit BINARY data without NUL, rather than literal8. | TestBinaryFetch |
+| IMAP2-RESP-202 | RFC 9051 §7.5.2 | MUST | Canonicalize line-oriented textual BINARY output to CRLF regardless of stored line endings. | n/a: binaryData returns decoded text without CRLF normalization. Full rev2 textual BINARY behavior awaits rest-mail/rest-mail-server#718. |
+| IMAP2-RESP-203 | RFC 9051 §7.5.2 | MUST | Refuse a BINARY decoding request with NO and UNKNOWN-CTE when the transfer encoding cannot be decoded. | TestBinaryUnknownCTE |
+| IMAP2-RESP-204 | RFC 9051 §7.5.2 | MUST | Make BINARY.SIZE equal to the octets returned by the corresponding decoded BINARY item. | TestBinaryFetch |
+| IMAP2-RESP-205 | RFC 9051 §7.5.2 | MUST | Refuse BINARY.SIZE when the transfer encoding cannot be decoded, using NO and UNKNOWN-CTE. | TestBinaryUnknownCTE |
+| IMAP2-RESP-207 | RFC 9051 §7.5.2 | MUST NOT | Add a BODY origin offset unless the client requested a partial BODY item. | TestFetchSections, TestFetchPartialOctets |
+| IMAP2-RESP-208 | RFC 9051 §7.5.2 | MUST | Transfer-encode binary data before returning it as ordinary BODY content. | n/a: ordinary message representation and transfer encoding belong to the host store; the engine returns stored BODY bytes without rewriting them. See IMAP2-CORE-30; rest-mail/rest-mail-server#718. |
+| IMAP2-RESP-209 | RFC 9051 §7.5.2 | MUST | Keep multipart BODYSTRUCTURE extension fields in order and omit them from BODY. | TestBodyStructureRFCMultipartExample, TestBodyStructureMultipartLocation |
+| IMAP2-RESP-210 | RFC 9051 §7.5.2 | SHOULD | Decode and concatenate RFC2231 media-type parameter continuations and character sets. | TestBodyStructureContinuedParameters |
+| IMAP2-RESP-210-02 | RFC 9051 §7.5.2 | Normative | Preserve the rev2 parameter-name/character-set convention for extended UTF-8 values. | n/a: the current MIME formatter uses the decoded base parameter name, rather than the RFC9051 extended-name illustration. Full rev2 parameter representation remains rest-mail/rest-mail-server#718. |
+| IMAP2-RESP-211 | RFC 9051 §7.5.2 | SHOULD | Decode RFC2231 Content-Disposition parameter continuations. | TestBodyStructureContinuedParameters |
+| IMAP2-RESP-212 | RFC 9051 §7.5.2 | MUST NOT | Send undefined future BODYSTRUCTURE extension fields. | n/a: the formatter has no private/future extension fields; it emits only defined MD5, disposition, language and location fields. Client tolerance of later fields is not a server obligation. |
+| IMAP2-RESP-213 | RFC 9051 §7.5.2 | MUST | Keep single-part BODYSTRUCTURE extension fields in order and omit them from BODY. | TestBodyStructureRFCExample, TestBodyStructureMD5Location |
+| IMAP2-RESP-215 | RFC 9051 §7.5.2 | MUST | Include UID in unsolicited FETCH updates. | n/a: current NOOP/IDLE flag updates can contain FLAGS without UID, as recorded in IMAP2-CMD-133. Rev2 update formatting awaits rest-mail/rest-mail-server#718. |
+
+## RFC 9051: grammar, security and compatibility inventory
+
+The normative grammar notes and security requirements below are separate from a complete audit of every ABNF production. TLS runtime policy, backend account policy and IANA registration duties are distinguished from Session wire behavior. Client-only certificate verification, connection-port selection, alert presentation and unknown-response handling are not server-engine obligations. Appendices A and A.1 are recorded in the following compatibility rows; Appendix E repeats changes rather than creating extra requirements, and the index is not normative protocol text.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP2-SEC-216 | RFC 9051 §9 | MUST | Give the earlier grammar alternative priority when productions overlap, including system flags versus extension flags. | TestStoreExample, TestSearchAnsweredDraftKeys |
+| IMAP2-SEC-217 | RFC 9051 §9 | MUST | Follow the rev2 ABNF, including exact spaces, complete argument forms and string framing. | n/a: shared rev1 grammar is extensively tested, but rev2 adds number64 and UTF-8 defaults and removes legacy constructs; those productions and mode selection are not implemented. Full rev2 grammar awaits rest-mail/rest-mail-server#718. |
+| IMAP2-SEC-218 | RFC 9051 §9 | MUST | Treat protocol command and keyword spelling case-insensitively unless a production says otherwise. | TestCaseAndSpacing |
+| IMAP2-SEC-219 | RFC 9051 §9 | MUST NOT | Accept ASCII NUL except where the OCTET production permits it. | TestCaseAndSpacing, TestAppendRejectsNULMessageOctet |
+| IMAP2-SEC-220 | RFC 9051 §9 | MUST NOT | Generate future BODYSTRUCTURE extension fields before a standards-track definition permits them. | n/a: the formatter defines no private/future extension fields; only the specified MD5, disposition, language and location are emitted. |
+| IMAP2-SEC-221 | RFC 9051 §9 | MUST NOT | Return single-part extension data in the nonextensible BODY form. | TestBodyStructureRFCExample, TestBodyStructureMD5Location |
+| IMAP2-SEC-222 | RFC 9051 §9 | MUST NOT | Return multipart extension data in the nonextensible BODY form. | TestBodyStructureRFCMultipartExample, TestBodyStructureMultipartLocation |
+| IMAP2-SEC-223 | RFC 9051 §9 | MUST NOT | Format MESSAGE/RFC822 or MESSAGE/GLOBAL using the generic basic-body production. | n/a: RFC822 has structured traversal proofs, but MESSAGE/GLOBAL structured handling is not implemented. Full rev2 message-type support awaits rest-mail/rest-mail-server#718. |
+| IMAP2-SEC-224 | RFC 9051 §9 | SHOULD | Register newly defined capabilities with IANA under the RFC-required policy. | n/a: no new/private capability is defined by this library; registration is a specification-author process. See IMAP2-RESP-184. |
+| IMAP2-SEC-225 | RFC 9051 §9 | MUST | Advertise IMAP4rev2, include IMAP4rev1 when compatibility is offered, and put IMAP4 first if RFC1730 compatibility is offered. | n/a: no rev2 or RFC1730 mode is offered; current capabilities advertise only the rev1 baseline. Dual-mode grammar awaits rest-mail/rest-mail-server#718. |
+| IMAP2-SEC-226 | RFC 9051 §9 | MUST NOT | Generate undefined flag extensions, and preserve the distinction between rev2 flags and deprecated Recent. | n/a: current rev1 exposes Recent and does not negotiate the rev2 flag vocabulary. No private system flag is defined; rev2 compatibility awaits rest-mail/rest-mail-server#718. |
+| IMAP2-SEC-227 | RFC 9051 §9 | MUST | Interpret every ASCII case variant of INBOX as the distinguished inbox rather than an ordinary case-sensitive name. | TestSelectionMailboxAstrings, TestInboxCannotBeCreatedOrDeleted, TestStatusRequestedItems |
+| IMAP2-SEC-228 | RFC 9051 §9 | MUST | Format LIST extended-data tags as registered standard/vendor tag forms. | n/a: the only emitted extended tag is the standard CHILDINFO string. No vendor tag interface is offered; OLDNAME is not implemented. |
+| IMAP2-SEC-229 | RFC 9051 §9 | MUST NOT | Change static FETCH data for one UID identity. | n/a: immutable content and metadata are host-backend obligations, not enforced against replacement data. See IMAP2-CORE-13 and IMAP2-CMD-150. |
+| IMAP2-SEC-230 | RFC 9051 §9 | MUST NOT | Use dot, slash, percent or star within a vendor name-component. | n/a: no vendor extension-name component is defined or accepted by this engine. |
+| IMAP2-SEC-231 | RFC 9051 §9 | MUST | Use an IANA-registered character-set name in the SEARCH CHARSET argument. | n/a: this is a client argument-selection/registration requirement; the server's unsupported-charset refusal is checked by IMAP2-CMD-144. |
+| IMAP2-SEC-232 | RFC 9051 §9 | MUST | Register vendor tokens with IANA. | n/a: the engine defines no vendor token; this is a specification/registration duty. |
+| IMAP2-SEC-233 | RFC 9051 §11.1 | MUST | Follow the relevant TLS recommendations with the rev2 document taking precedence on conflicts. | n/a: cryptographic policy is the host-supplied tls.Config and Go TLS runtime. The Session harness proves negotiation and protection gates, not a complete RFC8314 cryptographic-profile audit; rest-mail/rest-mail-server#374. |
+| IMAP2-SEC-234 | RFC 9051 §11.1 | MUST | Support TLS1.2 or newer, the mandated TLS1.2 ECDHE-RSA/AES128-GCM suite, and the recommended TLS1.3/interoperability profile. | n/a: the host supplies certificates and tls.Config. Existing TLS handshake proofs do not establish the complete required cipher/certificate/profile matrix; rest-mail/rest-mail-server#374. |
+| IMAP2-SEC-236 | RFC 9051 §11.1 | MUST | Only continue after a successful STARTTLS result and acceptable TLS negotiation. | TestStartTLSExample, TestStartTLSFailedNegotiation |
+| IMAP2-SEC-238 | RFC 9051 §11.2 | MUST | Offer an implicit-TLS listener and support STARTTLS if a cleartext listener is enabled. | n/a: implicit listeners are Server-level rather than this public Session wire harness. Root tests cover the protected capability path; TestStartTLSExample covers the cleartext upgrade. Full deployment/listener configuration remains a host obligation. |
+| IMAP2-SEC-241 | RFC 9051 §11.4 | SHOULD NOT | Disclose APPENDUID or COPYUID to a caller that cannot SELECT or EXAMINE the destination. | n/a: the host backend does not expose destination readability to the engine (IMAP-APPENDUID-05 and IMAP-COPY-15); rest-mail/rest-mail-server#374. |
+| IMAP2-SEC-242 | RFC 9051 §11.5 | MUST NOT | Reveal other users without an explicit personal-mailbox listing grant. | n/a: no other-users namespace is offered, and the host supplies the authorized mailbox view. See IMAP2-CMD-120. |
+| IMAP2-SEC-243 | RFC 9051 §11.7 | SHOULD NOT | Reveal the reason an AUTHENTICATE credential is invalid. | TestAuthenticationFailureDetailsStayPrivate |
+| IMAP2-SEC-244 | RFC 9051 §11.7 | MUST | Offer a configuration that protects credentials with TLS or rejects plaintext LOGIN/PLAIN and withholds their advertisement before protection. | TestStartTLSExample, TestStartTLSCleartextCredentialsRefused |
+| IMAP2-SEC-245 | RFC 9051 §11.7 | SHOULD NOT | Distinguish an invalid LOGIN user name from an invalid password in the wire error. | TestAuthenticationFailureDetailsStayPrivate |
+| IMAP2-SEC-246 | RFC 9051 §11.7 | SHOULD | Provide a mechanism that limits or delays failed LOGIN and AUTHENTICATE attempts. | TestAuthenticationFailureBudgetAppliesToBothForms |
+| IMAP2-SEC-247 | RFC 9051 §11.7 | MUST | Detect password-spraying risks, block accounts with known weak passwords, and require a strong replacement password. | n/a: credential strength, account blocking and per-account spraying analysis are host authentication policy, not provided by this engine's per-IP Limiter interface; rest-mail/rest-mail-server#374. |
+
+## RFC 9051: compatibility appendices
+
+Appendix A's client ENABLE obligation is client-only. Appendices B and C give compatibility advice for folded-in BINARY and LIST-EXTENDED; the shared extension rows above remain their wire proofs. Appendix D explicitly does not require servers to support 63-bit sizes, while clients must tolerate them. The engine uses native int sizes and still validates legacy SEARCH sizes as 32-bit values; no cross-architecture large-message or dual-mode size claim is made. Appendix E's change summary is cross-checked below rather than treated as a replacement for the normative section audit.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP2-COMPAT-249 | RFC 9051 §A | MUST NOT | Generate UTF-8 quoted strings in dual-mode operation until the client enables IMAP4rev2. | n/a: dual rev1/rev2 capability negotiation is not implemented. The existing UTF8=ACCEPT extension is separate; rest-mail/rest-mail-server#718. |
+| IMAP2-COMPAT-250 | RFC 9051 §A | MUST | Preserve the rev1 international mailbox-name convention when offering rev1 compatibility. | TestMailboxNamesAreWrittenInModifiedUTF7, TestMailboxNamesAreDecodedFromModifiedUTF7 |
+| IMAP2-COMPAT-251 | RFC 9051 §A.1 | MUST NOT | Encode printable ASCII unnecessarily in modified base64 or accept characters outside its alphabet. | TestInvalidModifiedUTF7NamesAreRefused |
+| IMAP2-COMPAT-252 | RFC 9051 §A.1 | MUST | Terminate modified-base64 shifts explicitly and reject superfluous/null shifts. | TestInvalidModifiedUTF7NamesAreRefused |
+| IMAP2-COMPAT-253 | RFC 9051 §A.1 | MUST | Preserve the case-sensitive modified-base64 portion of a mailbox name. | TestModifiedUTF7ShiftCaseIsSignificant |
+| IMAP2-COMPAT-254 | RFC 9051 §A.1 | SHOULD | Validate CREATE names against canonical modified UTF-7 without superfluous shifts or encoded printable ASCII. | TestInvalidModifiedUTF7NamesAreRefused |
+| IMAP2-COMPAT-255 | RFC 9051 §A.1 | MUST | Convert host mailbox names with non-ASCII or ampersand characters to modified UTF-7 for rev1 clients. | TestMailboxNamesAreWrittenInModifiedUTF7 |
+
+## RFC 9051: Appendix E change crosswalk
+
+This crosswalk follows all 30 changes listed in Appendix E. It records where
+shared behavior is tested and where rev2 work remains; it does not promote a
+rev1 extension test to proof of a complete rev2 implementation.
+
+1. Large sizes: Appendix D permits servers to retain 32-bit size limits;
+   cross-architecture number64 parsing and formatting still need audit.
+2. Folded-in extensions: the existing NAMESPACE, UNSELECT, UIDPLUS, ESEARCH,
+   SEARCHRES, ENABLE, IDLE, SASL-IR, LIST-EXTENDED, LIST-STATUS, MOVE, LITERAL-,
+   BINARY and SPECIAL-USE rows prove their stated slices. Rev2 baseline
+   negotiation, ABNF and response-code coverage remain IMAP2-SEC-217/225.
+3. STATUS SIZE has IMAP-STATUS-SIZE rows; STATUS DELETED is IMAP2-DELTA-03.
+4. Default ESEARCH remains unsupported (IMAP2-CMD-135-02).
+5. SEARCH matching has IMAP-SEARCH rows and IMAP2-CMD-143; the full rev2
+   key-by-key wording still needs non-keyword reconciliation.
+6. RFC2231 continued parameters have IMAP2-RESP-210/211 and the new
+   TestBodyStructureContinuedParameters; extended-name rev2 formatting remains
+   IMAP2-RESP-210-02.
+7. COPYUID for MOVE/UID MOVE has the existing IMAP-MOVE rows.
+8. Missing COPY/MOVE destinations have IMAP2-CMD-157/163; arbitrary backend
+   creation/preservation guarantees remain the explicit COPY/MOVE gaps.
+9. CLOSED on replacement selection remains IMAP2-CMD-74.
+10. Selected-mailbox LIST and normalized OLDNAME remain IMAP2-CMD-73.
+11. Rev2 deprecation of SELECT/EXAMINE UNSEEN requires mode-specific replies;
+    the current rev1 engine still emits it (IMAP2-SEC-217/225).
+12. Rev2 deprecation of RECENT, Recent, STATUS RECENT and SEARCH NEW also
+    requires mode-specific grammar and state (IMAP2-SEC-226).
+13. No additional PERMANENTFLAGS after keyword creation is required when the
+    wildcard was already advertised; this engine offers no keyword creation
+    (IMAP-STORE-06, IMAP2-RESP-175).
+14. Bare number64 tagged extension data remains part of IMAP2-SEC-217's ABNF
+    audit, without treating optional large server sizes as mandatory.
+15. Recommended predefined keywords remain unsupported (IMAP2-CORE-15).
+    The normative section names $NotJunk; Appendix E spells it $NonJunk.
+16. UTF-8 mailbox/header defaults and dual-mode negotiation remain
+    IMAP2-CORE-29/31, IMAP2-CMD-125 and IMAP2-COMPAT-249.
+17. Rev2 removal of CHECK requires mode-specific command grammar; rev1 CHECK
+    remains offered (IMAP2-SEC-217).
+18. Deprecated RFC822 FETCH aliases require the same mode-specific grammar;
+    rev1 compatibility tests do not establish rev2 refusal/acceptance policy.
+19. Deprecated LSUB is still a rev1 command; LIST SUBSCRIBED has shared
+    LIST-EXTENDED proofs, not rev2 negotiation (IMAP2-SEC-217/225).
+20. IDLE updates for other mailbox state are allowed, not required; the
+    selected-mailbox IDLE proofs do not claim that optional behavior.
+21. UID in every unsolicited FETCH remains IMAP2-CMD-133/IMAP2-RESP-215.
+22. Ignoring unknown response codes is a client duty, outside this engine.
+23. Empty resp-text is allowed in rev2; the current rev1 engine emits text.
+    Exact mode-dependent grammar still needs IMAP2-SEC-217 reconciliation.
+24. UTF-8 response text after ENABLE IMAP4rev2 remains unimplemented
+    (IMAP2-COMPAT-249); optional UTF8=ACCEPT is a separate extension.
+25. Modern TLS policy is distinguished from Session negotiation by
+    IMAP2-SEC-233/234/236/238/244.
+26. ALERT presentation is client-side; PREAUTH is not offered
+    (IMAP2-RESP-178). The security inventory makes no user-interface claim.
+27. Additional non-plaintext SASL, including SCRAM-SHA-256, remains
+    IMAP2-CMD-57-02, with no new backend authentication design chosen here.
+28. Every command resets the autologout timer (IMAP2-CORE-38); its root
+    timer proofs remain outside this Session harness.
+29. Registration policy and removal of the X convention are specification
+    duties (IMAP2-RESP-184, IMAP2-SEC-224/232); no private capability is added.
+30. Connection closure duties are distinguished in IMAP2-CORE-24 and the
+    RFC 9051 response inventory, without claiming new shutdown timer proofs.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP2-DELTA-03 | RFC 9051 §6.3.11 | Normative | Return the number of messages marked Deleted for STATUS DELETED, alongside the other requested status items. | n/a: STATUS DELETED is not supported by the current rev1 parser; rev2 baseline status items remain rest-mail/rest-mail-server#718. |
+
+## RFC 9051 first-pass audit record
+
+- 2026-10-26: reviewed the explicit RFC requirement-keyword paragraphs in
+  §§2–7, §9, §11 and Appendices A/A.1, with the compatibility guidance in
+  Appendices B–F and the Appendix E crosswalk above. Definitions, references,
+  index entries and client-only obligations are separated from server duties.
+  The source is [RFC 9051](https://www.rfc-editor.org/rfc/rfc9051.txt), SHA-256
+  `acf52a50eb748ea21b5ffdcb31c761d3fbba6242d53d4f53c2555de039c5c3cf`.
+- Added 214 rows, including 113 mappings to shared/new Session wire tests and
+  101 explicit non-applicability, backend-boundary or unsupported-work reasons.
+  Nine new wire tests exercise tag reuse, exact body octets, metadata-only
+  LIST, repeated ESEARCH options, pending-literal EXPUNGE suppression,
+  continued MIME parameters, private authentication failures, shared failure
+  budgets and case-sensitive modified-base64 mailbox identities. Existing
+  requirement rows are preserved. The subsequent #150 correction below changes
+  typed-text refusal without weakening the MIME SEARCH assertions.
+- Remaining before any full-inventory claim: reconcile every ABNF production
+  and non-keyword normative rule, finish every offered extension's inventory,
+  and distinguish root-package/host proofs from missing engine behavior.
+  A keyword scan and the Appendix E change list are discovery aids, not a
+  substitute for that complete review. This checklist stays PARTIAL and
+  rest-mail/rest-mail-server#374 stays open.
+- This work does not measure statement coverage or execute race/fuzz suites;
+  COVERAGE.md records its historical receipt and the separate CI coverage gate.
 
 ## RFC 3501 audit record
 
@@ -980,8 +1361,18 @@ here cover the rules every command line and response shares.
   LOGIN took any number of arguments, invalid escapes and atom-specials.
   Probed and already right: doubled SP and TAB, NUL, case, sequence-set and
   number limits, partial ranges, section parts, dates, empty lists, flag
-  atoms, STATUS items and FETCH macros. Kept, for the owner to decide: 8-bit
-  text outside a literal is accepted when the server does not support
-  UTF8=ACCEPT (rest-mail/go-imap#150). The literal reader could refuse it, but
-  SEARCH's tests send 8-bit quoted terms on purpose, and a quoted 8-bit LOGIN
-  password would be refused. Next: RFC 9051 (IMAP4rev2).
+  atoms, STATUS items and FETCH macros. The discovered typed 8-bit text
+  deviation was tracked in rest-mail/go-imap#150 and corrected below following
+  the owner's 2026-10-26 instruction. Next: RFC 9051 (IMAP4rev2).
+- 2026-10-26: corrected #150 (IMAP-SYNTAX-06..07). Backends without
+  UTF8=ACCEPT now refuse typed 8-bit command text, including pre-authentication
+  LOGIN and both APPEND literal boundaries. A refused unread non-synchronizing
+  literal closes with BYE; synchronizing refusals preserve the next command.
+  Literal contents and supported UTF8=ACCEPT behavior remain available. MIME
+  and charset SEARCH proofs now send their 8-bit operands as legal literals,
+  retaining their original decoding and match assertions. Three new wire
+  proofs include UTF-8 credentials through AUTHENTICATE PLAIN. The checklist
+  mutation fixture now removes exact IDs across every annotation line in one
+  function's parsed doc group, with a regression for prefix collisions and
+  neighboring functions; a supposed missing-annotation fixture cannot silently
+  retain the annotation.

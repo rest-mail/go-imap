@@ -39,6 +39,7 @@ func headerSearchMailbox() *fetchMailbox {
 // and an empty string matches any message that has the field.
 //
 // checklist: IMAP-SEARCH-19
+// checklist: IMAP2-CMD-145
 func TestSearchHeaderKeys(t *testing.T) {
 	box := headerSearchMailbox()
 	c := fetchClient(t, box, "EXAMINE")

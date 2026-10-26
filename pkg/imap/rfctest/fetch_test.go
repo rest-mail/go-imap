@@ -105,6 +105,8 @@ func fetchCommand(t *testing.T, c *client, command string) ([]fetchReply, string
 // decoded/rendered text. A UTF-8 body and forged response line exercise framing.
 //
 // checklist: IMAP-FETCH-01 IMAP-FETCH-02 IMAP-FETCH-03
+// checklist: IMAP2-CMD-151
+// checklist: IMAP2-RESP-207
 func TestFetchSections(t *testing.T) {
 	for _, prefix := range []string{"FETCH 1", "UID FETCH 10"} {
 		for _, tc := range []struct {
@@ -162,6 +164,7 @@ func TestFetchSections(t *testing.T) {
 // origin labels, including ranges that split a UTF-8 character.
 //
 // checklist: IMAP-FETCH-04
+// checklist: IMAP2-RESP-207
 func TestFetchPartialOctets(t *testing.T) {
 	for _, prefix := range []string{"FETCH 1", "UID FETCH 10"} {
 		for _, tc := range []struct{ suffix, origin, payload string }{
@@ -275,6 +278,7 @@ func TestFetchMetadataAndMacros(t *testing.T) {
 // response prefixes and implicit UID items, plus nonexistent UID no-ops.
 //
 // checklist: IMAP-FETCH-09
+// checklist: IMAP2-CMD-151 IMAP2-CMD-166
 func TestUIDFetchExample(t *testing.T) {
 	box := newFetchMailbox()
 	box.messages = make([]imap.Message, 25)
@@ -418,6 +422,7 @@ func TestFetchPartialFailure(t *testing.T) {
 // data before selection or after UNSELECT, with a successful selected control.
 //
 // checklist: IMAP-FETCH-13
+// checklist: IMAP2-CORE-22
 func TestFetchRequiresSelection(t *testing.T) {
 	box := newFetchMailbox()
 	c := selectionClient(t, box)

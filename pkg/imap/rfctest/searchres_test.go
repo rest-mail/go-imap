@@ -21,6 +21,7 @@ func runExactly(t *testing.T, c *client, command string, want ...string) {
 // commands run in order (§2.3).
 //
 // checklist: IMAP-SEARCHRES-01 IMAP-SEARCHRES-02
+// checklist: IMAP2-CMD-148
 func TestSearchRes(t *testing.T) {
 	c := sharedClient(t, esearchMailbox())
 	requireCaps(t, c.capabilities("C1"), []string{"SEARCHRES", "ESEARCH"}, nil)
@@ -72,6 +73,7 @@ func TestSearchResSaveOptions(t *testing.T) {
 // (example 6).
 //
 // checklist: IMAP-SEARCHRES-04 IMAP-SEARCHRES-05
+// checklist: IMAP2-CMD-146 IMAP2-CMD-147
 func TestSearchResVariable(t *testing.T) {
 	box := esearchMailbox()
 	c := sharedClient(t, box)

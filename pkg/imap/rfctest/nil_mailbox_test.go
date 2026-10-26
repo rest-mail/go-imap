@@ -15,6 +15,7 @@ import (
 // any case only as written.
 //
 // checklist: IMAP-NIL-01
+// checklist: IMAP2-RESP-189
 func TestMailboxNamedNIL(t *testing.T) {
 	box := newNamesMailbox("NIL")
 	c := selectionClient(t, box)

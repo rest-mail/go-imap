@@ -13,6 +13,7 @@ import (
 // same command (§3), as in the RFC's LOGIN example.
 //
 // checklist: IMAP-LITMINUS-01 IMAP-LITMINUS-02
+// checklist: IMAP2-CORE-26
 func TestLiteralMinus(t *testing.T) {
 	c := dial(t)
 	c.line()
@@ -40,6 +41,7 @@ func TestLiteralMinus(t *testing.T) {
 // of any size APPEND takes is unaffected.
 //
 // checklist: IMAP-LITMINUS-03 IMAP-LITMINUS-04
+// checklist: IMAP2-CORE-26
 func TestLiteralMinusLimit(t *testing.T) {
 	// Octets that would sign in and append if they were read as commands.
 	smuggled := func(n int) string {

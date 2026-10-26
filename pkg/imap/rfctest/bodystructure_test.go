@@ -38,6 +38,8 @@ func structureResponse(t *testing.T, raw, body, extended string, literals ...str
 // structure and dimensions, not the message text; the payload here is synthetic.
 //
 // checklist: IMAP-BS-01 IMAP-BS-02 IMAP-BS-03 IMAP-BS-06
+// checklist: IMAP2-RESP-213
+// checklist: IMAP2-SEC-221
 func TestBodyStructureRFCExample(t *testing.T) {
 	payload := strings.Repeat(strings.Repeat("a", 45)+"\r\n", 47) + strings.Repeat("b", 68) + "\r\n"
 	if len(payload) != 2279 {
@@ -110,6 +112,8 @@ func TestBodyStructureNestedEncoding(t *testing.T) {
 // The attachment's base64 characters are placeholders, not an RFC test vector.
 //
 // checklist: IMAP-BS-01 IMAP-BS-02 IMAP-BS-03 IMAP-BS-04 IMAP-BS-05 IMAP-BS-06 IMAP-BS-07
+// checklist: IMAP2-RESP-209
+// checklist: IMAP2-SEC-222
 func TestBodyStructureRFCMultipartExample(t *testing.T) {
 	plain := strings.Repeat(strings.Repeat("a", 48)+"\r\n", 22) + strings.Repeat("b", 50) + "\r\n"
 	encoded := strings.Repeat(strings.Repeat("A", 60)+"\r\n", 70) +

@@ -37,6 +37,7 @@ func TestUntaggedBadForUndeterminedCommand(t *testing.T) {
 // already knows.
 //
 // checklist: IMAP-RESP-12
+// checklist: IMAP2-RESP-199
 func TestNoExpungeDuringFetchStoreSearch(t *testing.T) {
 	box := &selectionMailbox{folders: map[string][]imap.Message{"INBOX": {
 		{UID: 1, Size: 24}, {UID: 2, Size: 24}, {UID: 3, Size: 24},

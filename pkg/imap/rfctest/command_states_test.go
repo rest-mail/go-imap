@@ -12,6 +12,9 @@ import (
 // reference, and an empty pattern returns the reference's root name.
 //
 // checklist: IMAP-LIST-04 IMAP-LIST-05
+// checklist: IMAP2-CORE-32
+// checklist: IMAP2-CMD-95 IMAP2-CMD-97 IMAP2-CMD-99
+// checklist: IMAP2-RESP-188
 func TestListReference(t *testing.T) {
 	for _, kind := range []string{"LIST", "LSUB"} {
 		t.Run(kind, func(t *testing.T) {
@@ -86,6 +89,7 @@ func (c *client) authenticate(tag, mech, resp string) string {
 // authentication identity is accepted.
 //
 // checklist: IMAP-AUTHENTICATE-01 IMAP-AUTHENTICATE-02 IMAP-AUTHENTICATE-03 IMAP-AUTHENTICATE-04 IMAP-AUTHENTICATE-05 IMAP-AUTHENTICATE-06 IMAP-AUTHENTICATE-08 IMAP-CAP-02
+// checklist: IMAP2-CMD-51 IMAP2-CMD-52 IMAP2-CMD-56 IMAP2-CMD-58 IMAP2-CMD-59
 func TestAuthenticateCommand(t *testing.T) {
 	c := dial(t)
 	c.line()

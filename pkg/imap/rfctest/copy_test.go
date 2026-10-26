@@ -188,6 +188,7 @@ func TestCopyReadOnlyAndNames(t *testing.T) {
 }
 
 // checklist: IMAP-COPY-09
+// checklist: IMAP2-CORE-22
 func TestCopyRequiresSelection(t *testing.T) {
 	for _, authenticated := range []bool{false, true} {
 		for _, command := range []string{"COPY 1 Archive", "UID COPY 300 Archive"} {

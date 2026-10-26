@@ -10,6 +10,7 @@ import (
 // leaves the client in the not authenticated state.
 //
 // checklist: IMAP-GREET-01
+// checklist: IMAP2-CORE-21
 func TestGreeting(t *testing.T) {
 	c := dial(t)
 	if g := c.line(); !strings.HasPrefix(g, "* OK ") {
@@ -79,6 +80,8 @@ func TestNoop(t *testing.T) {
 // closes the connection, both before and after authentication.
 //
 // checklist: IMAP-LOGOUT-01 IMAP-RESP-13
+// checklist: IMAP2-CORE-23
+// checklist: IMAP2-CMD-47
 func TestLogout(t *testing.T) {
 	for _, authenticated := range []bool{false, true} {
 		c := dial(t)

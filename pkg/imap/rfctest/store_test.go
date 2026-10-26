@@ -76,6 +76,7 @@ func requireExactly(t *testing.T, got []string, want ...string) {
 // engine's plain FETCH also volunteers UID, which RFC 3501 §7.4.2 permits.
 //
 // checklist: IMAP-STORE-01 IMAP-STORE-02
+// checklist: IMAP2-SEC-216
 func TestStoreExample(t *testing.T) {
 	box := newStoreMailbox()
 	c := storeClient(t, box)
@@ -119,6 +120,7 @@ func TestStoreExample(t *testing.T) {
 // applying and persisting the change.
 //
 // checklist: IMAP-STORE-03
+// checklist: IMAP2-CMD-154
 func TestStoreSilent(t *testing.T) {
 	box := newStoreMailbox()
 	c := storeClient(t, box)
@@ -142,6 +144,7 @@ func TestStoreSilent(t *testing.T) {
 // TestUIDStoreReportsUID proves a FETCH caused by UID STORE carries the UID.
 //
 // checklist: IMAP-STORE-04
+// checklist: IMAP2-CMD-166
 func TestUIDStoreReportsUID(t *testing.T) {
 	c := storeClient(t, newStoreMailbox())
 

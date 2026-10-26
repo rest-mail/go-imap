@@ -64,6 +64,7 @@ func requireRemaining(t *testing.T, c *client, uids ...uint32) {
 
 // TestMoveExample moves 2:4 through the base Mailbox.Move fallback.
 // checklist: IMAP-MOVE-01
+// checklist: IMAP2-CMD-161
 func TestMoveExample(t *testing.T) {
 	m := newMoveMailbox()
 	c := expungeClient(t, m)
@@ -77,6 +78,7 @@ func TestMoveExample(t *testing.T) {
 // TestMoveUIDExample follows the shape of RFC 6851's UID MOVE example:
 // COPYUID in an untagged OK, then the EXPUNGEs, then the tagged OK.
 // checklist: IMAP-MOVE-02 IMAP-MOVE-03
+// checklist: IMAP2-CMD-161
 func TestMoveUIDExample(t *testing.T) {
 	m := &uidMoveMailbox{moveMailbox: newMoveMailbox(), validity: 432432}
 	c := expungeClient(t, m)
@@ -206,6 +208,7 @@ func TestMoveReadOnly(t *testing.T) {
 }
 
 // checklist: IMAP-MOVE-07
+// checklist: IMAP2-CORE-22
 func TestMoveRequiresSelection(t *testing.T) {
 	for _, authenticated := range []bool{false, true} {
 		for _, command := range []string{"MOVE 1 Archive", "UID MOVE 300 Archive"} {

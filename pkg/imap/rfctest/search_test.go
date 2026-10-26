@@ -137,9 +137,10 @@ func TestSearchCalendarDates(t *testing.T) {
 
 // TestSearchCharsets proves mandatory US-ASCII acceptance, supported UTF-8
 // metadata matching and the unsupported-charset response, followed by recovery.
-// It does not prove MIME decoding, charset conversion or literal handling.
+// Its 8-bit UTF-8 operand uses a literal; MIME decoding is proved separately.
 //
 // checklist: IMAP-SEARCH-07 IMAP-RESP-06
+// checklist: IMAP2-CMD-143 IMAP2-CMD-144
 func TestSearchCharsets(t *testing.T) {
 	c := searchClient(t, []imap.Message{{UID: 10, Subject: "hello"}, {UID: 40, Subject: "café"}})
 	for _, prefix := range []string{"SEARCH", "UID SEARCH"} {
@@ -154,7 +155,7 @@ func TestSearchCharsets(t *testing.T) {
 		if prefix == "UID SEARCH" {
 			want = "* SEARCH 40"
 		}
-		requireSearch(t, c, prefix+` CHARSET UTF-8 SUBJECT "café"`, want)
+		requireLiteralSearch(t, c, prefix+` CHARSET UTF-8 SUBJECT "café"`, want)
 		lines, tagged := c.command("Q1", "%s CHARSET ISO-8859-1 ALL", prefix)
 		requireExactly(t, lines)
 		if !strings.HasPrefix(tagged, "Q1 NO [BADCHARSET (US-ASCII UTF-8)] ") {
@@ -197,6 +198,7 @@ func TestSearchInvalidCriteria(t *testing.T) {
 // mailbox, and an empty selected mailbox still yields an empty SEARCH response.
 //
 // checklist: IMAP-SEARCH-01 IMAP-SEARCH-09
+// checklist: IMAP2-CORE-22
 func TestSearchRequiresSelection(t *testing.T) {
 	c := selectionClient(t, &selectionMailbox{folders: map[string][]imap.Message{"INBOX": nil}})
 	for _, command := range []string{"SEARCH ALL", "UID SEARCH ALL"} {

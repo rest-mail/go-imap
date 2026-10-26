@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -68,7 +71,7 @@ func TestIMAPChecklist(t *testing.T) {
 		for _, mutation := range []struct{ name, checklist, source, want string }{
 			{"missing-test", checklist, strings.Replace(source, "func "+test+"(", "func missingProof(", 1), id + " lists " + test + ", which is not a test"},
 			{"missing-row", strings.Replace(checklist, row+"\n", "", 1), source, test + " names " + id + ", which is not in"},
-			{"missing-annotation", checklist, unname(source, test, id), test + " does not name " + id},
+			{"missing-annotation", checklist, unname(t, source, test, id), test + " does not name " + id},
 			{"empty-mapping", strings.Replace(checklist, row, emptied, 1), source, id + " names no test"},
 		} {
 			t.Run(id+"/"+mutation.name, func(t *testing.T) {
@@ -94,10 +97,44 @@ func TestIMAPChecklist(t *testing.T) {
 	}
 }
 
-// unname removes id from the checklist line of test's doc comment in source.
-func unname(source, test, id string) string {
-	fn := strings.Index(source, "func "+test+"(")
-	line := strings.LastIndex(source[:fn], "// checklist:")
-	end := line + strings.Index(source[line:], "\n")
-	return source[:line] + strings.Replace(source[line:end], " "+id, "", 1) + source[end:]
+// unname removes exactly id from every checklist line in test's doc group.
+// A proof may have several annotation lines; editing only the last one silently
+// leaves earlier IDs present and makes a supposed negative fixture still pass.
+func unname(t *testing.T, source, test, id string) string {
+	t.Helper()
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "proof_test.go", source, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Name.Name != test || fn.Doc == nil {
+			continue
+		}
+		removed := false
+		// Apply edits backwards, retaining the original parser offsets.
+		for i := len(fn.Doc.List) - 1; i >= 0; i-- {
+			comment := fn.Doc.List[i]
+			text, ok := strings.CutPrefix(comment.Text, "// checklist:")
+			if !ok {
+				continue
+			}
+			var keep []string
+			for _, field := range strings.Fields(text) {
+				if field == id {
+					removed = true
+				} else {
+					keep = append(keep, field)
+				}
+			}
+			start, end := fset.Position(comment.Pos()).Offset, fset.Position(comment.End()).Offset
+			source = source[:start] + "// checklist: " + strings.Join(keep, " ") + source[end:]
+		}
+		if removed {
+			return source
+		}
+	}
+	t.Fatalf("fixture %s has no checklist annotation for %s", test, id)
+	return ""
 }

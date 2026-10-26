@@ -94,6 +94,9 @@ func requireCaps(t *testing.T, caps []string, have, lack []string) {
 
 // TestStartTLSExample follows the RFC 3501 §6.2.1 example transcript.
 // checklist: IMAP-STARTTLS-01 IMAP-STARTTLS-02 IMAP-STARTTLS-03 IMAP-CAP-02 IMAP-LOGIN-02
+// checklist: IMAP2-CMD-45 IMAP2-CMD-49 IMAP2-CMD-50 IMAP2-CMD-58 IMAP2-CMD-62
+// checklist: IMAP2-RESP-181 IMAP2-RESP-182
+// checklist: IMAP2-SEC-236 IMAP2-SEC-244
 func TestStartTLSExample(t *testing.T) {
 	c := tlsClient(t)
 	requireCaps(t, c.capabilities("a001"), []string{"IMAP4rev1", "STARTTLS", "LOGINDISABLED"}, []string{"AUTH=PLAIN"})
@@ -136,6 +139,9 @@ func TestStartTLSNonAuthenticated(t *testing.T) {
 // built without a TLS config is a development deployment and is out of scope.
 //
 // checklist: IMAP-STARTTLS-08 IMAP-AUTHENTICATE-09 IMAP-LOGIN-02
+// checklist: IMAP2-CMD-57 IMAP2-CMD-62
+// checklist: IMAP2-RESP-182
+// checklist: IMAP2-SEC-244
 func TestStartTLSCleartextCredentialsRefused(t *testing.T) {
 	plain := base64.StdEncoding.EncodeToString([]byte("\x00" + testUser + "\x00" + testPass))
 	c := tlsClient(t)
@@ -175,6 +181,8 @@ func TestStartTLSCleartextCredentialsRefused(t *testing.T) {
 // TestStartTLSRefusals covers the BAD results: no TLS configured, arguments
 // supplied, and TLS already active. Each leaves the session usable.
 // checklist: IMAP-STARTTLS-05
+// checklist: IMAP2-CMD-45 IMAP2-CMD-48
+// checklist: IMAP2-RESP-181
 func TestStartTLSRefusals(t *testing.T) {
 	requireBAD := func(t *testing.T, c *client, tag, format string) {
 		t.Helper()
@@ -210,6 +218,7 @@ func TestStartTLSRefusals(t *testing.T) {
 // TestStartTLSDiscardsPipelinedPlaintext pipelines a LOGIN behind STARTTLS in
 // one cleartext write. It must never run inside the TLS layer.
 // checklist: IMAP-STARTTLS-06
+// checklist: IMAP2-CMD-49
 func TestStartTLSDiscardsPipelinedPlaintext(t *testing.T) {
 	c := tlsClient(t)
 	if _, err := io.WriteString(c.conn, "a1 STARTTLS\r\na2 LOGIN "+testUser+" "+testPass+"\r\n"); err != nil {
@@ -241,6 +250,8 @@ func TestStartTLSDiscardsPipelinedPlaintext(t *testing.T) {
 // TestStartTLSFailedNegotiation sends cleartext where the TLS handshake should
 // start. The server must close rather than fall back to cleartext commands.
 // checklist: IMAP-STARTTLS-07
+// checklist: IMAP2-CMD-49
+// checklist: IMAP2-SEC-236
 func TestStartTLSFailedNegotiation(t *testing.T) {
 	c := tlsClient(t)
 	if _, tagged := c.command("a1", "STARTTLS"); !strings.HasPrefix(tagged, "a1 OK") {

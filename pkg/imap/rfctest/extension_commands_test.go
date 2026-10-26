@@ -44,6 +44,8 @@ func TestExtensionCapabilities(t *testing.T) {
 }
 
 // checklist: IMAP-ENABLE-01 IMAP-ENABLE-02 IMAP-ENABLE-03
+// checklist: IMAP2-CMD-63 IMAP2-CMD-64 IMAP2-CMD-66 IMAP2-CMD-70
+// checklist: IMAP2-CMD-168
 func TestEnableUnknownAndCapabilityStability(t *testing.T) {
 	for _, box := range []imap.Mailbox{mailbox{}, &enableMailbox{}} {
 		c := selectionClient(t, box)
@@ -64,6 +66,7 @@ func TestEnableUnknownAndCapabilityStability(t *testing.T) {
 }
 
 // checklist: IMAP-ENABLE-02 IMAP-ENABLE-03 IMAP-ENABLE-04
+// checklist: IMAP2-CMD-63 IMAP2-CMD-65 IMAP2-CMD-66 IMAP2-CMD-69 IMAP2-CMD-70
 func TestEnableAdditiveAndPersistent(t *testing.T) {
 	m := &enableMailbox{}
 	c := selectionClient(t, m)
@@ -237,6 +240,7 @@ func TestIdleInvalidArguments(t *testing.T) {
 }
 
 // checklist: IMAP-IDLE-02 IMAP-RESP-17
+// checklist: IMAP2-CMD-134
 func TestIdleDoneAndNextCommand(t *testing.T) {
 	c := expungeClient(t, newExpungeMailbox(1))
 	for _, done := range []string{"DONE", "done"} {

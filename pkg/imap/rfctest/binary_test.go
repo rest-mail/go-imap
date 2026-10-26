@@ -53,6 +53,7 @@ func binaryMailbox() *fetchMailbox {
 // is empty, as BODY's is.
 //
 // checklist: IMAP-BINARY-01 IMAP-BINARY-02 IMAP-BINARY-03
+// checklist: IMAP2-RESP-201 IMAP2-RESP-204
 func TestBinaryFetch(t *testing.T) {
 	box := binaryMailbox()
 	c := fetchClient(t, box, "SELECT")
@@ -102,6 +103,7 @@ func TestBinarySeen(t *testing.T) {
 // NO [UNKNOWN-CTE] and no FETCH response (RFC 3516 §4.3), BINARY.SIZE too.
 //
 // checklist: IMAP-BINARY-05
+// checklist: IMAP2-RESP-203 IMAP2-RESP-205
 func TestBinaryUnknownCTE(t *testing.T) {
 	c := fetchClient(t, binaryMailbox(), "EXAMINE")
 	for _, command := range []string{"FETCH 2 BINARY.PEEK[1]", "FETCH 3 BINARY[1]", "UID FETCH 11 BINARY.SIZE[1]"} {

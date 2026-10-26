@@ -64,6 +64,7 @@ func TestSelectionInvalidArguments(t *testing.T) {
 }
 
 // checklist: IMAP-SELECT-12
+// checklist: IMAP2-SEC-227
 func TestSelectionMailboxAstrings(t *testing.T) {
 	for _, command := range []string{"SELECT", "EXAMINE"} {
 		for _, tc := range []struct{ wire, name string }{

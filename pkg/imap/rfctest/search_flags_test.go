@@ -13,6 +13,7 @@ import (
 // disagree with those flags, and UIDs differ from sequence numbers.
 //
 // checklist: IMAP-SEARCH-15
+// checklist: IMAP2-SEC-216
 func TestSearchAnsweredDraftKeys(t *testing.T) {
 	for _, selection := range []string{"SELECT", "EXAMINE"} {
 		for _, empty := range []bool{false, true} {

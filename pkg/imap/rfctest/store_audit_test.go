@@ -91,6 +91,7 @@ func (m *sharedMailbox) set(uid uint32, change func(*imap.Message)) {
 // after a silent STORE as after any other.
 //
 // checklist: IMAP-STORE-12
+// checklist: IMAP2-CMD-155
 func TestStoreSilentStillReportsOtherSourcesChanges(t *testing.T) {
 	box := &sharedMailbox{messages: []imap.Message{{UID: 5001}, {UID: 5002}, {UID: 5003}}}
 	c := dialConfigured(t, box, nil, nil, func(s *server.Session) { s.SetIdlePollInterval(20 * time.Millisecond) })

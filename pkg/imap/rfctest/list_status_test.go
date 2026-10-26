@@ -36,6 +36,7 @@ func (statusFolders) Messages(folder string) ([]imap.Message, error) {
 // LIST sends no STATUS.
 //
 // checklist: IMAP-LISTSTATUS-01 IMAP-LISTSTATUS-02
+// checklist: IMAP2-CMD-108
 func TestListStatus(t *testing.T) {
 	c := selectionClient(t, statusFolders{})
 	requireCaps(t, c.capabilities("C1"), []string{"LIST-STATUS"}, nil)

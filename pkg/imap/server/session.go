@@ -229,11 +229,10 @@ func (s *Session) readLiteralArgs(tag, args string) (assembled string, ok, close
 	typed := args // what the client typed, before any literal is spliced in
 	for {
 		prefix, size, sync, isLit := wire.SplitTrailingLiteral(args)
-		// A UTF8=ACCEPT server refuses 8-bit text that is not UTF-8 (RFC 6855
-		// §3). Literal octets are exempt: only the typed text is checked, before
-		// a synchronizing literal's continuation is sent.
-		if s.utf8Accept() && !wire.ValidCommandUTF8(typed) {
-			return reject("Invalid UTF-8 in command", isLit && !sync)
+		// Validate only typed text, before inviting a synchronizing literal.
+		// Literal octets already spliced into args remain exempt.
+		if reason := s.commandTextError(typed); reason != "" {
+			return reject(reason, isLit && !sync)
 		}
 		if !isLit {
 			return args, true, false // no (further) trailing literal
@@ -482,6 +481,11 @@ func (s *Session) Handle() {
 				return // buffered unread octets must never become new commands
 			}
 			if !argsOK {
+				// A refused SELECT or EXAMINE is still a failed selection
+				// attempt, so it deselects as handleSelect would.
+				if (ucmd == "SELECT" || ucmd == "EXAMINE") && s.auth.authenticated {
+					s.deselect()
+				}
 				continue // safe refusal before a continuation or after a complete command
 			}
 			args = materialized

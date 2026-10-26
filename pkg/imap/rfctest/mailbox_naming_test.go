@@ -82,6 +82,8 @@ var storeNames = []string{"~peter/mail/台北/日本語", "Tom & Jerry", "Entwü
 // are matched against the names as written.
 //
 // checklist: IMAP-MUTF7-01
+// checklist: IMAP2-RESP-189
+// checklist: IMAP2-COMPAT-250 IMAP2-COMPAT-255
 func TestMailboxNamesAreWrittenInModifiedUTF7(t *testing.T) {
 	box := newNamesMailbox(storeNames...)
 	c := selectionClient(t, box)
@@ -133,6 +135,8 @@ func TestMailboxNamesAreWrittenInModifiedUTF7(t *testing.T) {
 // stays case-insensitive (§5.1).
 //
 // checklist: IMAP-MUTF7-02
+// checklist: IMAP2-RESP-189
+// checklist: IMAP2-COMPAT-250
 func TestMailboxNamesAreDecodedFromModifiedUTF7(t *testing.T) {
 	box := newNamesMailbox(append(storeNames, "café")...)
 	c := selectionClient(t, box)
@@ -179,6 +183,7 @@ func TestMailboxNamesAreDecodedFromModifiedUTF7(t *testing.T) {
 // other command finds no folder by such a name: NO, without asking the store.
 //
 // checklist: IMAP-MUTF7-03
+// checklist: IMAP2-COMPAT-251 IMAP2-COMPAT-252 IMAP2-COMPAT-254
 func TestInvalidModifiedUTF7NamesAreRefused(t *testing.T) {
 	box := newNamesMailbox("Plain")
 	c := selectionClient(t, box)

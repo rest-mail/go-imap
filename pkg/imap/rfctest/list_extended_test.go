@@ -28,6 +28,7 @@ func (listFolders) Folders() ([]imap.Folder, error) {
 // "*" every name below is listed itself, so the level is not.
 //
 // checklist: IMAP-LIST-06
+// checklist: IMAP2-RESP-187
 func TestListHierarchyLevels(t *testing.T) {
 	c := selectionClient(t, listFolders{})
 	runExactly(t, c, `LIST "" "%"`,
@@ -44,6 +45,8 @@ func TestListHierarchyLevels(t *testing.T) {
 // REMOTE asks for remote mailboxes too, and this server has none (example 4).
 //
 // checklist: IMAP-LISTEXT-01 IMAP-LISTEXT-02
+// checklist: IMAP2-CMD-100 IMAP2-CMD-104 IMAP2-CMD-108 IMAP2-CMD-111 IMAP2-CMD-113 IMAP2-CMD-114
+// checklist: IMAP2-RESP-187
 func TestListExtendedChildren(t *testing.T) {
 	c := selectionClient(t, listFolders{})
 	requireCaps(t, c.capabilities("C1"), []string{"LIST-EXTENDED"}, nil)
@@ -89,6 +92,7 @@ func TestListExtendedSubscribed(t *testing.T) {
 // not returned.
 //
 // checklist: IMAP-LISTEXT-02 IMAP-LISTEXT-04
+// checklist: IMAP2-CMD-100 IMAP2-CMD-113 IMAP2-CMD-115
 func TestListExtendedRecursiveMatch(t *testing.T) {
 	c := selectionClient(t, listFolders{})
 	runExactly(t, c, `LIST (SPECIAL-USE RECURSIVEMATCH) "" "%"`,
@@ -108,6 +112,7 @@ func TestListExtendedRecursiveMatch(t *testing.T) {
 // extended LIST is ignored, never the delimiter request (§3).
 //
 // checklist: IMAP-LISTEXT-05
+// checklist: IMAP2-CMD-95 IMAP2-CMD-100
 func TestListMultiplePatterns(t *testing.T) {
 	c := selectionClient(t, listFolders{})
 	runExactly(t, c, `LIST "" ("INBOX" "Fruit/%" "Fruit/Apple")`,
@@ -122,6 +127,7 @@ func TestListMultiplePatterns(t *testing.T) {
 // REMOTE, is BAD (RFC 5258 §§3, 3.1); so is an unterminated pattern list.
 //
 // checklist: IMAP-LISTEXT-06
+// checklist: IMAP2-CMD-105
 func TestListExtendedRefusals(t *testing.T) {
 	c := selectionClient(t, listFolders{})
 	for _, command := range []string{

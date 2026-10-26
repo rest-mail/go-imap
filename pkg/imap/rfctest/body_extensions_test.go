@@ -10,6 +10,8 @@ import (
 // these synthetic bodies are deliberately not claimed to match its digest.
 //
 // checklist: IMAP-BS-17 IMAP-BS-18
+// checklist: IMAP2-RESP-213
+// checklist: IMAP2-SEC-221
 func TestBodyStructureMD5Location(t *testing.T) {
 	const base = `("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "7BIT" 1 1`
 	for _, tc := range []struct{ name, headers, md5, location string }{
@@ -30,6 +32,8 @@ func TestBodyStructureMD5Location(t *testing.T) {
 // Children have independent extension values; absent fields do not inherit.
 //
 // checklist: IMAP-BS-17 IMAP-BS-18
+// checklist: IMAP2-RESP-209
+// checklist: IMAP2-SEC-222
 func TestBodyStructureMultipartLocation(t *testing.T) {
 	const base = `("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "7BIT" 1 1`
 	raw := "Content-Type: multipart/mixed; boundary=B\r\nContent-Location: outer/\r\nContent-MD5: ignored-multipart\r\nContent-Disposition: inline\r\n\r\n" +
