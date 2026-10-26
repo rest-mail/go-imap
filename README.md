@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 466/618 mapped](https://img.shields.io/badge/partial%20checklist-466%2F618%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 475/643 mapped](https://img.shields.io/badge/partial%20checklist-475%2F643%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap/pkg/imap/server)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -347,6 +347,12 @@ Rows the library does not meet, or that belong to the host or the client, are
 `n/a` with the reason. The checklist is growing; it is not a full conformance
 claim.
 
+[RFC-SESSION-EXTENSIONS.md](RFC-SESSION-EXTENSIONS.md) records the grouped
+seven-spec negotiation/session audit, source pins, narrow proofs and explicit
+host/client/unsupported boundaries. PLAIN grammar and base64 refusals, required
+credential lengths, ENABLE pipelining, literal framing and live IDLE updates
+have focused wire regressions. Core and other-extension reconciliation remains.
+
 The checklist is a Markdown file of tables with this header:
 
 ```markdown
@@ -385,7 +391,7 @@ reason.
 
 | Area | What go-imap does | Why |
 |------|-------------------|-----|
-| Authentication | PLAIN and LOGIN only: no challenge-response mechanism (CRAM-MD5, DIGEST-MD5, SCRAM), EXTERNAL or ANONYMOUS. | PLAIN is only offered inside TLS, as mainstream clients expect. CRAM-MD5 and DIGEST-MD5 are obsolete and need passwords stored in plaintext-equivalent form. SCRAM needs a second, SCRAM-specific credential store and helps only when TLS is already broken. ANONYMOUS has no use on a server of personal accounts. |
+| Authentication | PLAIN and LOGIN only: no challenge-response mechanism (CRAM-MD5, DIGEST-MD5, SCRAM), EXTERNAL or ANONYMOUS. | When a TLS config is supplied, PLAIN is only offered inside TLS. A nil TLS config explicitly permits development/legacy cleartext authentication. CRAM-MD5 and DIGEST-MD5 are obsolete and need passwords stored in plaintext-equivalent form. SCRAM needs a second, SCRAM-specific credential store and helps only when TLS is already broken. ANONYMOUS has no use on a server of personal accounts. |
 | `\Recent` | Not tracked: RECENT, NEW and OLD approximate it with unseen. | IMAP4rev2 (RFC 9051) removes `\Recent`. |
 | Subscriptions | No subscription store: every folder counts as subscribed. | Clients show every folder anyway; a second list of folders would only go stale. |
 | UIDs | Without `UIDPlusMailbox`, UIDVALIDITY is 1 and UIDNEXT is the highest UID plus one. UIDNOTSTICKY is never reported. | A backend that has real values implements `UIDPlusMailbox`; UIDs are expected to persist. |
