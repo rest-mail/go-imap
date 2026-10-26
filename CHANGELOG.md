@@ -6,8 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-10-26
+
 ### Fixed
 
+- QUOTA commands reject malformed or unknown roots, check that the mailbox
+  exists, keep quoted and literal arguments intact, and refuse invalid resource
+  values before sending untagged data.
 - Reject malformed SASL PLAIN payloads before backend authentication: empty
   identity/password, extra NUL delimiters, invalid UTF-8 and embedded CR in
   base64 responses. Both initial-response and continuation exchanges can retry
@@ -20,6 +25,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- A crosswalk of every core grammar production name against pinned RFC source
+  indexes and the existing checklist proofs, and the missing QUOTA requirement
+  inventory. The wider inventory stays explicitly partial.
 - A grouped section audit of seven negotiation/session extension RFCs, with
   pinned source indexes, explicit host/client/unsupported boundaries and guards
   against lost sections or invalid requirement references. New wire proofs cover

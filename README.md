@@ -442,6 +442,12 @@ grammars.
 
 Recent releases; see [CHANGELOG.md](CHANGELOG.md) for the complete history.
 
+### v0.13.1 (2026-10-26)
+
+Stricter input: QUOTA commands, SASL PLAIN payloads and mailbox SIZE metadata
+are validated before anything reaches the backend or the wire, and LIST-STATUS
+handles a mailbox that disappears mid-listing. No API changes.
+
 ### v0.13.0 (2026-10-26)
 
 The library is split into `pkg/imap` and `pkg/imap/server`, and `NewServer` is
