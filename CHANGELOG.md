@@ -6,44 +6,98 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-26
+
+### Changed (breaking)
+
+- The library is split into packages. The module path is unchanged
+  (`github.com/rest-mail/go-imap`), but the root package is gone:
+  - `github.com/rest-mail/go-imap/pkg/imap` holds the types a backend
+    implements and exchanges with the server: `Backend`, `Mailbox`, `Message`,
+    `Address`, `Folder`, `FlagUpdate`, the `SpecialUse*` values, the optional
+    `UIDPlusMailbox`, `UTF8Mailbox`, `Mover` and `DateAppender` interfaces,
+    `ErrNoSuchMailbox`, `Limiter` and `NopLimiter`.
+  - `github.com/rest-mail/go-imap/pkg/imap/server` holds the server: `Server`,
+    `New`, `Ports`, `Session`, `NewSession`, `MaxCommandLineLength` and
+    `MaxLiteralSize`.
+  - `pkg/imap/internal/wire` (the command and response grammar),
+    `pkg/imap/internal/message` (sections, BODYSTRUCTURE, ENVELOPE, BINARY and
+    SEARCH text) and `pkg/imap/internal/mutf7` (modified UTF-7) hold what the
+    server uses to read commands and messages. They are internal, so they are
+    not importable.
+- `NewServer` is renamed `server.New`, to read well with its package name.
+  `NewSession` keeps its name as `server.NewSession`.
+
+The protocol is unchanged: every command answers as it did in v0.12.0.
+
+Migration: replace the import, then the names.
+
+| Before (v0.12) | After (v0.13) |
+|----------------|---------------|
+| `import "github.com/rest-mail/go-imap"` | `"github.com/rest-mail/go-imap/pkg/imap"` and `"github.com/rest-mail/go-imap/pkg/imap/server"` (import only the ones you use) |
+| `imap.NewServer(hostname, backend, tlsConfig, limiter)` | `server.New(hostname, backend, tlsConfig, limiter)` |
+| `imap.Server`, `imap.Ports`, `imap.Session`, `imap.NewSession`, `imap.MaxCommandLineLength`, `imap.MaxLiteralSize` | `server.Server`, `server.Ports`, `server.Session`, `server.NewSession`, `server.MaxCommandLineLength`, `server.MaxLiteralSize` |
+| `imap.Backend`, `imap.Mailbox`, `imap.Message`, `imap.Address`, `imap.Folder`, `imap.FlagUpdate`, `imap.SpecialUse*`, `imap.UIDPlusMailbox`, `imap.UTF8Mailbox`, `imap.Mover`, `imap.DateAppender`, `imap.ErrNoSuchMailbox`, `imap.Limiter`, `imap.NopLimiter` | unchanged, now from `.../pkg/imap` |
+
+## [0.12.0] - 2026-10-24
+
 ### Added
 
 - LIST-EXTENDED (RFC 5258): SUBSCRIBED, REMOTE and RECURSIVEMATCH selection
   options, SUBSCRIBED and CHILDREN return options, several patterns in
   parentheses, \NonExistent and CHILDINFO. Every folder counts as subscribed,
   as LSUB already said. Part of IMAP4rev2 (rest-mail/rest-mail-server#718).
+
+### Fixed
+
+- LIST with a pattern ending in `%` now returns a level of hierarchy that is
+  not itself a folder, with `\Noselect` (RFC 3501 §6.3.8): with only
+  `Music/Rock`, `LIST "" %` used to leave `Music` out, so a client showing the
+  top level never offered it.
+
+## [0.11.0] - 2026-10-24
+
+### Added
+
 - SEARCHRES (RFC 5182): `SEARCH RETURN (SAVE) ...` keeps its result, and
   `$` names it in FETCH, STORE, COPY, MOVE, SEARCH and their UID forms, so a
   client can search and act on the result without the list of numbers
   coming back first. Part of IMAP4rev2 (rest-mail/rest-mail-server#718).
+
 - BINARY (RFC 3516): `FETCH BINARY[part]`, `BINARY.PEEK[part]` and
   `BINARY.SIZE[part]` answer a section with its transfer encoding removed,
   so a client gets an attachment's octets without decoding base64 itself;
   data with a NUL comes as a literal8. An encoding the server cannot remove
   is `NO [UNKNOWN-CTE]`, and so is APPEND's literal8, which the store cannot
   keep. Part of IMAP4rev2 (rest-mail/rest-mail-server#718).
+
 - STATUS=SIZE (RFC 8438): `STATUS folder (SIZE)`, and LIST's STATUS return
   option, give a mailbox's size in octets, the sum of its messages'
   RFC822.SIZE. Part of IMAP4rev2 (rest-mail/rest-mail-server#718).
+
 - LIST-STATUS (RFC 5819): `LIST "" * RETURN (STATUS (MESSAGES UNSEEN))`
   follows each folder's LIST with its STATUS, so a client fills its folder
   list's counts in one command instead of a STATUS per folder. Part of
   IMAP4rev2 (rest-mail/rest-mail-server#718).
+
 - ESEARCH (RFC 4731): `SEARCH RETURN (MIN MAX ALL COUNT) ...` and the UID
   form answer one `* ESEARCH (TAG "...")` with the lowest and highest match,
   every match as a sequence-set, or their count, so a client can find the
   first unseen message or count matches without a list of every number.
   Part of IMAP4rev2 (rest-mail/rest-mail-server#718).
+
 - NAMESPACE (RFC 2342): `* NAMESPACE (("" "/")) NIL NIL`, one personal
   namespace with folders at the top and "/" as their delimiter, and no other
   users' or shared namespaces. Part of IMAP4rev2
   (rest-mail/rest-mail-server#718).
+
 - LITERAL- (RFC 7888 §5): the server advertises it, so a client may send
   `{n+}` literals of up to 4096 octets with no continuation round trip. A
   larger one, as a command argument or in APPEND, gets `BAD [TOOBIG]` and
   `BYE [TOOBIG]`, and the session ends without running its octets; APPEND's
   oversized `{n+}` message was a NO before. Part of IMAP4rev2
   (rest-mail/rest-mail-server#718).
+
 - SASL-IR (RFC 4959): AUTHENTICATE takes the initial client response on
   the command line (`AUTHENTICATE PLAIN <base64>`, or `=` for an empty one),
   saving a round trip at sign-in, and SASL-IR is advertised beside
@@ -52,10 +106,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- LIST with a pattern ending in `%` now returns a level of hierarchy that is
-  not itself a folder, with `\Noselect` (RFC 3501 §6.3.8): with only
-  `Music/Rock`, `LIST "" %` used to leave `Music` out, so a client showing the
-  top level never offered it.
 - RFC 3501 §9's rules every line shares (#374). A status response's code is
   followed by text (`resp-text = ["[" resp-text-code "]" SP] text`), but
   SELECT and EXAMINE sent `* OK [UNSEEN n]`, `[UIDVALIDITY n]`, `[UIDNEXT n]`
@@ -68,6 +118,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   UNSELECT and STARTTLS already did. LOGIN takes exactly two astrings: extra
   arguments, invalid escapes and atom-specials get BAD without the
   credentials being checked.
+
+## [0.10.0] - 2026-10-24
+
+### Fixed
+
 - `Server.Shutdown` closed no session that was waiting for a command or
   idling, so it waited for clients that would never finish, and a caller then
   used `Close`, which drops every connection without a word. RFC 3501 §3.4: "A
@@ -77,15 +132,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   at once, one running a command finishes it, then does the same. Checklist row
   IMAP-STATE-01.
 
-### Fixed
-
-- NOOP and CHECK never re-read the selected mailbox, so a client that polls
-  with NOOP rather than IDLE saw no new mail, expunge or flag change until it
-  selected the mailbox again. RFC 3501 calls NOOP the preferred way to poll
-  (§6.1.2), CHECK equivalent to NOOP without housekeeping (§6.4.1), and
-  requires size updates (§5.2). Both now report what other sources changed:
-  EXPUNGE, FETCH FLAGS and EXISTS, as an idling session already did.
-  Checklist rows IMAP-UPDATE-01 to -04 and IMAP-AUTOLOGOUT-01.
+## [0.9.0] - 2026-10-24
 
 ### Changed
 
@@ -101,6 +148,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   folders to their decoded names. Checklist rows IMAP-MUTF7-01 to -05,
   `FuzzModifiedUTF7` (rest-mail/go-imap#145).
 
+### Fixed
+
+- NOOP and CHECK never re-read the selected mailbox, so a client that polls
+  with NOOP rather than IDLE saw no new mail, expunge or flag change until it
+  selected the mailbox again. RFC 3501 calls NOOP the preferred way to poll
+  (§6.1.2), CHECK equivalent to NOOP without housekeeping (§6.4.1), and
+  requires size updates (§5.2). Both now report what other sources changed:
+  EXPUNGE, FETCH FLAGS and EXISTS, as an idling session already did.
+  Checklist rows IMAP-UPDATE-01 to -04 and IMAP-AUTOLOGOUT-01.
+
+## [0.8.0] - 2026-10-24
+
 ### Added
 
 - `Session.SetIdlePollInterval` and `Server.SetIdlePollInterval` set how often an
@@ -109,6 +168,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   rows IMAP-STORE-11 (FLAGS leaves \Recent alone) and IMAP-STORE-12 (another
   source's flag change is reported whatever .SILENT says) complete the RFC 3501
   §6.4.6 STORE audit.
+
 - SEARCH NEW and OLD, which were refused as unknown keys, now answer what
   their RFC 3501 §6.4.4 equivalents answer: (RECENT UNSEEN) and NOT RECENT.
   Checklist row IMAP-SEARCH-27.
@@ -118,29 +178,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - SEARCH FROM matched only the sender's address; it now matches the envelope's
   FROM field, the decoded display name as well as the address (RFC 3501
   §6.4.4). Checklist row IMAP-SEARCH-26.
+
 - SEARCH TO compared the recipient list with its encoded words undecoded; it
   now decodes them first, as SUBJECT and FROM do (RFC 3501 §6.4.4). Checklist
   row IMAP-SEARCH-28, which also tests DELETED, UNDELETED and UNFLAGGED.
+
 - BODY[HEADER.FIELDS] and BODY[HEADER.FIELDS.NOT] added a blank line to a
   message that has no body and no blank line; RFC 3501 §6.4.5 includes the
   blank line in every header fetch except that one. A message that starts
   with the blank line now has that line alone as its header, and the rest
   as its text, at the top level as in MIME parts. Checklist row
   IMAP-FETCH-24.
-- RFC 6855 UTF8=ACCEPT, for a backend that implements `UTF8Mailbox`:
-  - quoted-strings take UTF-8, and typed 8-bit text that is not UTF-8 is
-    BAD;
-  - CREATE and RENAME refuse mailbox names with controls, DELETE or the
-    Unicode line and paragraph separators;
-  - SEARCH with a CHARSET is BAD once UTF-8 is enabled;
-  - APPEND takes the message as `UTF8 (~{n})`, and a message with 8-bit header
-    fields is NO until the client has enabled UTF-8.
-  Backends without `UTF8Mailbox` are unchanged. Checklist rows IMAP-UTF8-01 to
-  -05.
-- RFC 6154 SPECIAL-USE: the capability is advertised, and LIST takes the
-  `(SPECIAL-USE)` selection option, which lists only the folders with a role,
-  and the `RETURN (SPECIAL-USE)` return option. Any other extended-LIST option
-  is BAD. Checklist row IMAP-SPECIALUSE-07.
+
+## [0.7.0] - 2026-10-24
 
 ### Changed
 
@@ -152,51 +202,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- An unknown MIME Content-Transfer-Encoding now overrides Content-Type as
-  application/octet-stream in BODY/BODYSTRUCTURE, numeric FETCH sections and
-  SEARCH (RFC 2045 §6.4). Previously a declared text charset could transform
-  undecodable octets, and declared multipart/message types could expose
-  fabricated nested structures and decoded search matches. Raw FETCH and the
-  original encoding string are preserved.
+- RFC 6154 SPECIAL-USE: the capability is advertised, and LIST takes the
+  `(SPECIAL-USE)` selection option, which lists only the folders with a role,
+  and the `RETURN (SPECIAL-USE)` return option. Any other extended-LIST option
+  is BAD. Checklist row IMAP-SPECIALUSE-07.
+
+## [0.6.0] - 2026-10-23
+
+### Fixed
+
+- RFC 6855 UTF8=ACCEPT, for a backend that implements `UTF8Mailbox`:
+  - quoted-strings take UTF-8, and typed 8-bit text that is not UTF-8 is
+    BAD;
+  - CREATE and RENAME refuse mailbox names with controls, DELETE or the
+    Unicode line and paragraph separators;
+  - SEARCH with a CHARSET is BAD once UTF-8 is enabled;
+  - APPEND takes the message as `UTF8 (~{n})`, and a message with 8-bit header
+    fields is NO until the client has enabled UTF-8.
+  Backends without `UTF8Mailbox` are unchanged. Checklist rows IMAP-UTF8-01 to
+  -05.
 
 - A multipart Content-Type without a boundary parameter, which RFC 2046
   §5.1.1 requires, now takes the RFC 2045 §5.2 default type (text/plain;
   charset=us-ascii, or message/rfc822 inside multipart/digest) in BODY,
   BODYSTRUCTURE, numeric FETCH sections and SEARCH. BODYSTRUCTURE used to
   report it as a leaf "MULTIPART" body, which no client can open.
-- A MESSAGE/RFC822 entity with a Content-Transfer-Encoding other than 7bit,
-  8bit or binary, which RFC 2046 §5.2.1 prohibits, is now one opaque
-  APPLICATION/OCTET-STREAM leaf in BODY, BODYSTRUCTURE and numeric FETCH
-  sections, and SEARCH BODY matches its decoded text. Its encoded octets used
-  to be parsed as if they were the encapsulated message (RFC 3501 §7.4.2).
-- MIME nesting is now bounded at depth 64 for BODY, BODYSTRUCTURE, numeric
-  FETCH sections and SEARCH alike. A multipart or MESSAGE/RFC822 entity at that
-  depth is one opaque APPLICATION/OCTET-STREAM leaf. BODYSTRUCTURE and section
-  FETCH used to recurse without a limit, while SEARCH stopped at a different
-  depth (RFC 3501 §7.4.2).
-- SEARCH BODY and TEXT now decode the encapsulated message of a message whose
-  own Content-Type is message/rfc822, as BODYSTRUCTURE already describes it;
-  its body used to be searched as stored (RFC 3501 §6.4.4).
 
-- The FETCH section fuzz check now allows filtered headers to join selected
-  lines and supply their terminating blank line instead of incorrectly requiring
-  a contiguous substring of the stored message.
-- A command line with no tag and command now gets an untagged `BAD`; it used to
-  be dropped without a reply, so the client waited forever (RFC 3501 §7.1.3).
-- LIST and LSUB now prefix a non-empty reference name to the mailbox pattern,
-  and an empty pattern returns the reference's root name; the reference used to
-  be ignored (RFC 3501 §6.3.8).
-- AUTHENTICATE PLAIN now refuses an authorization identity naming another user
-  with NO; it used to log in as the authentication identity and ignore the
-  requested one (RFC 3501 §6.2.2, RFC 4616 §2).
-- LOGIN and AUTHENTICATE now get BAD once the session is authenticated; a
-  second LOGIN used to switch user mid-session (RFC 3501 §6.2).
-- AUTHENTICATE without a mechanism name now gets BAD, not NO, and CHECK with an
-  argument gets BAD instead of OK (RFC 3501 §§6.2.2, 6.4.1).
-- LSUB now answers with untagged `LSUB` replies and `OK LSUB completed`; it
-  used to send `LIST` replies (RFC 3501 §7.2.3).
-- RENAME now carries inferior hierarchical names with the renamed folder, so
-  `RENAME Work Play` also moves `Work/Q1` to `Play/Q1` (RFC 3501 §6.3.5).
+## [0.5.0] - 2026-10-22
 
 ### Added
 
@@ -207,54 +239,169 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   RFC 6851 §3.3); other backend errors keep a plain NO. IMAP-APPEND-18,
   IMAP-COPY-13, IMAP-MOVE-11 and IMAP-RESP-09 are now mapped; partial
   checklist is 281/331.
+
 - IMAP-GREET-02 (RFC 3501 §§7.1.5, 9): a wire test through the public `Server`
   proves a `Limiter`-refused connection gets a BYE greeting. Partial checklist
   is 277/331 mapped.
+
 - Twenty RFC 3501 §6.5/§7 checklist rows from a dated line-by-line audit of
   server responses: ten mapped (four new wire tests), ten explicit gaps or
   client-only duties. Combined partial checklist is 276/330 mapped.
+
 - Twenty-two RFC 3501 checklist rows from a dated line-by-line audit of §§6.1,
   6.2 (AUTHENTICATE now has its own rows), 6.3.1, 6.3.2, 6.3.10, 6.3.11 and the
   CHECK, CLOSE, EXPUNGE, COPY and UID parts of §6.4: seventeen mapped to four
   new wire tests and existing ones, five n/a with reasons. LIST-04 is now
   mapped. Partial checklist is 266/310 mapped.
+
 - Twenty-two RFC 3501 §§6.3.3–6.3.9 checklist rows from a dated line-by-line
   audit of CREATE, DELETE, RENAME, SUBSCRIBE, UNSUBSCRIBE, LIST and LSUB: ten
   mapped to five new wire tests, twelve explicit gaps from the implicit-folder
   model. Partial checklist is 248/288 mapped.
+
 - Sixteen RFC 4315/6154 checklist rows for APPENDUID and ordinary LIST
   special-use attributes: eleven mapped to seven new public-Session wire tests,
   five explicit API/extension gaps. Partial checklist is 238/266 mapped.
+
 - Thirteen new checked RFC 2177/3691/5161 requirements with public-Session
   wire proofs for IDLE, UNSELECT and ENABLE; partial checklist is 227/250 mapped.
+
 - README badges for the 95% coverage gate and the partial checklist's mapped
   count. `TestReadmeCoverageBadge` reads the minimum from
   `.github/scripts/check_coverage.py`; `TestReadmeChecklistBadge` runs the real
   checker before deriving the count, so neither badge can go stale.
+
 - CI now measures race-test statement coverage across all packages, including
   the external RFC wire proofs, and fails below 95%. Offline fixtures exercise
   the gate's boundary, malformed reports and failed coverage pipelines.
   `COVERAGE.md` records the measurement policy and remaining uncovered branches.
+
 - Session wire tests cover quota and LIST backend failures, mailbox-management
   validation and moves, state refusals, malformed FETCH/STORE/UID requests and
   authentication syntax recovery. Sequential package coverage reaches 96.1%
   on Go 1.25.10, up from the initial CI baseline of 93.0%.
+
 - SEARCH supports KEYWORD and UNKEYWORD (RFC 3501 §6.4.4). No keyword is
   stored, so KEYWORD matches nothing and UNKEYWORD matches every message; a
   missing or non-atom operand is BAD.
+
 - SEARCH BODY, TEXT, HEADER, CC, BCC and SUBJECT match decoded text: base64 and
   quoted-printable parts (including inside MESSAGE/RFC822), ISO-8859-1 content
   and RFC 2047 encoded words are decoded to UTF-8 first (RFC 3501 §6.4.4).
+
 - Wire proofs map IMAP-STARTTLS-08, IMAP-STORE-06, IMAP-SEARCH-10 and
   IMAP-SEARCH-11; the checklist reaches 214/237 mapped rows.
 
+- Optional `UTF8Mailbox` interface for RFC 6855 `UTF8=ACCEPT`. When the
+  authenticated `Mailbox` implements it, CAPABILITY lists `UTF8=ACCEPT` and
+  `ENABLE UTF8=ACCEPT` (authenticated state only) calls `EnableUTF8` once
+  and answers `* ENABLED UTF8=ACCEPT`. A backend error fails ENABLE with NO
+  and leaves the mode off. Backends without it are unchanged. UTF-8 mailbox
+  names and the APPEND `UTF8` data extension are not implemented yet.
+
+- Checklist rows IMAP-LITERAL-10/11 with public-Session wire tests: an
+  overlong AUTHENTICATE response is refused with tagged BAD before any
+  credential check, and an overlong line while idling is ignored without
+  ending IDLE. Both keep the session whatever the line ends in, since neither
+  position admits a literal (RFC 3501 §9, RFC 2177 §3). No behavior change.
+
+- Partial APPEND checklist and public-Session wire proofs for the RFC 3501
+  example, message octets, flags/dates, selected-state notifications, backend
+  refusal, literal grammar, non-synchronizing continuation behavior and
+  incomplete commands. Storage, flag, date, grammar and extension gaps remain
+  explicit in CHECKLIST.md.
+
+- Partial EXPUNGE/CLOSE and RFC 4315 UID EXPUNGE checklist rows and external
+  wire proofs for RFC examples, sequence renumbering, UID filtering, backend
+  failure/retry, read-only operation, arguments and selection state. Persistent
+  Deleted flags, CLOSE deletion failures and strict UID-set validation are
+  explicit gaps.
+
+- A partial FETCH/UID FETCH checklist and external wire proofs for literal
+  octets, sections/aliases, header subsets, partial ranges, metadata/macros,
+  sparse UID replies, backend errors and read-only flags, including the RFC
+  3501 §§6.4.5/6.4.8 examples. Numeric MIME sections and strict argument
+  validation are explicit unsupported gaps.
+
+- A partial SEARCH/UID SEARCH checklist and public-session wire proofs for
+  RFC 3501 examples, Boolean criteria, sparse UID/sequence sets, calendar-date
+  boundaries, charsets, malformed criteria and selection state. MIME decoding,
+  unsupported standard keys and independent Recent search are explicit gaps.
+
+- Checked STORE/UID STORE rows and public-session wire tests, including the
+  RFC 3501 §6.4.6 example, .SILENT, UID reporting and backend refusal. Keyword
+  storage is recorded as unsupported.
+
+- Checked SELECT/EXAMINE selection-state rows and public-session wire tests,
+  including the RFC 3501 examples, failed/replacement selection and read-only
+  write prevention. Recent, persistent UID metadata and permission gaps are
+  explicitly recorded; the checklist remains partial.
+
+- **A partial, checked RFC 3501 checklist** (`CHECKLIST.md`). Its first seven
+  rows cover the greeting, CAPABILITY, NOOP, LOGOUT, LOGIN and tagged
+  completion; each names a wire test in `internal/rfctest` that drives a public
+  `Session`. CI runs `go run ./internal/checklist internal/rfctest`, which fails
+  on a row with no test, a test naming an unknown row, or a duplicate ID.
+
 ### Fixed
+
+- An unknown MIME Content-Transfer-Encoding now overrides Content-Type as
+  application/octet-stream in BODY/BODYSTRUCTURE, numeric FETCH sections and
+  SEARCH (RFC 2045 §6.4). Previously a declared text charset could transform
+  undecodable octets, and declared multipart/message types could expose
+  fabricated nested structures and decoded search matches. Raw FETCH and the
+  original encoding string are preserved.
+
+- A MESSAGE/RFC822 entity with a Content-Transfer-Encoding other than 7bit,
+  8bit or binary, which RFC 2046 §5.2.1 prohibits, is now one opaque
+  APPLICATION/OCTET-STREAM leaf in BODY, BODYSTRUCTURE and numeric FETCH
+  sections, and SEARCH BODY matches its decoded text. Its encoded octets used
+  to be parsed as if they were the encapsulated message (RFC 3501 §7.4.2).
+
+- MIME nesting is now bounded at depth 64 for BODY, BODYSTRUCTURE, numeric
+  FETCH sections and SEARCH alike. A multipart or MESSAGE/RFC822 entity at that
+  depth is one opaque APPLICATION/OCTET-STREAM leaf. BODYSTRUCTURE and section
+  FETCH used to recurse without a limit, while SEARCH stopped at a different
+  depth (RFC 3501 §7.4.2).
+
+- SEARCH BODY and TEXT now decode the encapsulated message of a message whose
+  own Content-Type is message/rfc822, as BODYSTRUCTURE already describes it;
+  its body used to be searched as stored (RFC 3501 §6.4.4).
+
+- The FETCH section fuzz check now allows filtered headers to join selected
+  lines and supply their terminating blank line instead of incorrectly requiring
+  a contiguous substring of the stored message.
+
+- A command line with no tag and command now gets an untagged `BAD`; it used to
+  be dropped without a reply, so the client waited forever (RFC 3501 §7.1.3).
+
+- LIST and LSUB now prefix a non-empty reference name to the mailbox pattern,
+  and an empty pattern returns the reference's root name; the reference used to
+  be ignored (RFC 3501 §6.3.8).
+
+- AUTHENTICATE PLAIN now refuses an authorization identity naming another user
+  with NO; it used to log in as the authentication identity and ignore the
+  requested one (RFC 3501 §6.2.2, RFC 4616 §2).
+
+- LOGIN and AUTHENTICATE now get BAD once the session is authenticated; a
+  second LOGIN used to switch user mid-session (RFC 3501 §6.2).
+
+- AUTHENTICATE without a mechanism name now gets BAD, not NO, and CHECK with an
+  argument gets BAD instead of OK (RFC 3501 §§6.2.2, 6.4.1).
+
+- LSUB now answers with untagged `LSUB` replies and `OK LSUB completed`; it
+  used to send `LIST` replies (RFC 3501 §7.2.3).
+
+- RENAME now carries inferior hierarchical names with the renamed folder, so
+  `RENAME Work Play` also moves `Work/Q1` to `Play/Q1` (RFC 3501 §6.3.5).
 
 - A connection the `Limiter` refuses is greeted with `* BYE` before the
   server closes it (RFC 3501 §7.1.5), instead of being dropped with no
   greeting. The write runs off the accept loop under a 5-second deadline.
+
 - ENABLE always sends an ENABLED response on success, even when empty, and
   rejects missing or malformed capability atoms before enabling any mode.
+
 - UNSELECT returns BAD without a selected mailbox, as RFC 3691 requires.
   UNSELECT and IDLE reject extra arguments without changing selection state.
 
@@ -284,6 +431,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Removals that succeeded are reported as EXPUNGE so sequence numbers stay
   valid, and failed messages keep their Deleted mark so CLOSE can be retried.
   A CLOSE whose deletions all succeed still sends no EXPUNGE.
+
 - FETCH BODY[section] and BODY.PEEK[section] resolve numeric MIME part
   paths (RFC 3501 §6.4.5) instead of returning the whole message: multipart
   parts, part 1 of a non-multipart message, MESSAGE/RFC822 encapsulation
@@ -421,6 +569,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   parenthesized groups. Invalid list/range members previously could be ignored
   or resolved as zero. Adds checked RFC 3501 wire tests for rejection, session
   recovery and valid reversed/star/overlapping/unsigned-32-bit boundary sets.
+
 - STORE and UID STORE now reject malformed sequence sets with BAD before
   changing flags, rather than silently applying valid portions of malformed
   lists/ranges. Checked RFC 3501 wire tests prove rejection without backend or
@@ -511,6 +660,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   encoded octet sizes and physical line counts instead of silently decoding
   parts and reporting them as 7BIT. Adds partial RFC 3501 §7.4.2 checklist rows,
   public-Session wire tests and both RFC example structures with synthetic bodies.
+
 - Top-level FETCH ENVELOPE now takes Subject and the original Date text from
   the raw headers. Missing Date/Subject/From/To no longer fabricate values from
   cached metadata or INTERNALDATE; empty scalar headers remain empty strings.
@@ -522,17 +672,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - STARTTLS with arguments now returns BAD instead of starting a TLS negotiation
   (RFC 3501 §6.2.1). Adds partial RFC 3501/RFC 2595 STARTTLS checklist rows and
   public-Session wire tests over a real TLS handshake.
+
 - MOVE and UID MOVE now stop at the first backend failure and return NO, still
   sending EXPUNGE (and COPYUID) for the messages already moved, instead of
   ignoring failures and reporting successful completion.
+
 - Overlapping UID MOVE sets move each message once, preventing duplicate backend
   moves, duplicate COPYUID members and repeated EXPUNGEs that dropped an
   unrelated message from the session view. Adds partial RFC 6851 checklist rows
   and public-Session wire tests.
+
 - COPY and UID COPY now stop at the first backend failure and return NO without
   COPYUID, instead of ignoring failures and reporting successful completion.
   Earlier destination copies cannot be rolled back through the current backend
   API; that RFC gap is documented explicitly.
+
 - Overlapping UID COPY sets copy each source message once, preventing duplicate
   destination messages and duplicate source UIDs in COPYUID. Adds partial RFC
   3501/RFC 4315 checklist rows and public-Session wire tests with RFC examples.
@@ -562,19 +716,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - APPEND validates its complete terminal message-literal marker instead of
   ignoring extra arguments or accepting signed lengths. Accepted `{n+}` message
   literals no longer receive an incorrect continuation.
+
 - APPEND requires the command's CRLF before invoking the backend. Incomplete
   reads and malformed terminators close the connection without storing a
   message, instead of ignoring terminator read failures or trailing text.
+
 - APPEND recognizes supported system flag names case-insensitively.
 
 - EXPUNGE and UID EXPUNGE now return NO when any backend deletion fails,
   preserving failed messages and their deletion marks for retry. Successful
   removals still emit EXPUNGE responses; multi-message removal is not atomic.
+
 - EXPUNGE and CLOSE reject extra arguments with BAD before changing state.
   EXPUNGE outside the selected state now returns BAD rather than NO.
 
 - FETCH and UID FETCH now return NO when requested message data cannot be
   loaded, instead of OK with omitted data or a partial ENVELOPE fallback.
+
 - Implicit Seen writes must succeed before FETCH emits the changed flags or
   body; backend refusal returns NO without phantom session flags. EXAMINE
   body responses no longer echo Seen when no flag change was made.
@@ -582,6 +740,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - SEARCH and UID SEARCH compare BEFORE/SINCE against the message's internal
   calendar date, ignoring its time and timezone as RFC 3501 requires, instead
   of comparing UTC instants. ON uses the same date-only comparison.
+
 - SEARCH and UID SEARCH reject missing keys and empty parenthesized groups
   with BAD, including empty groups nested under NOT/OR, instead of treating
   them as valid criteria.
@@ -589,62 +748,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `STORE` and `UID STORE` now answer `NO` when the backend refuses a flag
   write, and restore the message's session flags, instead of reporting `OK`
   with flags the mailbox never stored.
+
 - SELECT/EXAMINE's `UNSEEN` response now identifies the first unseen message's
   sequence number, rather than the unread count. Empty or fully seen mailboxes
   omit the code instead of emitting the invalid sequence number zero.
+
 - Non-peek `FETCH` and `UID FETCH` no longer set `\Seen` in a mailbox opened
   by `EXAMINE`, preserving both backend and session flags in read-only mode.
-
-### Added
-
-- Optional `UTF8Mailbox` interface for RFC 6855 `UTF8=ACCEPT`. When the
-  authenticated `Mailbox` implements it, CAPABILITY lists `UTF8=ACCEPT` and
-  `ENABLE UTF8=ACCEPT` (authenticated state only) calls `EnableUTF8` once
-  and answers `* ENABLED UTF8=ACCEPT`. A backend error fails ENABLE with NO
-  and leaves the mode off. Backends without it are unchanged. UTF-8 mailbox
-  names and the APPEND `UTF8` data extension are not implemented yet.
-- Checklist rows IMAP-LITERAL-10/11 with public-Session wire tests: an
-  overlong AUTHENTICATE response is refused with tagged BAD before any
-  credential check, and an overlong line while idling is ignored without
-  ending IDLE. Both keep the session whatever the line ends in, since neither
-  position admits a literal (RFC 3501 §9, RFC 2177 §3). No behavior change.
-
-- Partial APPEND checklist and public-Session wire proofs for the RFC 3501
-  example, message octets, flags/dates, selected-state notifications, backend
-  refusal, literal grammar, non-synchronizing continuation behavior and
-  incomplete commands. Storage, flag, date, grammar and extension gaps remain
-  explicit in CHECKLIST.md.
-
-- Partial EXPUNGE/CLOSE and RFC 4315 UID EXPUNGE checklist rows and external
-  wire proofs for RFC examples, sequence renumbering, UID filtering, backend
-  failure/retry, read-only operation, arguments and selection state. Persistent
-  Deleted flags, CLOSE deletion failures and strict UID-set validation are
-  explicit gaps.
-
-- A partial FETCH/UID FETCH checklist and external wire proofs for literal
-  octets, sections/aliases, header subsets, partial ranges, metadata/macros,
-  sparse UID replies, backend errors and read-only flags, including the RFC
-  3501 §§6.4.5/6.4.8 examples. Numeric MIME sections and strict argument
-  validation are explicit unsupported gaps.
-
-- A partial SEARCH/UID SEARCH checklist and public-session wire proofs for
-  RFC 3501 examples, Boolean criteria, sparse UID/sequence sets, calendar-date
-  boundaries, charsets, malformed criteria and selection state. MIME decoding,
-  unsupported standard keys and independent Recent search are explicit gaps.
-
-- Checked STORE/UID STORE rows and public-session wire tests, including the
-  RFC 3501 §6.4.6 example, .SILENT, UID reporting and backend refusal. Keyword
-  storage is recorded as unsupported.
-- Checked SELECT/EXAMINE selection-state rows and public-session wire tests,
-  including the RFC 3501 examples, failed/replacement selection and read-only
-  write prevention. Recent, persistent UID metadata and permission gaps are
-  explicitly recorded; the checklist remains partial.
-
-- **A partial, checked RFC 3501 checklist** (`CHECKLIST.md`). Its first seven
-  rows cover the greeting, CAPABILITY, NOOP, LOGOUT, LOGIN and tagged
-  completion; each names a wire test in `internal/rfctest` that drives a public
-  `Session`. CI runs `go run ./internal/checklist internal/rfctest`, which fails
-  on a row with no test, a test naming an unknown row, or a duplicate ID.
 
 ## [0.4.0] - 2026-07-26
 
