@@ -21,24 +21,30 @@ func (s *Session) resolveUIDValidity(folder string) uint32 {
 // handleSelect implements SELECT (readOnly=false) and EXAMINE (readOnly=true).
 // EXAMINE opens the mailbox read-only (RFC 3501 §6.3.2): the tagged OK carries
 // [READ-ONLY] and s.readOnly is set so state-mutating commands are refused.
+// deselect leaves the selected state, as a SELECT or EXAMINE does before it
+// attempts the new selection: "if a SELECT command that fails is attempted, no
+// mailbox is selected" (RFC 3501 §6.3.1). Without it a later FETCH, STORE or
+// SEARCH would keep operating on the previously selected mailbox. \Deleted
+// marks are keyed by folder-scoped UIDs, so they must not carry over either
+// (otherwise EXPUNGE could delete a same-numbered UID in the new mailbox).
+func (s *Session) deselect() {
+	s.selected = nil
+	s.readOnly = false
+	s.messages = nil
+	s.saved = nil
+	s.deleted = make(map[uint32]bool)
+}
+
 func (s *Session) handleSelect(tag, args string, readOnly bool) {
 	if !s.auth.authenticated {
 		s.tagged(tag, "NO", "Not authenticated")
 		return
 	}
 
-	// SELECT/EXAMINE begins a new selection (RFC 3501 §6.3.1/§6.3.2), and "if a
-	// SELECT command that fails is attempted, no mailbox is selected." Drop any
-	// prior selection up front so that a failure below leaves the session in the
-	// authenticated-but-unselected state — otherwise a later FETCH/STORE/SEARCH
-	// would keep operating on the previously selected mailbox. \Deleted marks are
-	// keyed by folder-scoped UIDs, so they must not carry over either (otherwise
-	// EXPUNGE could delete a same-numbered UID in the new mailbox).
-	s.selected = nil
-	s.readOnly = false
-	s.messages = nil
-	s.saved = nil
-	s.deleted = make(map[uint32]bool)
+	// SELECT/EXAMINE begins a new selection (RFC 3501 §6.3.1/§6.3.2): drop any
+	// prior selection up front so that a failure below leaves no mailbox
+	// selected.
+	s.deselect()
 
 	// SELECT and EXAMINE take exactly one mailbox astring (RFC 3501 §9).
 	// Literal arguments were materialized by readLiteralArgs; retain their
