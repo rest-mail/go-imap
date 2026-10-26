@@ -15,9 +15,11 @@ in `pkg/imap/rfctest` asserts the stated behavior through the public
 
 The first-pass RFC 9051 inventory below also records shared rev1 proofs,
 unsupported rev2 behavior, host-backend obligations and client-only duties.
-It is not yet an exhaustive inventory: a production-by-production ABNF audit,
-non-keyword protocol rules and the remaining extension specifications still
-need reconciliation. The engine continues to advertise IMAP4rev1 only.
+The [core grammar crosswalk](RFC-GRAMMAR.md) now lists every named section-9
+production, with its existing proof families and boundaries, against a pinned
+source index. This structural inventory does not prove every alternative or
+implicit value constraint. Non-keyword protocol rules and the remaining
+extension specifications still need reconciliation. The engine continues to advertise IMAP4rev1 only.
 
 Requirements below paraphrase [RFC 3501](https://www.rfc-editor.org/rfc/rfc3501.txt)
 and [RFC 9051](https://www.rfc-editor.org/rfc/rfc9051.txt).
@@ -851,12 +853,33 @@ as there are no remote mailboxes.
 | IMAP-LISTEXT-05 | RFC 5258 §3 | SHOULD | Several patterns in parentheses: a name matching any is answered once (example 7); an extended LIST ignores an empty pattern instead of treating it as the delimiter request. | TestListMultiplePatterns |
 | IMAP-LISTEXT-06 | RFC 5258 §§3, 3.1 | MUST | An unknown selection or return option is BAD; RECURSIVEMATCH alone or with only REMOTE is BAD; an unterminated pattern list is BAD. | TestListExtendedRefusals |
 
+## RFC 2087: account-wide QUOTA reporting
+
+The backend exposes one account-wide root named by the empty astring, with
+STORAGE usage and limit in bytes. It has no quota setter, extra resource model
+or separate unlimited marker. Read-side proofs below do not claim those features.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-QUOTA-01 | RFC 2087 §§3, 6 | MUST | Advertised QUOTA commands and resource names are case-insensitive; the supported account root is the empty astring. | TestQuotaExchange |
+| IMAP-QUOTA-02 | RFC 2087 §§4.2, 4.3, 6; RFC 3501 §§4.3, 9 | Normative | GETQUOTA and GETQUOTAROOT take exactly one astring, with quoted escapes or a counted literal; malformed, missing or extra arguments get BAD before quota access. | TestQuotaArguments, TestQuotaLiteralArguments |
+| IMAP-QUOTA-03 | RFC 2087 §§4.2, 4.3 | Normative | An unknown root or mailbox gets NO without fabricated quota data; mailbox existence is checked before reading its root usage. | TestQuotaArguments, TestQuotaLookupFailures |
+| IMAP-QUOTA-04 | RFC 2087 §§3, 4.2, 5.1 | Normative | GETQUOTA returns the root and STORAGE usage/limit triplet in 1024-octet units, followed by tagged OK. | TestQuotaExchange |
+| IMAP-QUOTA-05 | RFC 2087 §§4.3, 5.2, 6 | Normative | GETQUOTAROOT decodes its mailbox astring, emits that mailbox and its empty-name account root as properly encoded astrings, then emits the root quota before OK. | TestQuotaExchange, TestQuotaLiteralArguments |
+| IMAP-QUOTA-06 | RFC 2087 §8; RFC 3501 §6.3 | Normative | Unauthenticated requests reveal no quota values and do not call the authenticated account's quota backend. | TestQuotaExchange |
+| IMAP-QUOTA-07 | RFC 2087 §§4.2, 4.3 | Normative | Folder-list or quota lookup failure returns NO without leaking backend details or emitting a partial QUOTAROOT/QUOTA reply. | TestQuotaLookupFailures |
+| IMAP-QUOTA-08 | RFC 2087 §6; RFC 3501 §9 (number) | Normative | Resource triplets contain unsigned 32-bit numbers; negative or overflowing backend values are refused before any untagged reply, while the maximum is representable. | TestQuotaValueBounds |
+| IMAP-QUOTA-09 | RFC 2087 §4.1 | Normative | SETQUOTA replaces all limits of the named root and returns the resulting quota. | n/a: not implemented. Mailbox has only a read-side Quota method and no quota mutation/administrator interface; SETQUOTA remains an unknown command. This is a known extension limitation, not a completed configuration feature; rest-mail/rest-mail-server#374. |
+| IMAP-QUOTA-10 | RFC 2087 §5.1 | Normative | Omit resources without administrative limits; an empty resource list means the root has no resource limits. | n/a: the current backend always returns one STORAGE usage/limit pair and cannot distinguish an unlimited resource from a zero-byte cap. The existing zero-value interpretation is preserved, not silently decided by this audit; rest-mail/rest-mail-server#374. |
+| IMAP-QUOTA-11 | RFC 2087 §3 | Normative | Mailboxes sharing a named root share its resource limits and actual resource accounting. | n/a: enforcement and durable accounting belong to the host backend. The engine reports the authenticated account's single Quota result but cannot enforce storage mutations performed outside it. |
+| IMAP-QUOTA-12 | RFC 2087 §3 | MAY | Support implementation-defined resource types and multiple named roots. | n/a: the backend deliberately exposes only account-wide STORAGE with the empty root name; other resource/root types are not modeled. |
+
 ## RFC 2342: NAMESPACE
 
 | ID | Section | Level | Requirement | Tests |
 |----|---------|-------|-------------|-------|
 | IMAP-NAMESPACE-01 | RFC 2342 §§4, 5 | Normative | NAMESPACE is advertised, and answers one untagged NAMESPACE before OK: the personal namespace with prefix "" and the hierarchy delimiter LIST gives ("/"), and NIL for the other users' and shared classes, which the server does not have (example 5.1), in the authenticated and selected states. | TestNamespace |
-| IMAP-NAMESPACE-02 | RFC 2342 §5 | Normative | NAMESPACE takes no arguments (BAD otherwise), and before authentication answers NO with no NAMESPACE response. | TestNamespace |
+| IMAP-NAMESPACE-02 | RFC 2342 §5 | Normative | NAMESPACE takes no arguments (BAD otherwise), and before authentication answers NO with no NAMESPACE response. | TestNamespace, TestNamespaceNoArguments |
 
 ## RFC 7888: LITERAL-, non-synchronizing literals up to 4096 octets
 
