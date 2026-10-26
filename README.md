@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 473/646 mapped](https://img.shields.io/badge/partial%20checklist-473%2F646%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 495/702 mapped](https://img.shields.io/badge/partial%20checklist-495%2F702%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap/pkg/imap/server)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -345,7 +345,20 @@ row names the wire tests in [`pkg/imap/rfctest`](pkg/imap/rfctest) that prove
 it: they drive a public `server.Session` over `net.Pipe`, as a client would.
 Rows the library does not meet, or that belong to the host or the client, are
 `n/a` with the reason. The checklist is growing; it is not a full conformance
-claim.
+claim. The [core grammar crosswalk](RFC-GRAMMAR.md) inventories all
+section-9 production names independently of the narrower wire-test claims.
+
+[RFC-SESSION-EXTENSIONS.md](RFC-SESSION-EXTENSIONS.md) records the grouped
+seven-spec negotiation/session audit, source pins, narrow proofs and explicit
+host/client/unsupported boundaries. PLAIN grammar and base64 refusals, required
+credential lengths, ENABLE pipelining, literal framing and live IDLE updates
+have focused wire regressions. Core and other-extension reconciliation remains.
+
+[RFC-MAILBOX-EXTENSIONS.md](RFC-MAILBOX-EXTENSIONS.md) groups the five mailbox
+discovery/status specifications with source pins, narrow wire proofs and explicit
+host/client/unsupported boundaries. It records the SIZE numeric guard and
+LIST-STATUS race, recursive-selection and duplicate-option corrections; wider
+core/search/message reconciliation remains.
 
 [RFC-MESSAGE-EXTENSIONS.md](RFC-MESSAGE-EXTENSIONS.md) groups six search/message
 specifications with source pins, BINARY text canonicalization, saved-search/UID
@@ -390,7 +403,7 @@ reason.
 
 | Area | What go-imap does | Why |
 |------|-------------------|-----|
-| Authentication | PLAIN and LOGIN only: no challenge-response mechanism (CRAM-MD5, DIGEST-MD5, SCRAM), EXTERNAL or ANONYMOUS. | PLAIN is only offered inside TLS, as mainstream clients expect. CRAM-MD5 and DIGEST-MD5 are obsolete and need passwords stored in plaintext-equivalent form. SCRAM needs a second, SCRAM-specific credential store and helps only when TLS is already broken. ANONYMOUS has no use on a server of personal accounts. |
+| Authentication | PLAIN and LOGIN only: no challenge-response mechanism (CRAM-MD5, DIGEST-MD5, SCRAM), EXTERNAL or ANONYMOUS. | When a TLS config is supplied, PLAIN is only offered inside TLS. A nil TLS config explicitly permits development/legacy cleartext authentication. CRAM-MD5 and DIGEST-MD5 are obsolete and need passwords stored in plaintext-equivalent form. SCRAM needs a second, SCRAM-specific credential store and helps only when TLS is already broken. ANONYMOUS has no use on a server of personal accounts. |
 | `\Recent` | Not tracked: RECENT, NEW and OLD approximate it with unseen. | IMAP4rev2 (RFC 9051) removes `\Recent`. |
 | Subscriptions | No subscription store: every folder counts as subscribed. | Clients show every folder anyway; a second list of folders would only go stale. |
 | UIDs | Without `UIDPlusMailbox`, UIDVALIDITY is 1 and UIDNEXT is the highest UID plus one. UIDNOTSTICKY is never reported. | A backend that has real values implements `UIDPlusMailbox`; UIDs are expected to persist. |
@@ -402,6 +415,7 @@ reason.
 |------|-------------------|
 | Folder permissions | No per-folder read-only state through SELECT. Nothing needs it until mailboxes can be shared. |
 | METADATA (RFC 5464) | Not implemented. |
+| QUOTA configuration (RFC 2087 SETQUOTA) | Only GETQUOTA/GETQUOTAROOT are implemented; the backend has no setter or distinct unlimited-resource representation. |
 
 #### Planned
 

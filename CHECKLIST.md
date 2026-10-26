@@ -15,9 +15,11 @@ in `pkg/imap/rfctest` asserts the stated behavior through the public
 
 The first-pass RFC 9051 inventory below also records shared rev1 proofs,
 unsupported rev2 behavior, host-backend obligations and client-only duties.
-It is not yet an exhaustive inventory: a production-by-production ABNF audit,
-non-keyword protocol rules and the remaining extension specifications still
-need reconciliation. The engine continues to advertise IMAP4rev1 only.
+The [core grammar crosswalk](RFC-GRAMMAR.md) now lists every named section-9
+production, with its existing proof families and boundaries, against a pinned
+source index. This structural inventory does not prove every alternative or
+implicit value constraint. Non-keyword protocol rules and the remaining
+extension specifications still need reconciliation. The engine continues to advertise IMAP4rev1 only.
 
 Requirements below paraphrase [RFC 3501](https://www.rfc-editor.org/rfc/rfc3501.txt)
 and [RFC 9051](https://www.rfc-editor.org/rfc/rfc9051.txt).
@@ -812,8 +814,8 @@ inventory is complete.
 |----|---------|-------|-------------|-------|
 | IMAP-LISTSTATUS-01 | RFC 5819 §§2, 4 | MUST | LIST-STATUS is advertised; LIST's `STATUS (items)` return option follows each listed selectable mailbox's LIST with an untagged STATUS carrying the requested items in the order asked (the A01 example), beside SPECIAL-USE and in any case; without it no STATUS is sent. | TestListStatus |
 | IMAP-LISTSTATUS-02 | RFC 5819 §2 | MAY | A mailbox whose STATUS the store cannot read is still listed, its STATUS dropped, and the command completes OK. | TestListStatus |
-| IMAP-LISTSTATUS-03 | RFC 5819 §4; RFC 5258 §6 | Normative | `STATUS SP "(" status-att *(SP status-att) ")"`: an empty or unknown item, a missing list, doubled spaces, a second STATUS or an unknown return option is BAD with no response. | TestListStatusRefusals |
-| IMAP-LISTSTATUS-04 | RFC 5819 §2 | MUST NOT | A mailbox that cannot be selected gets no STATUS and is listed `\Noselect`. | n/a: every folder a Mailbox lists is selectable; the only `\Noselect` LIST answer is the empty pattern's root, which takes no STATUS. |
+| IMAP-LISTSTATUS-03 | RFC 5819 §4; RFC 5258 §6 | Normative | `STATUS SP "(" status-att *(SP status-att) ")"`: an empty or unknown item, a missing list, doubled spaces or an unknown return option is BAD with no response. A repeated well-formed STATUS option follows RFC5258 deduplication (IMAP-LISTEXT-07). | TestListStatusRefusals |
+| IMAP-LISTSTATUS-04 | RFC 5819 §2 | MUST NOT | A listed mailbox that vanishes before STATUS gets no STATUS and is marked `\Noselect` before LIST is emitted; recognize wrapped ErrNoSuchMailbox, preserve the connection, and omit unexpected-error STATUS without misclassifying the folder. Other selectability failures remain IMAP-LISTSTATUS-06. | TestListStatusVanishedMailbox |
 
 ## RFC 5182: SEARCHRES, the saved search result
 
@@ -851,12 +853,33 @@ as there are no remote mailboxes.
 | IMAP-LISTEXT-05 | RFC 5258 §3 | SHOULD | Several patterns in parentheses: a name matching any is answered once (example 7); an extended LIST ignores an empty pattern instead of treating it as the delimiter request. | TestListMultiplePatterns |
 | IMAP-LISTEXT-06 | RFC 5258 §§3, 3.1 | MUST | An unknown selection or return option is BAD; RECURSIVEMATCH alone or with only REMOTE is BAD; an unterminated pattern list is BAD. | TestListExtendedRefusals |
 
+## RFC 2087: account-wide QUOTA reporting
+
+The backend exposes one account-wide root named by the empty astring, with
+STORAGE usage and limit in bytes. It has no quota setter, extra resource model
+or separate unlimited marker. Read-side proofs below do not claim those features.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-QUOTA-01 | RFC 2087 §§3, 6 | MUST | Advertised QUOTA commands and resource names are case-insensitive; the supported account root is the empty astring. | TestQuotaExchange |
+| IMAP-QUOTA-02 | RFC 2087 §§4.2, 4.3, 6; RFC 3501 §§4.3, 9 | Normative | GETQUOTA and GETQUOTAROOT take exactly one astring, with quoted escapes or a counted literal; malformed, missing or extra arguments get BAD before quota access. | TestQuotaArguments, TestQuotaLiteralArguments |
+| IMAP-QUOTA-03 | RFC 2087 §§4.2, 4.3 | Normative | An unknown root or mailbox gets NO without fabricated quota data; mailbox existence is checked before reading its root usage. | TestQuotaArguments, TestQuotaLookupFailures |
+| IMAP-QUOTA-04 | RFC 2087 §§3, 4.2, 5.1 | Normative | GETQUOTA returns the root and STORAGE usage/limit triplet in 1024-octet units, followed by tagged OK. | TestQuotaExchange |
+| IMAP-QUOTA-05 | RFC 2087 §§4.3, 5.2, 6 | Normative | GETQUOTAROOT decodes its mailbox astring, emits that mailbox and its empty-name account root as properly encoded astrings, then emits the root quota before OK. | TestQuotaExchange, TestQuotaLiteralArguments |
+| IMAP-QUOTA-06 | RFC 2087 §8; RFC 3501 §6.3 | Normative | Unauthenticated requests reveal no quota values and do not call the authenticated account's quota backend. | TestQuotaExchange |
+| IMAP-QUOTA-07 | RFC 2087 §§4.2, 4.3 | Normative | Folder-list or quota lookup failure returns NO without leaking backend details or emitting a partial QUOTAROOT/QUOTA reply. | TestQuotaLookupFailures |
+| IMAP-QUOTA-08 | RFC 2087 §6; RFC 3501 §9 (number) | Normative | Resource triplets contain unsigned 32-bit numbers; negative or overflowing backend values are refused before any untagged reply, while the maximum is representable. | TestQuotaValueBounds |
+| IMAP-QUOTA-09 | RFC 2087 §4.1 | Normative | SETQUOTA replaces all limits of the named root and returns the resulting quota. | n/a: not implemented. Mailbox has only a read-side Quota method and no quota mutation/administrator interface; SETQUOTA remains an unknown command. This is a known extension limitation, not a completed configuration feature; rest-mail/rest-mail-server#374. |
+| IMAP-QUOTA-10 | RFC 2087 §5.1 | Normative | Omit resources without administrative limits; an empty resource list means the root has no resource limits. | n/a: the current backend always returns one STORAGE usage/limit pair and cannot distinguish an unlimited resource from a zero-byte cap. The existing zero-value interpretation is preserved, not silently decided by this audit; rest-mail/rest-mail-server#374. |
+| IMAP-QUOTA-11 | RFC 2087 §3 | Normative | Mailboxes sharing a named root share its resource limits and actual resource accounting. | n/a: enforcement and durable accounting belong to the host backend. The engine reports the authenticated account's single Quota result but cannot enforce storage mutations performed outside it. |
+| IMAP-QUOTA-12 | RFC 2087 §3 | MAY | Support implementation-defined resource types and multiple named roots. | n/a: the backend deliberately exposes only account-wide STORAGE with the empty root name; other resource/root types are not modeled. |
+
 ## RFC 2342: NAMESPACE
 
 | ID | Section | Level | Requirement | Tests |
 |----|---------|-------|-------------|-------|
 | IMAP-NAMESPACE-01 | RFC 2342 §§4, 5 | Normative | NAMESPACE is advertised, and answers one untagged NAMESPACE before OK: the personal namespace with prefix "" and the hierarchy delimiter LIST gives ("/"), and NIL for the other users' and shared classes, which the server does not have (example 5.1), in the authenticated and selected states. | TestNamespace |
-| IMAP-NAMESPACE-02 | RFC 2342 §5 | Normative | NAMESPACE takes no arguments (BAD otherwise), and before authentication answers NO with no NAMESPACE response. | TestNamespace |
+| IMAP-NAMESPACE-02 | RFC 2342 §5 | Normative | NAMESPACE takes no arguments (BAD otherwise), and before authentication answers NO with no NAMESPACE response. | TestNamespace, TestNamespaceNoArguments |
 
 ## RFC 7888: LITERAL-, non-synchronizing literals up to 4096 octets
 
@@ -866,6 +889,70 @@ as there are no remote mailboxes.
 | IMAP-LITMINUS-02 | RFC 7888 §3 | MUST | A non-synchronizing literal gets no continuation; its octets and the line after them are part of the same command, as in the RFC's LOGIN example. | TestLiteralMinus |
 | IMAP-LITMINUS-03 | RFC 7888 §§4, 5 | Normative | A non-synchronizing literal of up to 4096 octets is taken as a command argument and as APPEND's message; a synchronizing literal of any size the command allows is unaffected. | TestLiteralMinusLimit |
 | IMAP-LITMINUS-04 | RFC 7888 §§4, 5 | MUST | One over 4096 octets, as a command argument, APPEND's mailbox or APPEND's message, gets a tagged BAD with TOOBIG and a BYE with TOOBIG, and the session ends without running its in-flight octets. | TestLiteralMinusLimit, TestAppendRejectedNonSynchronizing |
+
+## Session negotiation extension reconciliation (2026-10-26)
+
+[RFC-SESSION-EXTENSIONS.md](RFC-SESSION-EXTENSIONS.md) reconciles every numbered
+section of seven related specifications, including non-keyword protocol rules,
+client duties, unsupported behavior and host policy. These additional rows do
+not replace the earlier narrow proofs or make the overall inventory complete.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-TLS-AUDIT-01 | RFC 2595 §2.1 | REQUIRED | Implement the historical mandatory DHE-DSS/3DES cipher suite. | n/a: deliberately unsupported by the Go TLS implementation; obsolete TLS/cipher requirements are not re-enabled. Modern policy belongs to the host tls.Config. This is a recorded historical deviation, not a conformance proof. |
+| IMAP-TLS-AUDIT-02 | RFC 2595 §§2.2–2.3 | SHOULD | Offer server-wide and per-user controls for refusing unprotected credentials. | n/a: the engine requires TLS for every user whenever a TLS config is supplied, but has no per-user privacy policy hook. A nil TLS config is the explicit development/legacy cleartext mode; rest-mail/rest-mail-server#374 retains this boundary. |
+| IMAP-TLS-AUDIT-03 | RFC 2595 §§2.4, 3.1, 3.2, 9 | MUST | Clients verify the connected server name, reject unsafe names, refresh capabilities after TLS and avoid LOGIN when LOGINDISABLED is present. | n/a: client-only hostname, cache, downgrade-warning and credential-transmission duties; this package implements the server. Server counterparts remain IMAP-STARTTLS-01 through IMAP-STARTTLS-08. |
+| IMAP-TLS-AUDIT-04 | RFC 2595 §§2.5, 9 | MUST | Check that negotiated TLS meets local authentication and privacy policy, including rejecting weak configurations. | n/a: the engine terminates failed handshakes (IMAP-STARTTLS-07), but acceptable TLS versions, cipher suites, certificates and client-certificate verification are supplied by the host tls.Config. No host-policy enforcement beyond that configuration is claimed. |
+| IMAP-TLS-AUDIT-05 | RFC 2595 §§4–5, 8 | Normative | Provide POP3 STLS and ACAP STARTTLS negotiation, refreshed greetings and their capability registrations. | n/a: these are other application protocols; this library serves IMAP only. No POP3 or ACAP behavior is inferred from IMAP tests. |
+| IMAP-TLS-AUDIT-06 | RFC 2595 §7 | Normative | Prefer STARTTLS over separate implicit-TLS ports in the historical deployment guidance. | n/a: port/deployment policy is outside Session; this historical recommendation is superseded by RFC8314 implicit-TLS guidance. Server supports host-selected listeners; no port policy changes are made here. |
+| IMAP-PLAIN-01 | RFC 4616 §2 | MUST | Accept only well-formed UTF-8 PLAIN data with exactly two NUL delimiters, rejecting empty authentication identity/password and additional NULs before any backend call. | TestPlainMalformedPayloads |
+| IMAP-PLAIN-02 | RFC 4616 §2 | Normative | An explicit authorization identity must be authorized; an unsupported different identity is refused, leaving the session unauthenticated and able to retry. | TestPlainMalformedPayloads |
+| IMAP-PLAIN-03 | RFC 4616 §2 | MUST | Accept at least 255 octets each for authzid, authcid and password, including multibyte UTF-8, both with and without an initial response. | TestPlainRequiredCredentialLengths |
+| IMAP-PLAIN-04 | RFC 4616 §2 | Normative | Prepare presented and stored credentials consistently before comparison or hashing; a failed or empty prepared value must fail verification. | n/a: Backend.Authenticate owns stored credentials, normalization/preparation and hashing. No SASLprep dependency or preparation policy is imposed by the engine; pass-through preparation is permitted by RFC4616. The backend must reject preparation failures and empty prepared output. |
+| IMAP-PLAIN-05 | RFC 4616 §2 | Normative | Derive an omitted authorization identity from the prepared authentication identity and apply the application authorization policy. | n/a: the host backend returns the authenticated Mailbox and owns canonical identity derivation. The engine only supports an empty or byte-identical explicit authzid, not delegated identities or a separate authorization hook. |
+| IMAP-PLAIN-06 | RFC 4616 §§1, 5 | SHOULD | Advertise and use PLAIN by default only when adequate data security services are active. | n/a: TLS-configured sessions enforce the protected default (IMAP-STARTTLS-01/08), but a nil TLS config intentionally permits development/legacy cleartext PLAIN and LOGIN. This documented exception is not a universal secure-default claim. |
+| IMAP-SASLIR-05 | RFC 4959 §6 | MUST | The parser accepts the full encoded PLAIN response required for three 255-octet components on one command line, as well as the continuation exchange. | TestPlainRequiredCredentialLengths |
+| IMAP-SASLIR-06 | RFC 4959 §3 | MUST | Reject non-base64 characters, embedded CR/TAB and misplaced padding in either response form before backend authentication; a later valid retry succeeds. | TestPlainBase64Alphabet |
+| IMAP-SASLIR-07 | RFC 4959 §§3, 6 | MUST NOT | Clients send an initial response only when SASL-IR is advertised, otherwise falling back to a continuation exchange. | n/a: client-only capability/fallback duty; the server supports omission through IMAP-SASLIR-03 and the required-length proof. |
+| IMAP-SASLIR-08 | RFC 4959 §3 | MUST | Reject an initial response for a supported SASL mechanism that cannot take one with tagged BAD. | n/a: the only supported mechanism is PLAIN, which accepts an initial response; there is no supported non-initial-response mechanism. Unknown mechanisms receive NO and are not advertised (IMAP-AUTHENTICATE-04). |
+| IMAP-ENABLE-07 | RFC 5161 §3.1 | Normative | Permit LOGIN followed immediately by ENABLE and ENABLE followed immediately by SELECT, preserving enabled mode and ordered completions. | TestEnablePipelinedLoginAndSelect |
+| IMAP-ENABLE-08 | RFC 5161 §§3.1, 3.3 | MUST NOT | Clients issue ENABLE only before selecting a mailbox, and extension designers avoid unnecessary ENABLE requirements. | n/a: client/designer duties; servers need not police selection history. The server ignores UTF8 enablement while selected, and no new enable-able extension is introduced. |
+| IMAP-IDLE-03 | RFC 2177 §3 | Normative | While IDLE owns the continuation, report newly delivered mail, external expunges and flag changes using current sequence numbers; DONE completes IDLE before the next command. | TestIdleMailboxNotificationTranscript |
+| IMAP-IDLE-04 | RFC 2177 §§3–4 | Normative | IDLE is an authenticated/selected-state command and may return NO when the server will not allow it at that time. | n/a: this implementation requires a selected mailbox and returns NO otherwise. It does not offer account-wide IDLE events in the authenticated-but-unselected state. This is its explicit NO policy, not a positive proof for both permitted states. |
+| IMAP-IDLE-05 | RFC 2177 §3 | MUST NOT | Clients use IDLE only when advertised, send no commands before DONE, still accept unsolicited updates and renew before 29 minutes if needed. | n/a: client-only duties. Immediate server completion/order is IMAP-IDLE-02, and the server inactivity timer remains IMAP-AUTOLOGOUT-01; no wall-clock timer claim is added. |
+| IMAP-LITMINUS-05 | RFC 7888 §3 | Normative | The two counted non-synchronizing LOGIN strings in the RFC example preserve their embedded spaces without continuations and leave a pipelined next command intact. | TestLiteralLoginRFC7888Example |
+| IMAP-LITMINUS-06 | RFC 7888 §3 | MUST NOT | Send non-synchronizing literals from server to client; message, header and body FETCH responses retain synchronizing literal framing. | TestServerLiteralResponsesSynchronize |
+| IMAP-LITMINUS-07 | RFC 7888 §§6, 8 | Normative | Allow the extended non-synchronizing literal8 syntax when BINARY and LITERAL- are both supported. | n/a: binary APPEND storage is unsupported and is refused with UNKNOWN-CTE (IMAP-BINARY-07); optional UTF8 data-item syntax is covered by IMAP-UTF8-04. This audit does not claim binary storage or every literal8 combination is implemented. |
+| IMAP-LITMINUS-08 | RFC 7888 §7 | Normative | Use LITERAL- with MULTIAPPEND as with LITERAL+. | n/a: MULTIAPPEND is not implemented or advertised. Existing single-message APPEND framing is not proof of multiple-message atomicity; rest-mail/rest-mail-server#374. |
+
+## Mailbox discovery and status reconciliation (2026-10-26)
+
+[RFC-MAILBOX-EXTENSIONS.md](RFC-MAILBOX-EXTENSIONS.md) records the grouped
+five-spec section review, source pins, corrected historical LIST-STATUS rows
+and the remaining backend/client/unsupported boundaries. Existing IDs are kept;
+no source case is silently dropped or counted as complete.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-NAMESPACE-03 | RFC 2342 §§2, 5, 7 | SHOULD NOT | Expose other users or their mailbox names without an explicit grant; put their user identifier beneath the other-users prefix. | n/a: other-users and shared namespaces are not offered. The host Backend returns the authenticated user's mailbox and must filter inaccessible names; no new sharing or ACL model is selected. |
+| IMAP-NAMESPACE-04 | RFC 2342 §§5–6 | MUST | Use modified UTF-7 for international namespace prefixes and prefix non-standard response extensions with X-. | n/a: the fixed single personal namespace has an empty ASCII prefix and no response extensions. Configurable prefixes, alternate delimiters and extension attributes are not exposed by the backend interface. |
+| IMAP-NAMESPACE-05 | RFC 2342 §§3, 5 | Normative | Clients handle multiple namespaces, permit manual prefixes and resolve ambiguous target namespaces with the user. | n/a: client-only discovery, configuration and mailbox-creation decisions; the server offers the single personal namespace in IMAP-NAMESPACE-01. |
+| IMAP-SPECIALUSE-10 | RFC 6154 §§2, 6 | MUST NOT | Return only standardized special-use attributes, covering all seven known roles, repeated roles on different folders and folders without a recognized role. | TestSpecialUseCompleteAttributeSet |
+| IMAP-SPECIALUSE-11 | RFC 6154 §2 | MAY | A mailbox may have multiple special uses, and uses may be specific to the authenticated user. | n/a: Folder.SpecialUse represents at most one role per mailbox. Multiple folders may share a role; user-specific folder/role presentation is the host mailbox view. The optional multiple-role representation is not implemented. |
+| IMAP-SPECIALUSE-12 | RFC 6154 §§3–4, 7 | MUST NOT | When optional CREATE USE or METADATA assignment is supported, validate roles, avoid invalid side effects and refuse a failed assignment without creating the mailbox. | n/a: CREATE-SPECIAL-USE and METADATA are not implemented or advertised; no role-assignment backend operation is available. Existing optional gaps IMAP-SPECIALUSE-08/09 remain, and METADATA is deliberately excluded by the owner. |
+| IMAP-SPECIALUSE-13 | RFC 6154 §6 | MUST | Clients ignore LIST attributes they do not understand. | n/a: client-only forward-compatibility duty. Server filtering of unsupported role attributes is IMAP-SPECIALUSE-10. |
+| IMAP-SPECIALUSE-14 | RFC 6154 §§5.3–5.4 | Normative | Exercise the CREATE USE and METADATA assignment example exchanges. | n/a: those optional commands are not supported; the examples are explicitly outside the offered LIST-only role-discovery behavior. No passing transcript is inferred from ordinary LIST tests. |
+| IMAP-LISTEXT-07 | RFC 5258 §3 | MUST | Treat repeated STATUS return options as one occurrence: preserve the first parameter list, validate repeated syntax and perform one metadata lookup per returned mailbox. | TestListRepeatedStatusOptions |
+| IMAP-LISTEXT-08 | RFC 5258 §§1, 3–3.5, 4 | MUST | Clients use advertised options, infer stronger attributes, ignore unknown extended fields and tolerate children changing after a LIST reply. | n/a: client-only discovery, attribute-inference and race-handling obligations; no client implementation lives in this server engine. |
+| IMAP-LISTEXT-09 | RFC 5258 §§3.1–3.3 | MUST | Subscription attributes accurately distinguish subscribed existing names, subscribed missing names and unsubscribed parents. | n/a: the deliberate subscription model treats every existing folder as subscribed and retains no subscriptions to missing folders. Actual subscription persistence and the corresponding example variants are not implemented; no owner design is changed. |
+| IMAP-LISTEXT-10 | RFC 5258 §3.1 | Normative | REMOTE includes remote mailboxes and accurately reports their remote attribute. | n/a: the backend exposes only local folders, with no remote-mailbox or referral model. REMOTE is accepted but cannot produce remote entries; the current boundary is preserved. |
+| IMAP-LISTEXT-11 | RFC 5258 §§4, 8 | SHOULD NOT | Expose child-existence information when the authenticated user can access none of those children. | n/a: the host must filter Folders to the authenticated user's permitted view. Folder has no ACL/selectability metadata; the engine cannot audit inaccessible rows supplied by an incorrect host. |
+| IMAP-LISTEXT-12 | RFC 5258 §5 | Normative | Cover the full eleven-example hierarchy, including selective/missing subscriptions, remote folders, alternate child-inference attributes and their variants. | n/a: existing tests cover supported hierarchy, recursive-match, patterns and children slices. The full example family needs persistent subscriptions and remote/ACL metadata, which are outside the offered backend. This is not a claim that all eleven examples run verbatim. |
+| IMAP-LISTSTATUS-05 | RFC 5819 §§2–3 | MUST NOT | Return STATUS for a parent included only because a descendant meets selection; query only mailboxes that themselves match the selection criteria. | TestListStatusRecursiveSelection |
+| IMAP-LISTSTATUS-06 | RFC 5819 §2 | MUST | Mark every mailbox that cannot be selected with Noselect and omit its STATUS, including permission-denied races. | n/a: ErrNoSuchMailbox is recognized and proved by IMAP-LISTSTATUS-04. Other permission/selectability failures have no typed backend representation, so arbitrary storage errors may only drop STATUS. A broader ACL/selectability contract remains in rest-mail/rest-mail-server#374. |
+| IMAP-LISTSTATUS-07 | RFC 5819 §5 | Normative | Large LIST-STATUS requests must allow other IMAP connections to make progress. | n/a: each Session has its own goroutine, but Folders and Messages are synchronous host calls with no context or fairness hook. Host storage/resource scheduling and a global load guarantee are outside this wire proof; rest-mail/rest-mail-server#374. |
+| IMAP-STATUSSIZE-03 | RFC 8438 §§3–4 | MUST | Emit an unsigned 63-bit SIZE without negative metadata or overflow; accept totals above 32 bits and at the 63-bit maximum, refusing invalid direct STATUS data and omitting invalid LIST-STATUS data. | TestStatusSizeNumericBounds |
+| IMAP-STATUSSIZE-04 | RFC 8438 §3 | MUST | Clients accept SIZE values throughout the unsigned 63-bit range. | n/a: client-only integer-width requirement. The server numeric boundary and wide-sum proofs are IMAP-STATUSSIZE-03; Message.Size is a native int supplied by the host. |
 
 ## Search and message extension reconciliation (2026-10-26)
 

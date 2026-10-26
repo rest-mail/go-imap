@@ -8,12 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Reject malformed SASL PLAIN payloads before backend authentication: empty
+  identity/password, extra NUL delimiters, invalid UTF-8 and embedded CR in
+  base64 responses. Both initial-response and continuation exchanges can retry
+  safely; 255-octet UTF-8 credential fields remain supported.
+- Refuse negative or overflowing mailbox SIZE metadata instead of emitting
+  invalid unsigned 63-bit STATUS data; preserve ordinary metadata requests.
+- LIST-STATUS now resolves metadata before LIST, marks a vanished mailbox
+  Noselect, omits STATUS for recursive-only parents, and deduplicates repeated
+  STATUS options while validating every occurrence.
 - Canonicalize bare CR/LF in supported ASCII-compatible BINARY text leaves after
   CTE decoding and before size/partial octet calculations. Preserve stored BODY
   bytes, existing CRLF, missing final newlines and opaque binary/UTF-16 payloads.
 
 ### Added
 
+- A grouped section audit of seven negotiation/session extension RFCs, with
+  pinned source indexes, explicit host/client/unsupported boundaries and guards
+  against lost sections or invalid requirement references. New wire proofs cover
+  ENABLE pipelining, RFC7888's exact LOGIN example, server literal framing and
+  IDLE mailbox updates. The wider RFC checklist remains partial.
+- A grouped source/section audit for five mailbox discovery/status RFCs, with
+  structural loss/drift guards and explicit host/client/unsupported boundaries.
+  Wire regressions cover SIZE boundaries, LIST-STATUS disappearance, recursion,
+  duplicate options and all seven standardized special-use attributes.
 - A grouped six-spec search/message source audit with independent section-loss
   guards and explicit backend/client/unsupported boundaries. New wire proofs cover
   textual/opaque BINARY data, encoded headers, saved-search COPY/STORE/UID EXPUNGE,

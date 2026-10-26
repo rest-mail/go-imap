@@ -59,8 +59,9 @@ func TestListStatus(t *testing.T) {
 
 // TestListStatusRefusals: the STATUS return option is STATUS SP "(" status-att
 // *(SP status-att) ")" (RFC 5819 §4): an empty or unknown item, a missing
-// list, doubled spaces, a second STATUS or an unknown return option is BAD
-// with no response.
+// list, doubled spaces or an unknown return option is BAD with no response.
+// The historical repeated-STATUS case is retained with its corrected RFC5258
+// section3 expectation: repeated options act as one; the first list is used.
 //
 // checklist: IMAP-LISTSTATUS-03
 func TestListStatusRefusals(t *testing.T) {
@@ -77,6 +78,14 @@ func TestListStatusRefusals(t *testing.T) {
 		"(MYRIGHTS)",
 	} {
 		lines, tagged := c.command("B1", `LIST "" * RETURN %s`, ret)
+		if ret == "(STATUS (MESSAGES) STATUS (UNSEEN))" {
+			requireOK(t, tagged, "B1")
+			requireExactly(t, lines,
+				`* LIST () "/" "INBOX"`, `* STATUS "INBOX" (MESSAGES 17)`,
+				`* LIST () "/" "foo"`, `* STATUS "foo" (MESSAGES 30)`,
+				`* LIST () "/" "broken"`)
+			continue
+		}
 		if !strings.HasPrefix(tagged, "B1 BAD ") || len(lines) != 0 {
 			t.Fatalf("RETURN %s: %q %q, want BAD", ret, lines, tagged)
 		}
