@@ -108,6 +108,7 @@ func TestCoverageQuotaReplies(t *testing.T) {
 	for _, fail := range []bool{false, true} {
 		t.Run(fmt.Sprintf("backendError=%v", fail), func(t *testing.T) {
 			m := &coverageQuotaMailbox{mockMailbox: newMockBackend().mbox, used: 3073, limit: 10249}
+			m.folders = append(m.folders, imap.Folder{Name: "Archive Box"})
 			if fail {
 				m.err = errors.New("quota unavailable")
 			}

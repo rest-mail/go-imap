@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 475/643 mapped](https://img.shields.io/badge/partial%20checklist-475%2F643%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 483/655 mapped](https://img.shields.io/badge/partial%20checklist-483%2F655%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap/pkg/imap/server)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -345,7 +345,8 @@ row names the wire tests in [`pkg/imap/rfctest`](pkg/imap/rfctest) that prove
 it: they drive a public `server.Session` over `net.Pipe`, as a client would.
 Rows the library does not meet, or that belong to the host or the client, are
 `n/a` with the reason. The checklist is growing; it is not a full conformance
-claim.
+claim. The [core grammar crosswalk](RFC-GRAMMAR.md) inventories all
+section-9 production names independently of the narrower wire-test claims.
 
 [RFC-SESSION-EXTENSIONS.md](RFC-SESSION-EXTENSIONS.md) records the grouped
 seven-spec negotiation/session audit, source pins, narrow proofs and explicit
@@ -403,6 +404,7 @@ reason.
 |------|-------------------|
 | Folder permissions | No per-folder read-only state through SELECT. Nothing needs it until mailboxes can be shared. |
 | METADATA (RFC 5464) | Not implemented. |
+| QUOTA configuration (RFC 2087 SETQUOTA) | Only GETQUOTA/GETQUOTAROOT are implemented; the backend has no setter or distinct unlimited-resource representation. |
 
 #### Planned
 
