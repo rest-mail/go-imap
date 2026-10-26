@@ -21,7 +21,7 @@ backend can be a database, a maildir or a remote API.
 - [Quick start](#quick-start): [run a server](#run-a-server), [optional interfaces](#optional-interfaces), [one connection](#one-connection)
 - [Features](#features): [capabilities](#capabilities), [commands](#commands), [server API](#server-api)
 - [What the library does and what the host must do](#what-the-library-does-and-what-the-host-must-do)
-- [RFC conformance](#rfc-conformance): [the checklist](#the-rfc-checklist), [known gaps](#known-gaps), [badges and coverage](#badges-and-coverage)
+- [RFC conformance](#rfc-conformance): [the checklist](#the-rfc-checklist), [what it does not do](#what-it-does-not-do), [badges and coverage](#badges-and-coverage)
 - [Changelog](#changelog)
 - [Licence](#licence)
 
@@ -251,6 +251,9 @@ The library:
   any cleartext the client pipelined after STARTTLS.
 - Refuses a second LOGIN or AUTHENTICATE once the session is authenticated, and
   an authorization identity that names a different user.
+- Answers `BAD` to 8-bit text outside a literal, unless the backend supports
+  UTF8=ACCEPT (RFC 3501 §9). A client sends 8-bit credentials in a literal or
+  through AUTHENTICATE PLAIN.
 - Reports every failed sign-in to the `Limiter`, and closes the connection once
   the `Limiter` reports the address banned.
 
@@ -372,22 +375,40 @@ go run ./internal/checklist pkg/imap/rfctest
 Tests that need the server's internals, such as the autologout timer, live
 beside it in `pkg/imap/server`; the checklist names them in the `n/a` reason.
 
-### Known gaps
+### What it does not do
 
-The checklist records each of these as an `n/a` row with its reason.
+Some gaps are deliberate, and go-imap will not fill them. Others are planned,
+each with an issue. The checklist records every one as an `n/a` row with its
+reason.
 
-| Area | Not supported yet |
+#### Not supported, by design
+
+| Area | What go-imap does | Why |
+|------|-------------------|-----|
+| Authentication | PLAIN and LOGIN only: no challenge-response mechanism (CRAM-MD5, DIGEST-MD5, SCRAM), EXTERNAL or ANONYMOUS. | PLAIN is only offered inside TLS, as mainstream clients expect. CRAM-MD5 and DIGEST-MD5 are obsolete and need passwords stored in plaintext-equivalent form. SCRAM needs a second, SCRAM-specific credential store and helps only when TLS is already broken. ANONYMOUS has no use on a server of personal accounts. |
+| `\Recent` | Not tracked: RECENT, NEW and OLD approximate it with unseen. | IMAP4rev2 (RFC 9051) removes `\Recent`. |
+| Subscriptions | No subscription store: every folder counts as subscribed. | Clients show every folder anyway; a second list of folders would only go stale. |
+| UIDs | Without `UIDPlusMailbox`, UIDVALIDITY is 1 and UIDNEXT is the highest UID plus one. UIDNOTSTICKY is never reported. | A backend that has real values implements `UIDPlusMailbox`; UIDs are expected to persist. |
+| ENVELOPE | Source routes are always NIL, and obsolete address syntax that `net/mail` rejects gives NIL. | Source routes are obsolete. |
+
+#### Not planned
+
+| Area | What go-imap does |
 |------|-------------------|
-| Authentication | Only PLAIN. No challenge-response mechanism, EXTERNAL or ANONYMOUS: `Authenticate` takes a user name and a password. |
-| `\Recent` | Not tracked. RECENT, NEW and OLD approximate it with unseen. |
-| Keywords | Not stored: `FlagUpdate` has no keyword field, and PERMANENTFLAGS offers no `\*`. |
-| `\Deleted` | Kept per session until EXPUNGE, not stored, so other sessions do not see it. |
-| UIDs | Without `UIDPlusMailbox`, UIDVALIDITY is 1 and UIDNEXT is the highest UID plus one. No UIDNOTSTICKY. |
-| Folders | CREATE succeeds without creating anything; DELETE and RENAME move messages; there is no subscription store, so every folder counts as subscribed. |
-| Permissions | No per-folder read-only state through SELECT. |
-| Transactions | APPEND, COPY and MOVE cannot roll back a partly applied command. |
-| ENVELOPE | Source routes are always NIL; obsolete address syntax that `net/mail` rejects gives NIL. |
-| Not implemented | CONDSTORE and QRESYNC (RFC 7162), METADATA, ID, and the IMAP4rev2 capability itself (RFC 9051). |
+| Folder permissions | No per-folder read-only state through SELECT. Nothing needs it until mailboxes can be shared. |
+| METADATA (RFC 5464) | Not implemented. |
+
+#### Planned
+
+| Gap | Issue |
+|-----|-------|
+| Keywords (`$Forwarded`, `$Junk`, tags) are accepted but not stored, and PERMANENTFLAGS offers no `\*`. | [#158](https://github.com/rest-mail/go-imap/issues/158) |
+| `\Deleted` lives in one session until EXPUNGE, so other sessions do not see it. | [#159](https://github.com/rest-mail/go-imap/issues/159) |
+| CREATE succeeds without creating anything, and DELETE and RENAME move messages. An empty folder does not exist. | [#160](https://github.com/rest-mail/go-imap/issues/160) |
+| COPY and MOVE cannot roll back a partly applied command. | [#161](https://github.com/rest-mail/go-imap/issues/161) |
+| CONDSTORE and QRESYNC (RFC 7162). | [#162](https://github.com/rest-mail/go-imap/issues/162) |
+| ID (RFC 2971). | [#163](https://github.com/rest-mail/go-imap/issues/163) |
+| The IMAP4rev2 capability (RFC 9051). The checklist inventories its requirements. | [rest-mail/rest-mail-server#718](https://github.com/rest-mail/rest-mail-server/issues/718) |
 
 ### Badges and coverage
 
@@ -407,11 +428,31 @@ grammars.
 
 Recent releases; see [CHANGELOG.md](CHANGELOG.md) for the complete history.
 
-- **v0.13.0** (2026-10-26): the library is split into `pkg/imap` and `pkg/imap/server`; `NewServer` is `server.New` (breaking, migration table in the changelog). The protocol is unchanged.
-- **v0.12.0** (2026-10-24): LIST-EXTENDED; LIST under `%` returns hierarchy levels that are not folders themselves.
-- **v0.11.0** (2026-10-24): SASL-IR, LITERAL-, NAMESPACE, ESEARCH, LIST-STATUS, STATUS=SIZE, BINARY and SEARCHRES; response codes carry text, and argument-free commands follow the grammar.
-- **v0.10.0** (2026-10-24): a stopping server tells every session's client why, with `BYE`.
-- **v0.9.0** (2026-10-24): mailbox names are modified UTF-7 on the wire (breaking); NOOP and CHECK report other sources' changes.
+### v0.13.0 (2026-10-26)
+
+The library is split into `pkg/imap` and `pkg/imap/server`, and `NewServer` is
+`server.New` (breaking; the changelog has a migration table). 8-bit text outside
+a literal gets `BAD` unless the backend supports UTF8=ACCEPT.
+
+### v0.12.0 (2026-10-24)
+
+LIST-EXTENDED. LIST under `%` returns hierarchy levels that are not folders
+themselves.
+
+### v0.11.0 (2026-10-24)
+
+SASL-IR, LITERAL-, NAMESPACE, ESEARCH, LIST-STATUS, STATUS=SIZE, BINARY and
+SEARCHRES. Response codes carry text, and argument-free commands follow the
+grammar.
+
+### v0.10.0 (2026-10-24)
+
+A stopping server tells every session's client why, with `BYE`.
+
+### v0.9.0 (2026-10-24)
+
+Mailbox names are modified UTF-7 on the wire (breaking). NOOP and CHECK report
+other sources' changes.
 
 ## Licence
 
