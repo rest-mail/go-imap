@@ -182,6 +182,7 @@ func TestStatusEscapesQuoteInMailboxName(t *testing.T) {
 // line. It must be encoded as an astring (quoted). RED on the pre-fix bare form.
 func TestQuotaRootQuotesMailboxName(t *testing.T) {
 	b := newMockBackend()
+	b.mbox.folders = append(b.mbox.folders, imap.Folder{Name: "Foo Bar"})
 	h := newIMAPHarness(t, b)
 	h.login("a1")
 
