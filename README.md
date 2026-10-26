@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 466/618 mapped](https://img.shields.io/badge/partial%20checklist-466%2F618%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 471/637 mapped](https://img.shields.io/badge/partial%20checklist-471%2F637%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap/pkg/imap/server)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -346,6 +346,12 @@ it: they drive a public `server.Session` over `net.Pipe`, as a client would.
 Rows the library does not meet, or that belong to the host or the client, are
 `n/a` with the reason. The checklist is growing; it is not a full conformance
 claim.
+
+[RFC-MAILBOX-EXTENSIONS.md](RFC-MAILBOX-EXTENSIONS.md) groups the five mailbox
+discovery/status specifications with source pins, narrow wire proofs and explicit
+host/client/unsupported boundaries. It records the SIZE numeric guard and
+LIST-STATUS race, recursive-selection and duplicate-option corrections; wider
+core/search/message reconciliation remains.
 
 The checklist is a Markdown file of tables with this header:
 

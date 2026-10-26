@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/rest-mail/go-imap/pkg/imap"
@@ -105,7 +106,7 @@ func listReturnOptions(list string, returns map[string]bool) (status []string, r
 		switch up := strings.ToUpper(opt); {
 		case up == "SUBSCRIBED", up == "CHILDREN", up == "SPECIAL-USE":
 			returns[up] = true
-		case up == "STATUS" && status == nil:
+		case up == "STATUS":
 			end := strings.IndexByte(list, ')')
 			items, ok := wire.ParseStatusItems(list[:end+1])
 			for _, item := range items {
@@ -115,7 +116,12 @@ func listReturnOptions(list string, returns map[string]bool) (status []string, r
 				return nil, "Invalid STATUS return option"
 			}
 			returns["STATUS"] = true
-			status, list = items, list[end+1:]
+			// RFC5258 section3: repeated options act as one. Keep the first
+			// parameter list, while still validating later occurrences.
+			if status == nil {
+				status = items
+			}
+			list = list[end+1:]
 			if list != "" {
 				if list, ok = strings.CutPrefix(list, " "); !ok || list == "" {
 					return nil, "Invalid LIST return options"
@@ -216,7 +222,20 @@ func (s *Session) handleList(tag, args, cmd string) {
 			continue
 		}
 
+		// RFC5819: only names that themselves meet selection get STATUS.
+		// Resolve it before emitting LIST: a mailbox that disappeared between
+		// Folders and Messages must be marked Noselect, not just lose STATUS.
+		var status string
+		var statusErr error
+		statusRequested := req.status != nil && meets(e)
+		if statusRequested {
+			status, statusErr = s.statusData(e.folder.Name, req.status)
+		}
+
 		var attrs []string
+		if errors.Is(statusErr, imap.ErrNoSuchMailbox) {
+			attrs = append(attrs, `\Noselect`)
+		}
 		if !e.exists {
 			if req.extended {
 				attrs = append(attrs, `\NonExistent`)
@@ -258,13 +277,9 @@ func (s *Session) handleList(tag, args, cmd string) {
 			line += ` ("CHILDINFO" (` + strings.Join(criteria, " ") + `))`
 		}
 		s.send("%s", line)
-		// A listed folder is selectable, so its STATUS follows its LIST; a
-		// level that is not a mailbox gets none, and one the store cannot count
-		// has its STATUS dropped (RFC 5819 §2).
-		if req.status != nil && e.exists {
-			if data, err := s.statusData(e.folder.Name, req.status); err == nil {
-				s.send(`* STATUS %s (%s)`, wire.EncodeMailboxName(e.wire), data)
-			}
+		// Unexpected lookup failures may omit STATUS while LIST still succeeds.
+		if statusRequested && statusErr == nil {
+			s.send(`* STATUS %s (%s)`, wire.EncodeMailboxName(e.wire), status)
 		}
 	}
 	s.tagged(tag, "OK", cmd+" completed")

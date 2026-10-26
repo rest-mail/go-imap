@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Refuse negative or overflowing mailbox SIZE metadata instead of emitting
+  invalid unsigned 63-bit STATUS data; preserve ordinary metadata requests.
+- LIST-STATUS now resolves metadata before LIST, marks a vanished mailbox
+  Noselect, omits STATUS for recursive-only parents, and deduplicates repeated
+  STATUS options while validating every occurrence.
+
+### Added
+
+- A grouped source/section audit for five mailbox discovery/status RFCs, with
+  structural loss/drift guards and explicit host/client/unsupported boundaries.
+  Wire regressions cover SIZE boundaries, LIST-STATUS disappearance, recursion,
+  duplicate options and all seven standardized special-use attributes.
+
 ## [0.13.0] - 2026-10-26
 
 ### Changed (breaking)
