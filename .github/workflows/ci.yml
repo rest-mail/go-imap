@@ -41,9 +41,9 @@ jobs:
           args: --timeout=5m
 
       - name: Validate partial RFC checklist
-        run: go run ./internal/checklist internal/rfctest
+        run: go run ./internal/checklist pkg/imap/rfctest
 
-      # Wire proofs in internal/rfctest exercise the public library from a
+      # Wire proofs in pkg/imap/rfctest exercise the public library from a
       # separate package. Instrument all packages so those proofs count too.
       - name: Run tests with race detector and coverage
         run: go test -race -count=1 -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
@@ -68,28 +68,28 @@ jobs:
       # (golang/go#75804). Bound each smoke run by executions instead; failures
       # still propagate through go test without retries or suppressed errors.
       - name: Fuzz MIME transfer-encoding token
-        run: go test -run=^$ -fuzz=^FuzzTransferEncoding$ -fuzztime=500000x .
+        run: go test -run=^$ -fuzz=^FuzzTransferEncoding$ -fuzztime=500000x ./pkg/imap/internal/message
 
       - name: Fuzz Content-Type comments
-        run: go test -run='^$' -fuzz='^FuzzContentTypeComments$' -fuzztime=500000x .
+        run: go test -run='^$' -fuzz='^FuzzContentTypeComments$' -fuzztime=500000x ./pkg/imap/internal/message
 
       - name: Fuzz FETCH partial ranges
-        run: go test -run='^$' -fuzz='^FuzzBodyPartial$' -fuzztime=500000x .
+        run: go test -run='^$' -fuzz='^FuzzBodyPartial$' -fuzztime=500000x ./pkg/imap/internal/message
 
       - name: Fuzz FETCH data-item lists
-        run: go test -run='^$' -fuzz='^FuzzFetchItems$' -fuzztime=500000x .
+        run: go test -run='^$' -fuzz='^FuzzFetchItems$' -fuzztime=500000x ./pkg/imap/internal/wire
 
       - name: Fuzz FETCH header lists
-        run: go test -run='^$' -fuzz='^FuzzHeaderFields$' -fuzztime=500000x .
+        run: go test -run='^$' -fuzz='^FuzzHeaderFields$' -fuzztime=500000x ./pkg/imap/internal/wire
 
       - name: Fuzz FETCH section-specs
-        run: go test -run='^$' -fuzz='^FuzzSectionSpec$' -fuzztime=500000x .
+        run: go test -run='^$' -fuzz='^FuzzSectionSpec$' -fuzztime=500000x ./pkg/imap/internal/message
 
       - name: Fuzz SEARCH date tokens
-        run: go test -run='^$' -fuzz='^FuzzSearchDate$' -fuzztime=500000x .
+        run: go test -run='^$' -fuzz='^FuzzSearchDate$' -fuzztime=500000x ./pkg/imap/internal/wire
 
       - name: Fuzz SEARCH quote framing
-        run: go test -run='^$' -fuzz='^FuzzSearchQuotes$' -fuzztime=500000x .
+        run: go test -run='^$' -fuzz='^FuzzSearchQuotes$' -fuzztime=500000x ./pkg/imap/server
 
       - name: Fuzz modified UTF-7 mailbox names
-        run: go test -run='^$' -fuzz='^FuzzModifiedUTF7$' -fuzztime=500000x .
+        run: go test -run='^$' -fuzz='^FuzzModifiedUTF7$' -fuzztime=500000x ./pkg/imap/internal/mutf7

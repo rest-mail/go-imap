@@ -15,8 +15,9 @@ CI uploads `coverage.out` and the function report `coverage.txt` as the
 `statement-coverage` artifact even when the gate fails, unless the run is
 cancelled. A run that fails before producing coverage has no profile to upload.
 
-`-coverpkg=./...` is necessary: the checked wire proofs in `internal/rfctest`
-exercise the public library from another package. Their execution must count
+`-coverpkg=./...` is necessary: the checked wire proofs in `pkg/imap/rfctest`
+exercise the public library from another package, and the server's own tests
+exercise `pkg/imap/internal/wire`, `message` and `mutf7` through it. Their execution must count
 toward coverage of the library. The checklist command is still run separately;
 statement coverage does not measure RFC conformance or checklist completeness.
 
@@ -33,6 +34,10 @@ go test -count=1 -covermode=atomic -coverpkg=github.com/rest-mail/go-imap -cover
 go test -count=1 -covermode=atomic -coverprofile=checklist.out ./internal/checklist
 ```
 
+Those commands predate the package split (v0.13.0), when the library was the
+root package. After the split, the same `-coverpkg=./...` run measured
+**97.0%** on Go 1.27.1 darwin/arm64, the same total as before the move.
+
 The profiles are combined by source file and block range, counting each block's
 statements once and marking it covered when any package executed it. This counts
 the external wire proofs with the library tests, like CI's `-coverpkg=./...`.
@@ -45,11 +50,12 @@ commands without backend stores; and authentication syntax refusal and recovery.
 They assert replies, state recovery and backend effects, without production changes.
 
 Remaining uncovered branches include listener binding/implicit TLS and accept-loop
-errors in `server.go`; MIME child/part parse failures; long-line drain boundaries;
+errors in `pkg/imap/server/server.go`; MIME child/part parse failures; long-line drain boundaries;
 authentication bans; selected-message iteration guards; search flag/date/fetch
 failures and unknown search keys; deleted-flag removal; APPEND literal mailbox
 failures and selected-mailbox refresh errors; IDLE polling/reconciliation guards;
-and defensive parsing/formatting branches in `util.go`. These are test work, not
+and defensive parsing/formatting branches in `pkg/imap/internal/wire` and
+`pkg/imap/internal/message`. These are test work, not
 approved exclusions; protocol gaps remain recorded in the partial `CHECKLIST.md`.
 
 The checker's `main` calls `os.Exit`, which cannot be exercised in-process.

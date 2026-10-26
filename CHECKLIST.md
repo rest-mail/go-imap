@@ -10,12 +10,12 @@ RFC 6851 MOVE, RFC 3691 UNSELECT, RFC 5161 ENABLE, RFC 2177 IDLE command exchang
 and RFC 7888 non-synchronizing APPEND and command-argument refusal slices. It is not
 an inventory of all applicable RFC requirements, a full conformance claim, or
 a coverage badge. A mapped row means its named wire test
-in `internal/rfctest` asserts the stated behavior through the public
-`Session`; it does not prove the entire referenced section.
+in `pkg/imap/rfctest` asserts the stated behavior through the public
+`server.Session`; it does not prove the entire referenced section.
 
 Requirements below paraphrase [RFC 3501](https://www.rfc-editor.org/rfc/rfc3501.txt).
 `Normative` denotes protocol text without an explicit RFC 2119 keyword.
-CI runs `go run ./internal/checklist internal/rfctest`, which fails on an item
+CI runs `go run ./internal/checklist pkg/imap/rfctest`, which fails on an item
 with no test, a test naming an unknown item, or a duplicate ID.
 
 ## RFC 3501: connection, any-state commands and LOGIN
@@ -648,8 +648,8 @@ them by sequence number as §5.5 allows.
 | IMAP-UPDATE-02 | RFC 3501 §6.4.1 | Normative | With no housekeeping to do, CHECK is equivalent to NOOP and reports the same changes, under SELECT and EXAMINE. | TestCheckReportsLikeNoop |
 | IMAP-UPDATE-03 | RFC 3501 §5.3 | MUST | No untagged response is sent while no command is in progress, even after an idle poll interval, so §5.3's flow-control rule has no unsolicited write to govern; the changes wait for the next command. | TestNoUntaggedResponseWithoutCommand |
 | IMAP-UPDATE-04 | RFC 3501 §5.5 | MUST | Commands sent without waiting run to completion in the order given: FETCH + STORE + FETCH + SEARCH + CHECK of the same message answer in order, each seeing the one before. | TestPipelinedCommandsRunInOrder |
-| IMAP-AUTOLOGOUT-01 | RFC 3501 §5.4 | MUST | An inactivity autologout timer lasts at least 30 minutes, and any command resets it. | n/a: the timer is internal and not settable through Session, so the root package proves it: TestAutologoutIsAtLeastThirtyMinutes and TestSession_CommandActivityResetsAutologout. |
-| IMAP-STATE-01 | RFC 3501 §§3.4, 7.1.5 | MUST | The server does not close a connection unilaterally without an untagged BYE that gives the reason: when the Server stops, a session waiting for a command or idling sends BYE at once, and one running a command finishes it, then sends BYE. | n/a: Server-level, so the root package proves it: TestShutdownSaysByeToIdleSessions and TestShutdownWaitsForInflightSession. The autologout, panic and refusal BYEs are IMAP-RESP-14's. |
+| IMAP-AUTOLOGOUT-01 | RFC 3501 §5.4 | MUST | An inactivity autologout timer lasts at least 30 minutes, and any command resets it. | n/a: the timer is internal and not settable through Session, so the server package's own tests prove it: TestAutologoutIsAtLeastThirtyMinutes and TestSession_CommandActivityResetsAutologout. |
+| IMAP-STATE-01 | RFC 3501 §§3.4, 7.1.5 | MUST | The server does not close a connection unilaterally without an untagged BYE that gives the reason: when the Server stops, a session waiting for a command or idling sends BYE at once, and one running a command finishes it, then sends BYE. | n/a: Server-level, so the server package's own tests prove it: TestShutdownSaysByeToIdleSessions and TestShutdownWaitsForInflightSession. The autologout, panic and refusal BYEs are IMAP-RESP-14's. |
 | IMAP-NIL-01 | RFC 3501 §4.5 | Normative | NIL is never an atom's value: a folder named NIL is listed and answered as the quoted name "NIL", and SELECT, EXAMINE and STATUS find it by that name, bare or quoted, case-sensitively. | TestMailboxNamedNIL |
 
 ## RFC 6855: UTF8=ACCEPT — partial slice
@@ -763,7 +763,7 @@ inventory is complete.
 | IMAP-RESP-11 | RFC 3501 §7.1.4 | Normative | PREAUTH greets a connection that is already authenticated. | n/a: the engine never pre-authenticates; every greeting is OK (TestGreeting). |
 | IMAP-RESP-12 | RFC 3501 §7.4.1 | MUST NOT | Send no EXPUNGE when no command is in progress, or while answering FETCH, STORE or SEARCH (UID forms included), even after another session removed a message. | TestNoExpungeDuringFetchStoreSearch |
 | IMAP-RESP-13 | RFC 3501 §§6.1.3, 7.1.5 | Normative | BYE is always untagged. On LOGOUT it comes before the tagged OK; on a failure the connection closes straight after it. | TestLogout, TestCommandLiteralRefusalCloses |
-| IMAP-RESP-14 | RFC 3501 §7.1.5 | Normative | BYE announces a panic shutdown, an inactivity autologout, or a greeting that refuses the connection. | n/a: not fully supported yet. Autologout and panic BYE are proven in the root package (session_autologout_test.go, session_panic_test.go), not on this harness; the refusal greeting is IMAP-GREET-02. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-RESP-14 | RFC 3501 §7.1.5 | Normative | BYE announces a panic shutdown, an inactivity autologout, or a greeting that refuses the connection. | n/a: not fully supported yet. Autologout and panic BYE are proven in the server package (pkg/imap/server/session_autologout_test.go, session_panic_test.go), not on this harness; the refusal greeting is IMAP-GREET-02. Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-RESP-15 | RFC 3501 §7.3.2 | Normative | RECENT reports the number of messages with the `\Recent` flag. | n/a: not supported yet; the engine keeps no `\Recent` state and reports the unseen count (see TestSelectionExamples). Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-RESP-16 | RFC 3501 §7.4.2 | MUST | Header data is 7-bit, and non-textual body data is transfer-encoded to text before it is sent. | n/a: not supported yet; the engine returns stored octets as they are and does not re-encode 8-bit headers or binary bodies. NUL is refused (IMAP-ENV-12). Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-RESP-17 | RFC 3501 §§4.3, 7.5 | Normative | A `+` continuation request asks for the rest of a command: before synchronizing literal octets and during IDLE. | TestCommandLiteralAccepted, TestAppendExample, TestIdleDoneAndNextCommand |
