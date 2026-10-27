@@ -349,6 +349,9 @@ The [core security crosswalk](RFC-SECURITY.md) distinguishes listener proofs fro
 host/client policy and explicitly missing full RFC sample transcripts. Requesting
 an implicit-TLS port without a TLS configuration fails before either listener
 opens. A separately requested development cleartext listener remains supported.
+Authentication reporting is tested with debug enabled; incoming command traces
+record byte counts without copying credentials or other command text. Structured
+authentication outcome, identity and source events remain available.
 
 [CHECKLIST.md](CHECKLIST.md) is a partial, CI-checked list of RFC 3501
 requirements and those of every extension the server advertises. Each mapped
