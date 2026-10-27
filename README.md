@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 504/711 mapped](https://img.shields.io/badge/partial%20checklist-504%2F711%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 508/728 mapped](https://img.shields.io/badge/partial%20checklist-508%2F728%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap/pkg/imap/server)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -338,6 +338,11 @@ The host:
 ## RFC conformance
 
 ### The RFC checklist
+
+The [core security crosswalk](RFC-SECURITY.md) distinguishes listener proofs from
+host/client policy and explicitly missing full RFC sample transcripts. Requesting
+an implicit-TLS port without a TLS configuration fails before either listener
+opens. A separately requested development cleartext listener remains supported.
 
 [CHECKLIST.md](CHECKLIST.md) is a partial, CI-checked list of RFC 3501
 requirements and those of every extension the server advertises. Each mapped

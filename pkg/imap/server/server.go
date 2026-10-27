@@ -70,6 +70,12 @@ type Ports struct {
 // skipped. It returns once the listeners are open; connections are served in the
 // background until [Server.Shutdown] or [Server.Close].
 func (s *Server) ListenAndServe(ports Ports) error {
+	// Validate both listener requests before opening either one. Without this
+	// check, listen's cleartext fallback could mark a plaintext connection as
+	// using TLS solely because it arrived on the requested implicit-TLS port.
+	if ports.IMAPTLS > 0 && s.tlsConfig == nil {
+		return fmt.Errorf("implicit TLS requires a TLS configuration")
+	}
 	if ports.IMAP > 0 {
 		if err := s.listen(ports.IMAP, false); err != nil {
 			return fmt.Errorf("failed to listen on port %d: %w", ports.IMAP, err)

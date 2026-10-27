@@ -1,0 +1,239 @@
+{
+  "scope": "Selected core operational/security sections8,10\u201312 only; the complete inventory remains partial.",
+  "sources": [
+    {
+      "rfc": 3501,
+      "url": "https://www.rfc-editor.org/rfc/rfc3501.txt",
+      "sha256": "4437974dde85859f2391f32215295e7b20ce157c3bd2adbe7e5b443e990f15cf",
+      "sections": [
+        {
+          "section": "8",
+          "title": "Sample IMAP4rev1 connection",
+          "source_section_sha256": "b6cd0b31d85ef727b7da7c5b1a2372b1a8a1946e4ca6a151e92525b5bb9228c1",
+          "requirements": [
+            "IMAP-SECURITY-12"
+          ],
+          "note": "Full sample transcript is an explicit outstanding vector; component proofs do not establish the combined example."
+        },
+        {
+          "section": "10",
+          "title": "Author's Note",
+          "source_section_sha256": "6026eb0faee6bce3bd1d4ae2a7f84ee8822563b6890d060ff00f4cc92704808c",
+          "requirements": [],
+          "note": "Historical specification succession; no independent runtime requirement."
+        },
+        {
+          "section": "11",
+          "title": "Security Considerations",
+          "source_section_sha256": "170a435c09910db1f34b54b088ed450d856d4714815bdce4c0614a25668a6b5c",
+          "requirements": [
+            "IMAP-SECURITY-02",
+            "IMAP-STARTTLS-01",
+            "IMAP-PLAIN-06"
+          ],
+          "note": "Unprotected transactions expose credentials and mail; protected configuration is proved, while the documented development mode is outside that claim."
+        },
+        {
+          "section": "11.1",
+          "title": "STARTTLS Security Considerations",
+          "source_section_sha256": "ed0afa92153aa258ee6bdf763e02a7d356f8329b9cc39158b0c450b1d7c1dd82",
+          "requirements": [
+            "IMAP-SECURITY-04",
+            "IMAP-SECURITY-05",
+            "IMAP-STARTTLS-07",
+            "IMAP-TLS-AUDIT-04",
+            "IMAP-SECURITY-17"
+          ],
+          "note": "Historical cipher deviation, every client identity rule, handshake result and host privacy/authentication policy are separate dispositions."
+        },
+        {
+          "section": "11.2",
+          "title": "Other Security Considerations",
+          "source_section_sha256": "c68d0a43b61cabf0011531463529a7191af7b30c0c142934de72c414cdf71c93",
+          "requirements": [
+            "IMAP2-SEC-243",
+            "IMAP2-SEC-244",
+            "IMAP2-SEC-245",
+            "IMAP2-SEC-246",
+            "IMAP-AUTHENTICATE-10"
+          ],
+          "note": "LOGIN/PLAIN privacy alternatives, generic wire errors, optional non-plaintext mechanisms and host-supplied failure limiting; no default per-account policy is implied."
+        },
+        {
+          "section": "12",
+          "title": "IANA Considerations",
+          "source_section_sha256": "5ed9641979fa672dbc4c4ec339f6ad3e5da0bc104c8e1f69e93beda9ff21fe59",
+          "requirements": [
+            "IMAP-SECURITY-14"
+          ],
+          "note": "Capability-registration process and STARTTLS/LOGINDISABLED registry updates, not a new wire requirement."
+        }
+      ]
+    },
+    {
+      "rfc": 9051,
+      "url": "https://www.rfc-editor.org/rfc/rfc9051.txt",
+      "sha256": "acf52a50eb748ea21b5ffdcb31c761d3fbba6242d53d4f53c2555de039c5c3cf",
+      "sections": [
+        {
+          "section": "8",
+          "title": "Sample IMAP4rev2 Connection",
+          "source_section_sha256": "c35c9d875c79b4808f34135fb24c8bfc9c4cb44c3d8fccfbf6bb2b7b7883f424",
+          "requirements": [
+            "IMAP-SECURITY-13"
+          ],
+          "note": "SCRAM, rev2 enablement and OLDNAME make this full transcript unsupported; rev1 components are not a substitute."
+        },
+        {
+          "section": "10",
+          "title": "Author's Note",
+          "source_section_sha256": "087077477514f0596dadf700b518118a1d11935089e4d68b1d08d308d83f57a4",
+          "requirements": [],
+          "note": "Historical specification succession; no independent runtime requirement."
+        },
+        {
+          "section": "11",
+          "title": "Security Considerations",
+          "source_section_sha256": "0fc0adf6d8a2dd68ae4aa150a0d7b408ca99fcf39e03d714d25fc20abb4487ac",
+          "requirements": [
+            "IMAP-SECURITY-02",
+            "IMAP-PLAIN-06"
+          ],
+          "note": "Transport/confidentiality warning covers both implicit TLS and STARTTLS; SASL confidentiality layers remain unsupported."
+        },
+        {
+          "section": "11.1",
+          "title": "TLS-Related Security Considerations",
+          "source_section_sha256": "bc050c01638b3b3910560b8ea4f5e4db6f01a9e8cd95dcc493adb172b9dc9b09",
+          "requirements": [
+            "IMAP2-SEC-233",
+            "IMAP2-SEC-234",
+            "IMAP2-SEC-236",
+            "IMAP-SECURITY-02",
+            "IMAP-SECURITY-03",
+            "IMAP-SECURITY-05"
+          ],
+          "note": "TLS recommendations and exact cipher/profile matrix remain host obligations; concrete TLS1.2/TLS1.3 fixtures do not prove the complete profile. Client identity checking stays client-side."
+        },
+        {
+          "section": "11.2",
+          "title": "STARTTLS Command versus Use of Implicit TLS Port",
+          "source_section_sha256": "09b6651ac8b4ba83898937d24c3c9aaf68e9c583021a415a8c6b71b2fdc82cbd",
+          "requirements": [
+            "IMAP-SECURITY-01",
+            "IMAP-SECURITY-02",
+            "IMAP-SECURITY-06",
+            "IMAP-SECURITY-07",
+            "IMAP2-SEC-238",
+            "IMAP-SECURITY-15"
+          ],
+          "note": "Missing implicit-TLS configuration now fails before either bind. Server cleartext availability, client dual-mode support and concurrent port/address recommendations have distinct scopes and levels."
+        },
+        {
+          "section": "11.3",
+          "title": "Client Handling of Unsolicited Responses Not Suitable for the",
+          "source_section_sha256": "ab41b5880d9808dc0cdcc01fa7fe0b928c443cde996c59a31504a0b0eef319af",
+          "requirements": [
+            "IMAP-SECURITY-08",
+            "IMAP-SECURITY-16"
+          ],
+          "note": "All three response-filtering rules and PREAUTH cross-reference are client injection defenses, not server parser proofs."
+        },
+        {
+          "section": "11.4",
+          "title": "COPYUID and APPENDUID Response Codes",
+          "source_section_sha256": "f06dceb38f6a5ae2ffec3a7ab52237421de7a0a4b4c8c496d10cdaaf56ea75b5",
+          "requirements": [
+            "IMAP2-SEC-241",
+            "IMAP-APPENDUID-05",
+            "IMAP-COPY-15"
+          ],
+          "note": "Destination metadata privacy requires backend readability state; the engine does not infer that state from write access."
+        },
+        {
+          "section": "11.5",
+          "title": "LIST Command and Other Users' Namespace",
+          "source_section_sha256": "5b5d903f843b5a63b67c8aac5ece98b4a15d2d2d8d7fc32233733ae34c7752f2",
+          "requirements": [
+            "IMAP2-SEC-242",
+            "IMAP-NAMESPACE-01"
+          ],
+          "note": "No other-users namespace is offered; host mailbox authorization remains necessary. NIL namespace output does not prove arbitrary backend ACLs."
+        },
+        {
+          "section": "11.6",
+          "title": "Use of MD5",
+          "source_section_sha256": "1db6c12d9178c27e10c214ecc9a95ccd1b6faa53dba03d41c85bbf6a612d305a",
+          "requirements": [
+            "IMAP-BS-17",
+            "IMAP-BS-19"
+          ],
+          "note": "Content-MD5 is preserved metadata, never a generated/verified cryptographic digest. Absent/multipart forms and string framing have narrow existing wire proofs."
+        },
+        {
+          "section": "11.7",
+          "title": "Other Security Considerations",
+          "source_section_sha256": "4e3d0a2652f55de1a45894509cac78f8d22cebd14289f5c5045c7346c1294e04",
+          "requirements": [
+            "IMAP2-SEC-243",
+            "IMAP2-SEC-244",
+            "IMAP2-SEC-245",
+            "IMAP2-SEC-246",
+            "IMAP2-SEC-247",
+            "IMAP-SECURITY-09",
+            "IMAP-SECURITY-10",
+            "IMAP-SECURITY-11"
+          ],
+          "note": "Reporting, per-IP limiting, cross-account analysis, mandatory weak-account blocking/change request and recommended password strength are distinct. Generic errors and protected configuration have wire proofs; host policy remains unimplemented here."
+        },
+        {
+          "section": "12",
+          "title": "IANA Considerations",
+          "source_section_sha256": "3794c3848cd34eb00832ae9ffdf1e179c7baee01ead32142e5034551dcbcca9a",
+          "requirements": [
+            "IMAP-SECURITY-14"
+          ],
+          "note": "TCP143/993 service references and reserved UDP port registry actions; deployment does not claim registry administration."
+        },
+        {
+          "section": "12.1",
+          "title": "Updates to IMAP Capabilities Registry",
+          "source_section_sha256": "49be10fa83971cbad2a37a12634588e113a57864ad2ee246cf121be79158e4b4",
+          "requirements": [
+            "IMAP-SECURITY-14",
+            "IMAP2-SEC-224"
+          ],
+          "note": "Capability registration process and AUTH=/STARTTLS/LOGINDISABLED reference updates."
+        },
+        {
+          "section": "12.2",
+          "title": "GSSAPI/SASL Service Name",
+          "source_section_sha256": "7fb907e8303093860d0d18dff133eeb3a5be166b04d6147ba58c3343180351ba",
+          "requirements": [
+            "IMAP-SECURITY-14",
+            "IMAP-AUTHENTICATE-12"
+          ],
+          "note": "The imap SASL service-name registry; PLAIN does not consume a GSSAPI service identity."
+        },
+        {
+          "section": "12.3",
+          "title": "LIST Selection Options, LIST Return Options, and LIST Extended",
+          "source_section_sha256": "1177e960693c1ee6085174892e6dbb3fe0efdf57a15747ad18e293de4492cbf6",
+          "requirements": [
+            "IMAP-SECURITY-14"
+          ],
+          "note": "RFC5258 registration procedures and OLDNAME registry reference; OLDNAME implementation is not inferred."
+        },
+        {
+          "section": "12.4",
+          "title": "IMAP Mailbox Name Attributes and IMAP Response Codes",
+          "source_section_sha256": "42ce5a8f0f4828e82d65488a0d1fa65fdf4128bc35a732cbc1aef93bbe95c194",
+          "requirements": [
+            "IMAP-SECURITY-14"
+          ],
+          "note": "Mailbox-name attribute and response-code registry references, not new runtime behavior."
+        }
+      ]
+    }
+  ]
+}
