@@ -465,6 +465,17 @@ func (s *Session) Handle() {
 			continue
 		}
 
+		// Protocol command names remain ASCII even with UTF8=ACCEPT. Unicode
+		// case folding must not turn an unknown name into SELECT or STORE.
+		if !wire.IsASCII(cmd) {
+			s.tagged(tag, "BAD", "Invalid command name")
+			_, _, sync, literal := wire.SplitTrailingLiteral(args)
+			if literal && !sync {
+				s.send("* BYE Invalid command with a pending literal")
+				return
+			}
+			continue
+		}
 		ucmd := strings.ToUpper(cmd)
 
 		// A synchronizing literal {n} (or LITERAL+ {n+}) may stand in for any

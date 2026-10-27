@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep command names, keywords and bare atoms ASCII even when UTF8=ACCEPT is
+  available. Unicode look-alikes no longer execute commands or change SEARCH
+  semantics; legal quoted UTF-8 and counted literals remain supported.
+- Keep untrusted charset, date and unknown SEARCH values out of response text,
+  preventing literal CR/LF from injecting additional server replies. Charset
+  matching also rejects Unicode look-alikes of supported ASCII names.
+
+### Added
+
+- Six public-session wire regressions and a token-boundary unit test for core
+  text forms, response framing and synchronizing/non-synchronizing recovery.
+  The focused audit remains part of the partial RFC conformance inventory.
+
 ## [0.13.1] - 2026-10-26
 
 ### Fixed
