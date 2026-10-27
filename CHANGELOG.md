@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Preserve literal argument types before materializing their bytes. SEARCH
+  dates no longer become valid quoted dates, and atom/number-only positions,
+  ENABLE, AUTHENTICATE and no-argument commands refuse literals before soliciting
+  data. Valid string operands, saved searches and LITERAL- TOOBIG priority remain.
+
 - Keep command names, keywords and bare atoms ASCII even when UTF8=ACCEPT is
   available. Unicode look-alikes no longer execute commands or change SEARCH
   semantics; legal quoted UTF-8 and counted literals remain supported.
@@ -16,6 +21,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   matching also rejects Unicode look-alikes of supported ASCII names.
 
 ### Added
+
+- Eight wire proofs for literal type boundaries, legal string continuations,
+  session/saved-search state and size-error priority, plus a CI fuzz target for
+  earlier literal bytes preserving a later operand's type. The existing SEARCH
+  criterion parser determines string slots rather than a second grammar.
 
 - Six public-session wire regressions and a token-boundary unit test for core
   text forms, response framing and synchronizing/non-synchronizing recovery.
