@@ -452,7 +452,10 @@ func (s *Session) Handle() {
 			continue
 		}
 
-		slog.Debug("imap: recv", "remote", s.conn.RemoteAddr(), "cmd", line)
+		// Raw command text can contain LOGIN passwords, inline SASL responses or
+		// secrets in malformed tag/command positions. Log only the byte count,
+		// before parsing, so enabling debug cannot copy those values to logs.
+		slog.Debug("imap: recv", "remote", s.conn.RemoteAddr(), "octets", len(line))
 
 		// IMAP commands are: <tag> <command> [<args>]
 		tag, cmd, args := wire.ParseCommand(line)

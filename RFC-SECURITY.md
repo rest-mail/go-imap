@@ -54,7 +54,15 @@ cleartext listeners retain their documented behavior.
 Three focused public-listener tests cover missing configuration, verified
 TLS1.2/TLS1.3 authentication and rejected hostname/trust/version negotiations.
 A fourth wire test checks structured failure reporting for LOGIN and both PLAIN
-forms without leaking passwords, encoded responses or backend diagnostics.
+forms without leaking passwords, encoded responses or backend diagnostics. It
+enables debug logging and covers failed, malformed, literal, pre-TLS-refused and
+successful authentication, plus refused reauthentication and invalid input. The
+command trace records the input byte count and source, never the command line,
+arguments or tag. Structured success/failure identity and source context remain
+available. This diagnostic hardening strengthens the existing reporting proof;
+it adds no RFC requirement or new checklist coverage. It does not promise that
+arbitrary host backend errors or panic values logged elsewhere contain no
+private data.
 Existing privacy, limiter, STARTTLS, namespace and Content-MD5 proofs stay intact.
 These fixtures do not prove the entire rev2 cipher matrix, production listener
 configuration, arbitrary backend ACLs, account policy or password-spraying
