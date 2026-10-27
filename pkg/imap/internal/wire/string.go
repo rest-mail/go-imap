@@ -253,7 +253,29 @@ func IsASCII(s string) bool {
 // sequence with the high bit set that is not well-formed UTF-8. Outside a
 // quoted-string no 8-bit octet is legal at all, so the whole line is checked.
 func ValidCommandUTF8(text string) bool {
-	return utf8.ValidString(text)
+	if !utf8.ValidString(text) {
+		return false
+	}
+	quoted, escaped := false, false
+	for i := range len(text) {
+		c := text[i]
+		if escaped {
+			escaped = false
+			continue
+		}
+		switch c {
+		case '"':
+			quoted = !quoted
+		case '\\':
+			escaped = quoted
+		default:
+			if c >= 0x80 && !quoted {
+				return false
+			}
+		}
+	}
+	// Individual command parsers still validate quote balance and escapes.
+	return true
 }
 
 // ValidUTF8MailboxName reports whether name is a mailbox name RFC 6855 §3

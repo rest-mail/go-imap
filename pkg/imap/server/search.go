@@ -133,8 +133,10 @@ func (s *Session) parseSearchCriteria(args string) ([]searchCriterion, *searchEr
 			return nil, badSearch("CHARSET requires an argument")
 		}
 		name := wire.Unquote(tokens[1])
-		if !searchCharsets[strings.ToUpper(name)] {
-			return nil, &searchError{status: "NO", text: "[BADCHARSET (US-ASCII UTF-8)] unsupported charset " + name}
+		if !wire.IsASCII(name) || !searchCharsets[strings.ToUpper(name)] {
+			// A literal charset may contain arbitrary octets, including CR/LF.
+			// Keep it out of response text and use ASCII-only name matching.
+			return nil, &searchError{status: "NO", text: "[BADCHARSET (US-ASCII UTF-8)] unsupported charset"}
 		}
 		tokens = tokens[2:]
 	}
@@ -343,7 +345,7 @@ func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriter
 		}
 		d, ok := wire.ParseSearchDate(tokens[idx+1])
 		if !ok {
-			return searchCriterion{}, idx, badSearch("invalid " + keyword + " date: " + wire.Unquote(tokens[idx+1]))
+			return searchCriterion{}, idx, badSearch("invalid " + keyword + " date")
 		}
 		return searchCriterion{kind: strings.ToLower(keyword), value: tokens[idx+1], date: d}, idx + 2, nil
 	case "UID":
@@ -382,7 +384,7 @@ func parseSingleCriterion(tokens []string, idx int, maxUID uint32) (searchCriter
 		if wire.ValidSequenceSet(tok) {
 			return searchCriterion{kind: "seqset", value: tok}, idx + 1, nil
 		}
-		return searchCriterion{}, idx, badSearch("unknown search criterion: " + tok)
+		return searchCriterion{}, idx, badSearch("unknown search criterion")
 	}
 }
 

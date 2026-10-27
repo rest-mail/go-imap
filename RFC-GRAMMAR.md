@@ -86,3 +86,28 @@ The main checklist remains PARTIAL until non-keyword prose and the remaining sup
 - The QUOTA extension had no requirement table. Its full RFC2087 audit and new wire tests found ignored GETQUOTA arguments, fabricated root/mailbox success and broken escaped mailbox names. Those have focused baseline reproductions and corrections in this branch. Numeric responses now refuse backend data outside the advertised rev1 number grammar before any partial response.
 - NAMESPACE already rejected extra arguments on current main. Its additional trailing-space regression passes without a runtime change.
 - RFC9051 compatibility, host UID identity, keywords, session-local Deleted, folder persistence, command-wide rollback, and deliberate owner exclusions remain visible in CHECKLIST.md/README.md and their existing issue links. This crosswalk neither decides those items nor closes #374.
+
+## Focused core value boundaries (2026-10-27)
+
+RFC3501 and RFC9051 section 4 distinguish value forms rather than treating all
+text as interchangeable. This slice reconciles the boundaries below against
+section 9 and the named existing proofs. It does not claim an exhaustive audit
+of every production alternative, non-keyword paragraph or cross-extension
+combination. The source hashes above identify the RFC Editor texts read.
+
+| Value boundary | Current proof or explicit limit |
+|---|---|
+| ASCII command names and atoms versus quoted text | IMAP-SYNTAX-09/10 reject Unicode case-folding look-alikes before dispatch or data access. RFC6855 extends quoted strings; it does not widen command keywords or bare atoms. Both before and after ENABLE are exercised. |
+| Quoted strings and escapes | IMAP-SYNTAX-04 and IMAP-UTF8-01 cover quoted structure; IMAP-SYNTAX-10 and the wire token-boundary unit test distinguish escaped quotes/backslashes from quote boundaries and preserve legal quoted UTF-8. |
+| Synchronizing, non-synchronizing and empty literals | IMAP-LITERAL-06, IMAP-APPEND-23 and IMAP-LITMINUS-* retain counted-octet and empty-value behavior. IMAP-SYNTAX-08/09 add pre-continuation refusals and BYE for unread non-synchronizing data, including command continuations and APPEND's separate reader. |
+| Literal data versus response text | IMAP-SEARCH-29/30 keep CR/LF, invalid UTF-8 and response-looking literal content out of charset/date/unknown-key diagnostics. A pipelined NOOP proves there is exactly one refusal and framing survives. No submitted value is echoed. |
+| Numbers versus nonzero numbers | Existing IMAP-SEARCH-17/18, IMAP-FETCH-* and sequence-set proofs distinguish zero/leading-zero SEARCH numbers from nonzero sequence and part numbers, uint32 limits and partial counts. Rev2 number64 widths remain a separate #718 boundary. |
+| Dates versus general strings | IMAP-SEARCH-22/23 and IMAP-APPEND-29 retain the distinct SEARCH date and fixed-width APPEND date-time grammar. Full literal-versus-quoted provenance validation after argument materialization is not established by this slice. |
+| Empty list, NIL and empty string | IMAP-NIL-01 keeps a mailbox named NIL separate from absence; IMAP-STORE-* and IMAP-APPEND-* cover empty flag lists. The generic materializer does not by itself prove every nstring or nested-list alternative. |
+| Rev1, negotiated UTF8 and rev2 binary data | IMAP-SYNTAX-06/07 and IMAP-UTF8-* retain rev1/negotiated text distinctions. BINARY literal8 has its own proofs; ordinary NUL output, complete rev2 baseline behavior and backend-generated metadata are not inferred from these command tests. |
+
+The baseline reproduced Unicode command/keyword execution and raw SEARCH
+response injection. The first continuation fixture used concurrent writes in
+the wrong order; it was corrected to submit each wire transcript in one write.
+No runtime deviation is claimed for that fixture error. Existing checklist
+rows, tests and the PARTIAL status are retained; #374 remains open.
