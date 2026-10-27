@@ -26,6 +26,14 @@ jobs:
       - name: Build
         run: go build ./...
 
+      # A signed 32-bit int cannot hold every valid IMAP sequence endpoint.
+      # Run the actual wire proofs on 386; amd64-only tests hide this bug.
+      - name: Check 32-bit sequence dispatch
+        env:
+          GOARCH: "386"
+          CGO_ENABLED: "0"
+        run: go test -count=1 -run '^(TestParseSequenceSet.*|TestResolveSeqNum.*|TestWideSequenceDispatch|TestSearchValidSequenceSet)$' ./pkg/imap/internal/wire ./pkg/imap/rfctest
+
       - name: Check coverage gate fixtures
         run: python3 -B -m unittest discover -s .github/tests -v
 

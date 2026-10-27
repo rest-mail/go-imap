@@ -69,7 +69,7 @@ func ParseSetMailbox(args string) (set, mailbox, problem string) {
 
 // ParseSequenceSet parses an IMAP sequence set like "1", "1:5", "1,3,5", "1:*".
 func ParseSequenceSet(seqStr string, total int) []int {
-	if total == 0 {
+	if total <= 0 {
 		return nil
 	}
 
@@ -99,21 +99,23 @@ func ParseSequenceSet(seqStr string, total int) []int {
 			if start < 1 {
 				start = 1
 			}
-			if end > total {
-				end = total
+			if end > uint64(total) {
+				end = uint64(total)
 			}
 			for i := start; i <= end; i++ {
-				if !seen[i] {
-					result = append(result, i)
-					seen[i] = true
+				// Only snapshot-bounded values may be converted to int.
+				n := int(i)
+				if !seen[n] {
+					result = append(result, n)
+					seen[n] = true
 				}
 			}
 		} else {
 			// Single number
 			n := resolveSeqNum(part, total)
-			if n >= 1 && n <= total && !seen[n] {
-				result = append(result, n)
-				seen[n] = true
+			if n >= 1 && n <= uint64(total) && !seen[int(n)] {
+				result = append(result, int(n))
+				seen[int(n)] = true
 			}
 		}
 	}
@@ -122,12 +124,14 @@ func ParseSequenceSet(seqStr string, total int) []int {
 }
 
 // resolveSeqNum resolves a sequence number, handling "*" as the total count.
-func resolveSeqNum(s string, total int) int {
+// RFC 3501 numbers are unsigned 32-bit even when Go's int is signed 32-bit.
+// Retain wider historical helper inputs too; callers validate wire syntax.
+func resolveSeqNum(s string, total int) uint64 {
 	s = strings.TrimSpace(s)
 	if s == "*" {
-		return total
+		return uint64(total)
 	}
-	n, err := strconv.Atoi(s)
+	n, err := strconv.ParseUint(s, 10, 64)
 	if err != nil {
 		return 0
 	}
