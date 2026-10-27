@@ -99,10 +99,10 @@ combination. The source hashes above identify the RFC Editor texts read.
 |---|---|
 | ASCII command names and atoms versus quoted text | IMAP-SYNTAX-09/10 reject Unicode case-folding look-alikes before dispatch or data access. RFC6855 extends quoted strings; it does not widen command keywords or bare atoms. Both before and after ENABLE are exercised. |
 | Quoted strings and escapes | IMAP-SYNTAX-04 and IMAP-UTF8-01 cover quoted structure; IMAP-SYNTAX-10 and the wire token-boundary unit test distinguish escaped quotes/backslashes from quote boundaries and preserve legal quoted UTF-8. |
-| Synchronizing, non-synchronizing and empty literals | IMAP-LITERAL-06, IMAP-APPEND-23 and IMAP-LITMINUS-* retain counted-octet and empty-value behavior. IMAP-SYNTAX-08/09 add pre-continuation refusals and BYE for unread non-synchronizing data, including command continuations and APPEND's separate reader. |
+| Synchronizing, non-synchronizing and empty literals | IMAP-LITERAL-06, IMAP-APPEND-23 and IMAP-LITMINUS-* retain counted-octet and empty-value behavior. IMAP-SYNTAX-09/10 add pre-continuation refusals and BYE for unread non-synchronizing data, including command continuations and APPEND's separate reader. |
 | Literal data versus response text | IMAP-SEARCH-29/30 keep CR/LF, invalid UTF-8 and response-looking literal content out of charset/date/unknown-key diagnostics. A pipelined NOOP proves there is exactly one refusal and framing survives. No submitted value is echoed. |
 | Numbers versus nonzero numbers | Existing IMAP-SEARCH-17/18, IMAP-FETCH-* and sequence-set proofs distinguish zero/leading-zero SEARCH numbers from nonzero sequence and part numbers, uint32 limits and partial counts. Rev2 number64 widths remain a separate #718 boundary. |
-| Dates versus general strings | IMAP-SEARCH-22/23 and IMAP-APPEND-29 retain the distinct SEARCH date and fixed-width APPEND date-time grammar. Full literal-versus-quoted provenance validation after argument materialization is not established by this slice. |
+| Dates versus general strings | IMAP-SEARCH-22/23 and IMAP-APPEND-29 retain the distinct SEARCH date and fixed-width APPEND date-time grammar. IMAP-SEARCH-31/32 now preserve literal source types before materialization, including nested and UID criteria. This does not establish every other command production or extension value. |
 | Empty list, NIL and empty string | IMAP-NIL-01 keeps a mailbox named NIL separate from absence; IMAP-STORE-* and IMAP-APPEND-* cover empty flag lists. The generic materializer does not by itself prove every nstring or nested-list alternative. |
 | Rev1, negotiated UTF8 and rev2 binary data | IMAP-SYNTAX-06/07 and IMAP-UTF8-* retain rev1/negotiated text distinctions. BINARY literal8 has its own proofs; ordinary NUL output, complete rev2 baseline behavior and backend-generated metadata are not inferred from these command tests. |
 
@@ -111,3 +111,34 @@ response injection. The first continuation fixture used concurrent writes in
 the wrong order; it was corrected to submit each wire transcript in one write.
 No runtime deviation is claimed for that fixture error. Existing checklist
 rows, tests and the PARTIAL status are retained; #374 remains open.
+
+## Literal argument types (2026-10-27)
+
+A counted literal and a quoted string can decode to identical bytes but are not
+interchangeable in every production. RFC3501 section 9 permits a literal for
+SEARCH's astring values, while its date production offers bare and quoted forms.
+The reader previously replaced both with quoted strings before validating the
+command. Baseline wire transcripts reproduce a valid literal date being accepted.
+
+IMAP-SEARCH-31/32 now check the literal's position before consuming it. A probe of
+the real recursive criterion parser marks string slots, including both HEADER
+astrings; its data is never evaluated against messages. This preserves Boolean,
+group, RETURN, charset and UID forms without introducing a parallel SEARCH
+syntax table. Earlier materialized literal values remain data, including words
+such as ON, quotes/backslashes, line breaks and 8-bit octets. Fuzz seeds check
+that such values cannot change a later date/string slot; CI runs the campaign.
+
+IMAP-LITERAL-12 refuses counted literals for no-argument commands, ENABLE's
+capability atoms (RFC5161 sections 3.1 and 4), and AUTHENTICATE's mechanism or
+initial response (RFC4959 section 3). Synchronizing refusals invite no payload;
+non-synchronizing refusals close with BYE because data is unread. Existing size
+limits run first so RFC7888's mandatory TOOBIG response is not masked. Refusals
+preserve selected/authenticated state, do not partly enable UTF8, and keep the
+saved SEARCH result after BAD (IMAP-SEARCH-33).
+
+The initial positive fixture omitted the backend's envelope metadata; its
+Subject/From/To fields were corrected to agree with its original raw headers.
+That fixture error is not a claimed runtime defect. All pre-existing checklist
+rows and test cases remain. Other command/extension productions, non-keyword
+prose and host responsibilities still require reconciliation; #374 remains
+PARTIAL rather than claiming complete RFC3501 or IMAP4rev2 conformance.

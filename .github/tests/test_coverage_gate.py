@@ -151,7 +151,7 @@ class WorkflowFixtures(unittest.TestCase):
                     re.MULTILINE,
                 )
             )
-        self.assertEqual(len(targets), 9)
+        self.assertEqual(len(targets), 10)
         self.assertCountEqual(targets, declared)
 
 

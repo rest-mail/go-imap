@@ -99,5 +99,8 @@ jobs:
       - name: Fuzz SEARCH quote framing
         run: go test -run='^$' -fuzz='^FuzzSearchQuotes$' -fuzztime=500000x ./pkg/imap/server
 
+      - name: Fuzz literal argument type boundaries
+        run: go test -run='^$' -fuzz='^FuzzLiteralTypeBoundaries$' -fuzztime=500000x ./pkg/imap/server
+
       - name: Fuzz modified UTF-7 mailbox names
         run: go test -run='^$' -fuzz='^FuzzModifiedUTF7$' -fuzztime=500000x ./pkg/imap/internal/mutf7

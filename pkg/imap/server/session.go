@@ -217,7 +217,7 @@ func endsNonSyncLiteral(tail []byte) bool {
 // Memory stays bounded:
 // the aggregate literal octets are capped at MaxLiteralSize and the assembled
 // line at MaxCommandLineLength, both independent of how the client chunks input.
-func (s *Session) readLiteralArgs(tag, args string) (assembled string, ok, closeConn bool) {
+func (s *Session) readLiteralArgs(tag, command, args string) (assembled string, ok, closeConn bool) {
 	reject := func(reason string, fatal bool) (string, bool, bool) {
 		s.tagged(tag, "BAD", reason)
 		if fatal {
@@ -249,6 +249,9 @@ func (s *Session) readLiteralArgs(tag, args string) (assembled string, ok, close
 		// is refused without a continuation, so the client never sends the octets.
 		if size > MaxLiteralSize || total+size > MaxLiteralSize {
 			return reject(fmt.Sprintf("Literal too large (limit %d bytes)", MaxLiteralSize), !sync)
+		}
+		if !literalArgumentAllowed(command, prefix) {
+			return reject("Literal is not allowed at this argument position", !sync)
 		}
 		total += size
 
@@ -487,7 +490,7 @@ func (s *Session) Handle() {
 		// handleAppend's large-message path, which needs the raw octets, not a
 		// re-encoded argument; handleAppend reads a literal mailbox name itself.
 		if ucmd != "APPEND" {
-			materialized, argsOK, closeConn := s.readLiteralArgs(tag, args)
+			materialized, argsOK, closeConn := s.readLiteralArgs(tag, ucmd, args)
 			if closeConn {
 				return // buffered unread octets must never become new commands
 			}
