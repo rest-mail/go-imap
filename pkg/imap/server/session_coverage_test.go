@@ -69,7 +69,7 @@ func TestCoverageMailboxManagement(t *testing.T) {
 	for i, tc := range []struct{ cmd, reply string }{
 		{`CREATE ""`, "NO Missing folder name"},
 		{"CREATE " + strings.Repeat("x", 201), "NO Folder name too long"},
-		{"CREATE bad\x00name", "NO Invalid folder name"},
+		{"CREATE bad\x00name", "BAD CREATE requires one mailbox name"},
 		{`DELETE ""`, "NO Missing folder name"},
 		{"RENAME Old", "BAD RENAME requires old and new name"},
 		{`RENAME "" New`, "BAD RENAME requires old and new name"},

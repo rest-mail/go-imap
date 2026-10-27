@@ -49,6 +49,29 @@ func (s *Session) wireName(name string) string {
 	return mutf7.Encode(name)
 }
 
+// mailboxArguments consumes exactly count mailbox astrings (RFC 3501 section 9).
+// Validate the original tokens before decoding; ParseAstring alone is lenient
+// about separators and escapes. Counted literals have already been materialized
+// as quoted strings, so their spaces and quoted-specials remain name data.
+func mailboxArguments(args string, count int) ([]string, bool) {
+	names := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		name, rest, ok := wire.ParseAstring(args)
+		if !ok || !wire.ValidAstring(args[:len(args)-len(rest)]) {
+			return nil, false
+		}
+		names = append(names, name)
+		if i == count-1 {
+			return names, rest == ""
+		}
+		args, ok = wire.CutSingleSP(rest)
+		if !ok {
+			return nil, false
+		}
+	}
+	return names, args == ""
+}
+
 // handleSubscribe implements SUBSCRIBE (RFC 3501 §6.3.6) and handleUnsubscribe
 // implements UNSUBSCRIBE (§6.3.7) — both mandatory IMAP4rev1 commands. This
 // engine keeps no persistent per-user subscription list: folders are implicit
@@ -69,7 +92,12 @@ func (s *Session) handleSubscription(tag, args, cmd string) {
 		s.tagged(tag, "NO", "Not authenticated")
 		return
 	}
-	mailbox := wire.Unquote(strings.TrimSpace(args))
+	names, ok := mailboxArguments(args, 1)
+	if !ok {
+		s.tagged(tag, "BAD", cmd+" requires one mailbox name")
+		return
+	}
+	mailbox := names[0]
 	if mailbox == "" {
 		s.tagged(tag, "BAD", cmd+" requires a mailbox name")
 		return
@@ -87,7 +115,12 @@ func (s *Session) handleCreate(tag, args string) {
 		return
 	}
 
-	folder := wire.Unquote(strings.TrimSpace(args))
+	names, ok := mailboxArguments(args, 1)
+	if !ok {
+		s.tagged(tag, "BAD", "CREATE requires one mailbox name")
+		return
+	}
+	folder := names[0]
 	if folder == "" {
 		s.tagged(tag, "NO", "Missing folder name")
 		return
@@ -95,7 +128,7 @@ func (s *Session) handleCreate(tag, args string) {
 	// A name with "&" must be modified UTF-7 without superfluous shifts or
 	// encoded ASCII (RFC 3501 §5.1.3), and an 8-bit name is refused unless the
 	// server takes UTF-8 (§5.1, RFC 6855 §3).
-	folder, ok := s.mailboxName(folder)
+	folder, ok = s.mailboxName(folder)
 	if !ok {
 		s.tagged(tag, "NO", "Invalid folder name")
 		return
@@ -133,7 +166,12 @@ func (s *Session) handleDelete(tag, args string) {
 		return
 	}
 
-	folder := wire.Unquote(strings.TrimSpace(args))
+	names, ok := mailboxArguments(args, 1)
+	if !ok {
+		s.tagged(tag, "BAD", "DELETE requires one mailbox name")
+		return
+	}
+	folder := names[0]
 	if folder == "" {
 		s.tagged(tag, "NO", "Missing folder name")
 		return
@@ -141,7 +179,7 @@ func (s *Session) handleDelete(tag, args string) {
 	// "INBOX" is case-insensitive (RFC 3501 §5.1): fold to canonical so any-case
 	// spelling ("inbox", "InBoX") hits the standard-folder guard below rather
 	// than bypassing it. Other standard names stay case-sensitive.
-	folder, ok := s.folderName(folder)
+	folder, ok = s.folderName(folder)
 	if !ok {
 		s.tagged(tag, "NO", "No such folder")
 		return
@@ -170,14 +208,13 @@ func (s *Session) handleRename(tag, args string) {
 		return
 	}
 
-	parts := strings.SplitN(args, " ", 2)
-	if len(parts) < 2 {
+	names, ok := mailboxArguments(args, 2)
+	if !ok {
 		s.tagged(tag, "BAD", "RENAME requires old and new name")
 		return
 	}
 
-	oldName := wire.Unquote(strings.TrimSpace(parts[0]))
-	newName := wire.Unquote(strings.TrimSpace(parts[1]))
+	oldName, newName := names[0], names[1]
 
 	if oldName == "" || newName == "" {
 		s.tagged(tag, "BAD", "RENAME requires old and new name")
@@ -188,6 +225,12 @@ func (s *Session) handleRename(tag, args string) {
 	newName, newOK = s.mailboxName(newName)
 	if !oldOK || !newOK {
 		s.tagged(tag, "NO", "Invalid folder name")
+		return
+	}
+	// The RENAME production forbids INBOX as a destination, in any case
+	// (RFC 3501 section 9); refuse before enumerating or moving messages.
+	if canonicalizeInbox(newName) == "INBOX" {
+		s.tagged(tag, "NO", "Cannot rename a folder to INBOX")
 		return
 	}
 	// The new name follows CREATE's UTF8=ACCEPT rules (RFC 6855 §3).
