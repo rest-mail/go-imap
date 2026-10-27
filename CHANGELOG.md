@@ -6,8 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-10-27
+
 ### Fixed
 
+- Sequence-set ranges keep their unsigned 32-bit endpoints on 32-bit hosts
+  instead of wrapping, so a range near 4294967295 addresses the messages it
+  names.
 - Keep command names, keywords and bare atoms ASCII even when UTF8=ACCEPT is
   available. Unicode look-alikes no longer execute commands or change SEARCH
   semantics; legal quoted UTF-8 and counted literals remain supported.
