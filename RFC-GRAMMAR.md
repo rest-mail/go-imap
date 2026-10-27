@@ -142,3 +142,28 @@ That fixture error is not a claimed runtime defect. All pre-existing checklist
 rows and test cases remain. Other command/extension productions, non-keyword
 prose and host responsibilities still require reconciliation; #374 remains
 PARTIAL rather than claiming complete RFC3501 or IMAP4rev2 conformance.
+
+## Mailbox management astrings (2026-10-27)
+
+The RFC3501 section-9 productions for CREATE, DELETE, SUBSCRIBE and
+UNSUBSCRIBE take one mailbox astring; RENAME takes two. The shared token
+parser now checks exact arity, single-SP separation, complete quoted strings
+and legal escapes before decoding the names. It reuses the existing astring
+and literal materialization code rather than splitting decoded names at spaces.
+The baseline accepted malformed/trailing arguments and misread legal quoted
+and literal RENAME sources. New public-session proofs retain significant
+spaces, quotes and backslashes, verify exact source/inferior moves, and show
+that syntax refusals leave the prior selection usable without backend work
+(IMAP-MBOX-ARGS-01–03).
+
+The same production explicitly refuses INBOX as a RENAME destination. The
+baseline moved messages there and acknowledged success; IMAP-RENAME-05 proves
+the new NO refusal for atom, quoted and literal forms in mixed letter cases.
+The parser has fuzz seeds and a decoded-identity round-trip invariant.
+
+This is a focused grammar-alternative slice. It does not implement durable
+folder creation, deletion, subscription storage, general rename existence or
+atomicity, backend UID ownership, full RFC sample transcripts or IMAP4rev2.
+All previous requirement IDs remain; the general rename-existence boundary
+is narrowed to distinguish the newly proved INBOX refusal. The full core
+prose/grammar reconciliation and #374 remain PARTIAL.
