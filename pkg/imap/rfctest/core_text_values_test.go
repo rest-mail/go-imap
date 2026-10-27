@@ -30,7 +30,7 @@ func coreTextClient(t *testing.T, enabled bool) (*client, *fetchMailbox) {
 // unknown command into SELECT, SEARCH, STORE or CLOSE. No attempt may change
 // selection or flags, with either an ordinary or UTF8=ACCEPT backend.
 //
-// checklist: IMAP-SYNTAX-08
+// checklist: IMAP-SYNTAX-09
 func TestCoreCommandNamesAreASCII(t *testing.T) {
 	for _, utf8 := range []bool{false, true} {
 		for _, command := range []string{"ſELECT INBOX", "ſEARCH ALL", `ſTORE 1 +FLAGS (\Seen)`, "CLOſE"} {
@@ -60,7 +60,7 @@ func TestCoreCommandNamesAreASCII(t *testing.T) {
 // keywords, UID subcommands, options and bare mailbox astrings. The restriction
 // also applies before ENABLE on a backend that advertises UTF8=ACCEPT.
 //
-// checklist: IMAP-SYNTAX-09
+// checklist: IMAP-SYNTAX-10
 func TestCoreUTF8DoesNotExtendAtoms(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		for _, command := range []string{
@@ -120,7 +120,7 @@ func TestCoreCharsetValuesStayASCII(t *testing.T) {
 // does not reject legal UTF-8 quoted values, escaped quotes, or either literal
 // form. Quotes and command-looking text inside a value never become keywords.
 //
-// checklist: IMAP-SYNTAX-09
+// checklist: IMAP-SYNTAX-10
 func TestCoreQuotedAndLiteralValuesRemainText(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		c, _ := coreTextClient(t, enabled)
@@ -192,7 +192,7 @@ func TestCoreSearchRefusalsKeepOneLine(t *testing.T) {
 // a synchronizing one leaves NOOP usable. The rule applies at the original
 // command line, its continuation, and APPEND's separate literal reader.
 //
-// checklist: IMAP-SYNTAX-08 IMAP-SYNTAX-09
+// checklist: IMAP-SYNTAX-09 IMAP-SYNTAX-10
 func TestCoreTextRejectionLiteralBoundaries(t *testing.T) {
 	for _, sync := range []bool{false, true} {
 		for _, position := range []string{"command", "args", "continuation", "append", "append continuation"} {

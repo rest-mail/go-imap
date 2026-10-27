@@ -75,6 +75,13 @@ The main checklist remains PARTIAL until non-keyword prose and the remaining sup
 
 ## Audit receipt
 
+- 2026-10-27: checked the rev1 unsigned sequence endpoints on 386 as well as
+  arm64. Signed-int parsing changed valid endpoints above 2147483647 to zero,
+  selecting incorrect messages in SEARCH, FETCH, STORE and COPY. Endpoints
+  now stay unsigned until bounded by the snapshot; IMAP-SYNTAX-08 proves
+  forward/reversed ranges and absent targets through the public wire API.
+  The 386 test step retains this architecture-specific proof. This is one
+  value constraint, not completion of the grammar inventory or rev2 support.
 - 2026-10-26: read both complete section-9 grammar blocks and their comments; 148 rev1 and 232 rev2 base productions, plus the one rev2 sequence-set incremental alternative. Embedded core ABNF names are retained in the rev2 index. No production body is imported as runtime code.
 - The QUOTA extension had no requirement table. Its full RFC2087 audit and new wire tests found ignored GETQUOTA arguments, fabricated root/mailbox success and broken escaped mailbox names. Those have focused baseline reproductions and corrections in this branch. Numeric responses now refuse backend data outside the advertised rev1 number grammar before any partial response.
 - NAMESPACE already rejected extra arguments on current main. Its additional trailing-space regression passes without a runtime change.
@@ -90,8 +97,8 @@ combination. The source hashes above identify the RFC Editor texts read.
 
 | Value boundary | Current proof or explicit limit |
 |---|---|
-| ASCII command names and atoms versus quoted text | IMAP-SYNTAX-08/09 reject Unicode case-folding look-alikes before dispatch or data access. RFC6855 extends quoted strings; it does not widen command keywords or bare atoms. Both before and after ENABLE are exercised. |
-| Quoted strings and escapes | IMAP-SYNTAX-04 and IMAP-UTF8-01 cover quoted structure; IMAP-SYNTAX-09 and the wire token-boundary unit test distinguish escaped quotes/backslashes from quote boundaries and preserve legal quoted UTF-8. |
+| ASCII command names and atoms versus quoted text | IMAP-SYNTAX-09/10 reject Unicode case-folding look-alikes before dispatch or data access. RFC6855 extends quoted strings; it does not widen command keywords or bare atoms. Both before and after ENABLE are exercised. |
+| Quoted strings and escapes | IMAP-SYNTAX-04 and IMAP-UTF8-01 cover quoted structure; IMAP-SYNTAX-10 and the wire token-boundary unit test distinguish escaped quotes/backslashes from quote boundaries and preserve legal quoted UTF-8. |
 | Synchronizing, non-synchronizing and empty literals | IMAP-LITERAL-06, IMAP-APPEND-23 and IMAP-LITMINUS-* retain counted-octet and empty-value behavior. IMAP-SYNTAX-08/09 add pre-continuation refusals and BYE for unread non-synchronizing data, including command continuations and APPEND's separate reader. |
 | Literal data versus response text | IMAP-SEARCH-29/30 keep CR/LF, invalid UTF-8 and response-looking literal content out of charset/date/unknown-key diagnostics. A pipelined NOOP proves there is exactly one refusal and framing survives. No submitted value is echoed. |
 | Numbers versus nonzero numbers | Existing IMAP-SEARCH-17/18, IMAP-FETCH-* and sequence-set proofs distinguish zero/leading-zero SEARCH numbers from nonzero sequence and part numbers, uint32 limits and partial counts. Rev2 number64 widths remain a separate #718 boundary. |
