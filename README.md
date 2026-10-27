@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml/badge.svg)](https://github.com/rest-mail/go-imap/actions/workflows/ci.yml)
 [![Coverage gate: >=95%](https://img.shields.io/badge/coverage%20gate-%3E%3D95%25-brightgreen)](COVERAGE.md)
-[![Partial checklist: 508/728 mapped](https://img.shields.io/badge/partial%20checklist-508%2F728%20mapped-blue)](CHECKLIST.md)
+[![Partial checklist: 511/731 mapped](https://img.shields.io/badge/partial%20checklist-511%2F731%20mapped-blue)](CHECKLIST.md)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rest-mail/go-imap.svg)](https://pkg.go.dev/github.com/rest-mail/go-imap/pkg/imap/server)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rest-mail/go-imap)](https://goreportcard.com/report/github.com/rest-mail/go-imap)
 
@@ -338,6 +338,12 @@ The host:
 ## RFC conformance
 
 ### The RFC checklist
+
+The [core response crosswalk](RFC-RESPONSES.md) indexes all 43 numbered response
+sections and 44 core response-code names across RFC 3501/RFC 9051, separating
+wire proofs from optional codes, client duties and unsupported/backend boundaries.
+Blank commands receive untagged BAD; panic and deadline-failure transcripts prove
+BYE-before-close without claiming a real 30-minute timeout test.
 
 The [core security crosswalk](RFC-SECURITY.md) distinguishes listener proofs from
 host/client policy and explicitly missing full RFC sample transcripts. Requesting

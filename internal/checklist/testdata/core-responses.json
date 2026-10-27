@@ -1,0 +1,816 @@
+{
+  "sources": [
+    {
+      "rfc": 3501,
+      "url": "https://www.rfc-editor.org/rfc/rfc3501.txt",
+      "sha256": "4437974dde85859f2391f32215295e7b20ce157c3bd2adbe7e5b443e990f15cf",
+      "sections": [
+        {
+          "section": "7",
+          "title": "Server Responses",
+          "source_section_sha256": "72dc8c2f363b2f8de306c9135e30ad4fd89dfea312ea51c41ac186c97e76fbd8",
+          "requirements": [
+            "IMAP-RESP-01",
+            "IMAP-RESP-AUDIT-02",
+            "IMAP-RESP-CLIENT-01"
+          ],
+          "note": "Tag identity, untagged data and continuation framing have component proofs; unsolicited update/client memory duties remain separate."
+        },
+        {
+          "section": "7.1",
+          "title": "Server Responses - Status Responses",
+          "source_section_sha256": "20a9f6775c71556aff2eb8212f4e38a23ea11e2d59a25de0640d86c865e0b160",
+          "requirements": [
+            "IMAP-RESP-02",
+            "IMAP-RESP-04",
+            "IMAP-RESP-AUDIT-03",
+            "IMAP-RESP-CLIENT-01"
+          ],
+          "note": "Each named response code is dispositioned below. Optional availability and client presentation/unknown-code duties do not imply server implementation."
+        },
+        {
+          "section": "7.1.1",
+          "title": "OK Response",
+          "source_section_sha256": "3e95c07a9b3e94b154ea22595dae1a3f30cb0771e46c328927fdf948d1c5f696",
+          "requirements": [
+            "IMAP-GREET-01",
+            "IMAP-RESP-AUDIT-02"
+          ],
+          "note": "OK greeting begins unauthenticated; tagged OK marks success. Optional informational alerts are not emitted."
+        },
+        {
+          "section": "7.1.2",
+          "title": "NO Response",
+          "source_section_sha256": "04ee6473d45977045383bb88a2e6a4db487275d659c8d5d83f5f47b5e9db7165",
+          "requirements": [
+            "IMAP-RESP-10",
+            "IMAP-RESP-AUDIT-02"
+          ],
+          "note": "Tagged NO reports operational failure while selection remains usable. Optional untagged warnings are not emitted."
+        },
+        {
+          "section": "7.1.3",
+          "title": "BAD Response",
+          "source_section_sha256": "922ac3ed1fd7860891a694efbe79f05001d896f54591343394360dc5468cd4f3",
+          "requirements": [
+            "IMAP-RESP-03",
+            "IMAP-RESP-AUDIT-01",
+            "IMAP-RESP-AUDIT-02"
+          ],
+          "note": "Undetermined commands, including blank lines, receive untagged BAD. Determined protocol failures carry their own tag; the next command remains usable."
+        },
+        {
+          "section": "7.1.4",
+          "title": "PREAUTH Response",
+          "source_section_sha256": "cae97ef6e3e272099f284b8a3e467b2875d3cb6851ad00ba3fda9c269e2542d4",
+          "requirements": [
+            "IMAP-RESP-11",
+            "IMAP2-RESP-178"
+          ],
+          "note": "PREAUTH is not offered. Its protected-transport recommendation and client refusal duty do not establish a server feature."
+        },
+        {
+          "section": "7.1.5",
+          "title": "BYE Response",
+          "source_section_sha256": "15501659125564b3666d74f4b38da467045ce70fa580a9dbb75799702ddbf8ec",
+          "requirements": [
+            "IMAP-RESP-13",
+            "IMAP-RESP-14",
+            "IMAP-GREET-02"
+          ],
+          "note": "LOGOUT sends BYE then tagged OK; panic, deadline and refusal paths close after untagged BYE. Deadline injection proves handling, not elapsed production timing."
+        },
+        {
+          "section": "7.2",
+          "title": "Server Responses - Server and Mailbox Status",
+          "source_section_sha256": "11bed1c45f9e133027fee57c9f1a1c35fcc552ee952879b8d81dc3852e6c1156",
+          "requirements": [
+            "IMAP-RESP-01"
+          ],
+          "note": "Server and mailbox status data are untagged; completion is separate."
+        },
+        {
+          "section": "7.2.1",
+          "title": "CAPABILITY Response",
+          "source_section_sha256": "7e0890db23920f1b486b24aeead51974fd891c581d3a8d7817bf82be7621fb23",
+          "requirements": [
+            "IMAP-CAP-01",
+            "IMAP-CAP-02",
+            "IMAP-RESP-CLIENT-01"
+          ],
+          "note": "Rev1 capability baseline and protected-authentication advertisement have proofs; unknown-capability tolerance is client-side."
+        },
+        {
+          "section": "7.2.2",
+          "title": "LIST Response",
+          "source_section_sha256": "8ae477a8615e7679189ef66c1c9694e5df869973bef338f5e89c457cd23ad0cb",
+          "requirements": [
+            "IMAP-LIST-01",
+            "IMAP-LIST-02",
+            "IMAP2-RESP-187",
+            "IMAP2-RESP-188",
+            "IMAP2-RESP-189"
+          ],
+          "note": "LIST syntax, attributes, separator consistency and reusable mailbox names have narrow component proofs; arbitrary hidden-child ACLs remain host-side."
+        },
+        {
+          "section": "7.2.3",
+          "title": "LSUB Response",
+          "source_section_sha256": "929aaa87a95cc627036967b0ce55347a4d878e40552653997dbc335e994a47d1",
+          "requirements": [
+            "IMAP-LSUB-01",
+            "IMAP-LSUB-02"
+          ],
+          "note": "LSUB has its own response name; separate subscription persistence remains the recorded backend boundary."
+        },
+        {
+          "section": "7.2.4",
+          "title": "STATUS Response",
+          "source_section_sha256": "b563d2e0fd245b8d9cb207dcd3decf0906ae6f4ab35ba25e8d46523fbb0153d8",
+          "requirements": [
+            "IMAP-STATUS-01",
+            "IMAP-STATUS-02"
+          ],
+          "note": "STATUS names the requested mailbox and attributes; detailed item/backend identity boundaries remain in the STATUS family."
+        },
+        {
+          "section": "7.2.5",
+          "title": "SEARCH Response",
+          "source_section_sha256": "0ffc8bd690467484ff6efdf6dea8fdd2dc49780d42593ea9878b1cbe44335507",
+          "requirements": [
+            "IMAP-SEARCH-01",
+            "IMAP-SEARCH-02"
+          ],
+          "note": "SEARCH sequence/UID results have existing component proofs. The complete response example is not a new transcript claim."
+        },
+        {
+          "section": "7.2.6",
+          "title": "FLAGS Response",
+          "source_section_sha256": "e533f43702d9bbb207e9aae0e50a6a95c72ca1550dccec9d258bb75be9d86830",
+          "requirements": [
+            "IMAP-SELECT-01",
+            "IMAP-STORE-06",
+            "IMAP-RESP-CLIENT-01"
+          ],
+          "note": "FLAGS and PERMANENTFLAGS have distinct scopes; keyword persistence and client memory duties remain separate."
+        },
+        {
+          "section": "7.3",
+          "title": "Server Responses - Mailbox Size",
+          "source_section_sha256": "d5016c6d0ce353926227745a8292ff456ac4e7dfeca33a2e1815ef881fd6afb7",
+          "requirements": [
+            "IMAP-UPDATE-01",
+            "IMAP-RESP-15"
+          ],
+          "note": "Numeric mailbox counts are untagged; RECENT remains an explicit approximation."
+        },
+        {
+          "section": "7.3.1",
+          "title": "EXISTS Response",
+          "source_section_sha256": "d88d0449145ce07714c4f7451a3d963b1ad4c7f3e77889351c6b195f26160c93",
+          "requirements": [
+            "IMAP-SELECT-01",
+            "IMAP-UPDATE-01",
+            "IMAP-RESP-CLIENT-01"
+          ],
+          "note": "EXISTS reports total messages on selection and updates. Remembering the new count is a client duty."
+        },
+        {
+          "section": "7.3.2",
+          "title": "RECENT Response",
+          "source_section_sha256": "3b436953bf560784bb97be62fe1d9e3b5ffa069afbc05642be6962ef2a34b08c",
+          "requirements": [
+            "IMAP-RESP-15",
+            "IMAP-RESP-CLIENT-01"
+          ],
+          "note": "True Recent ownership is not implemented; unseen-count approximation must not be presented as conformance."
+        },
+        {
+          "section": "7.4",
+          "title": "Server Responses - Message Status",
+          "source_section_sha256": "0ed4d2bff537b166fc43ffd38f11ca96667bf43b214d569a73d9827c987a02c9",
+          "requirements": [
+            "IMAP-FETCH-01",
+            "IMAP-EXPUNGE-01"
+          ],
+          "note": "Message data use sequence-number prefixes; full FETCH structure semantics remain in the component families."
+        },
+        {
+          "section": "7.4.1",
+          "title": "EXPUNGE Response",
+          "source_section_sha256": "a9b677e13209fc8557700d3e453f0328ea99aaad90c725a33fc3ca9ee41d290f",
+          "requirements": [
+            "IMAP-EXPUNGE-01",
+            "IMAP-RESP-12",
+            "IMAP-RESP-CLIENT-01"
+          ],
+          "note": "Sequence renumbering and EXPUNGE restrictions are separate. UID commands MAY expunge; current deferral is a narrower valid choice."
+        },
+        {
+          "section": "7.4.2",
+          "title": "FETCH Response",
+          "source_section_sha256": "f679d25e36d1460dcf58adbb43687853acb92c77366c652de73ab9128e96e234",
+          "requirements": [
+            "IMAP-FETCH-01",
+            "IMAP-ENV-01",
+            "IMAP-BS-01",
+            "IMAP-RESP-16"
+          ],
+          "note": "Metadata, body structures, sections and partials have narrower proofs. Host wire representation and all grammar alternatives remain explicit limits."
+        },
+        {
+          "section": "7.5",
+          "title": "Server Responses - Command Continuation Request",
+          "source_section_sha256": "2c27d91fd629b4d80d403fa84bf8b2bebf2c25a3b7f04d550cb038e56c147a2c",
+          "requirements": [
+            "IMAP-RESP-17",
+            "IMAP-AUTHENTICATE-02"
+          ],
+          "note": "Continuation requests precede synchronizing payloads and SASL challenges. Client wait-before-send duty is distinct from server framing."
+        }
+      ],
+      "codes": [
+        {
+          "code": "ALERT",
+          "requirements": [
+            "IMAP-RESP-05",
+            "IMAP-RESP-CLIENT-01",
+            "IMAP-SECURITY-08"
+          ],
+          "note": "Not emitted; client display and protected/unprotected trust rules are separate obligations."
+        },
+        {
+          "code": "BADCHARSET",
+          "requirements": [
+            "IMAP-RESP-06"
+          ],
+          "note": "Unsupported SEARCH charsets return this code with the supported list."
+        },
+        {
+          "code": "CAPABILITY",
+          "requirements": [
+            "IMAP-RESP-02"
+          ],
+          "note": "Greeting capability code matches the explicit capability result; authentication refresh has its own command proofs."
+        },
+        {
+          "code": "PARSE",
+          "requirements": [
+            "IMAP-RESP-07"
+          ],
+          "note": "Optional parse warning is not emitted; malformed-message handling is not proof of this code."
+        },
+        {
+          "code": "PERMANENTFLAGS",
+          "requirements": [
+            "IMAP-STORE-06",
+            "IMAP2-RESP-175"
+          ],
+          "note": "Permanent flags are distinguished from session-local flags; arbitrary keyword creation and its limit notification are not offered."
+        },
+        {
+          "code": "READ-ONLY",
+          "requirements": [
+            "IMAP-RESP-08"
+          ],
+          "note": "EXAMINE selection code is covered; dynamic backend ACL changes are not inferred."
+        },
+        {
+          "code": "READ-WRITE",
+          "requirements": [
+            "IMAP-RESP-08"
+          ],
+          "note": "SELECT selection code is covered; dynamic backend ACL changes are not inferred."
+        },
+        {
+          "code": "TRYCREATE",
+          "requirements": [
+            "IMAP-RESP-09"
+          ],
+          "note": "Missing destination is distinguished for APPEND/COPY; MOVE shares the narrow backend sentinel mapping."
+        },
+        {
+          "code": "UIDNEXT",
+          "requirements": [
+            "IMAP-SELECT-01",
+            "IMAP-SELECT-09"
+          ],
+          "note": "Selection exposes UIDNEXT; persistent allocation and fallback identity remain host boundaries."
+        },
+        {
+          "code": "UIDVALIDITY",
+          "requirements": [
+            "IMAP-SELECT-01",
+            "IMAP-SELECT-09"
+          ],
+          "note": "Selection exposes validity; stable store lifetime cannot be proved from the fallback."
+        },
+        {
+          "code": "UNSEEN",
+          "requirements": [
+            "IMAP-RESP-08"
+          ],
+          "note": "Rev1 first-unseen sequence response is covered; rev2 removes this code."
+        }
+      ]
+    },
+    {
+      "rfc": 9051,
+      "url": "https://www.rfc-editor.org/rfc/rfc9051.txt",
+      "sha256": "acf52a50eb748ea21b5ffdcb31c761d3fbba6242d53d4f53c2555de039c5c3cf",
+      "sections": [
+        {
+          "section": "7",
+          "title": "Server Responses",
+          "source_section_sha256": "94c88e293e03a214b122e75846e4a77e2e6f2ee185ceb2dbc53ea708ee5c82c9",
+          "requirements": [
+            "IMAP-RESP-01",
+            "IMAP-RESP-AUDIT-02",
+            "IMAP-RESP-CLIENT-01"
+          ],
+          "note": "Tag identity, untagged data and continuation framing have component proofs; unsolicited update/client memory duties remain separate."
+        },
+        {
+          "section": "7.1",
+          "title": "Server Responses - Generic Status Responses",
+          "source_section_sha256": "f842cd0bae8f47da261cf116e15ba1f4c4df4582df0a142365bf63adf062ebe4",
+          "requirements": [
+            "IMAP-RESP-02",
+            "IMAP-RESP-04",
+            "IMAP-RESP-AUDIT-03",
+            "IMAP-RESP-CLIENT-01"
+          ],
+          "note": "Each named response code is dispositioned below. Optional availability and client presentation/unknown-code duties do not imply server implementation."
+        },
+        {
+          "section": "7.1.1",
+          "title": "OK Response",
+          "source_section_sha256": "a61e25984a8e87f2dd6e5f3f873d5b07065f770cd5edc1ef272bccd58b27bfbb",
+          "requirements": [
+            "IMAP-GREET-01",
+            "IMAP-RESP-AUDIT-02"
+          ],
+          "note": "OK greeting begins unauthenticated; tagged OK marks success. Optional informational alerts are not emitted."
+        },
+        {
+          "section": "7.1.2",
+          "title": "NO Response",
+          "source_section_sha256": "be53c6ff8d1f63f1f8206a1a1ee51a3e63f23ce7b19f8bc716f5542210cbcbcd",
+          "requirements": [
+            "IMAP-RESP-10",
+            "IMAP-RESP-AUDIT-02"
+          ],
+          "note": "Tagged NO reports operational failure while selection remains usable. Optional untagged warnings are not emitted."
+        },
+        {
+          "section": "7.1.3",
+          "title": "BAD Response",
+          "source_section_sha256": "c486caff3f96e5255dc559f398c1e395867cf4b2c5c04e3d3a75a0c3ade7aa15",
+          "requirements": [
+            "IMAP-RESP-03",
+            "IMAP-RESP-AUDIT-01",
+            "IMAP-RESP-AUDIT-02"
+          ],
+          "note": "Undetermined commands, including blank lines, receive untagged BAD. Determined protocol failures carry their own tag; the next command remains usable."
+        },
+        {
+          "section": "7.1.4",
+          "title": "PREAUTH Response",
+          "source_section_sha256": "5f6ea9dd5d5723bd6372919f4981b01906152539f660da3aacb337d237e67449",
+          "requirements": [
+            "IMAP-RESP-11",
+            "IMAP2-RESP-178"
+          ],
+          "note": "PREAUTH is not offered. Its protected-transport recommendation and client refusal duty do not establish a server feature."
+        },
+        {
+          "section": "7.1.5",
+          "title": "BYE Response",
+          "source_section_sha256": "79c1273a7e8828920172b8a7113c7df2b8b1c4a78c30b0fa721559fda1e40295",
+          "requirements": [
+            "IMAP-RESP-13",
+            "IMAP-RESP-14",
+            "IMAP-GREET-02"
+          ],
+          "note": "LOGOUT sends BYE then tagged OK; panic, deadline and refusal paths close after untagged BYE. Deadline injection proves handling, not elapsed production timing."
+        },
+        {
+          "section": "7.2",
+          "title": "Server Responses - Server Status",
+          "source_section_sha256": "0d92c997ba4a170532181a95156cc0878f38463849c372329a0c2a0a572be355",
+          "requirements": [
+            "IMAP-RESP-01"
+          ],
+          "note": "Server status data remain untagged."
+        },
+        {
+          "section": "7.2.1",
+          "title": "ENABLED Response",
+          "source_section_sha256": "a55ca17175c06d6af7c4eabb1e4f721be5b852eb262dca37a57fc65faa0dd2ba",
+          "requirements": [
+            "IMAP-ENABLE-01",
+            "IMAP-ENABLE-02",
+            "IMAP-ENABLE-03"
+          ],
+          "note": "ENABLED lists successfully enabled features, including empty results. This does not imply ENABLE IMAP4rev2."
+        },
+        {
+          "section": "7.2.2",
+          "title": "CAPABILITY Response",
+          "source_section_sha256": "de02c75822d3e3f43ffee5962117c620a6f235df7ead7527e304d8f5bc76eb22",
+          "requirements": [
+            "IMAP2-RESP-180",
+            "IMAP2-RESP-181",
+            "IMAP2-RESP-182",
+            "IMAP2-RESP-183",
+            "IMAP2-RESP-184"
+          ],
+          "note": "Shared protected-auth behavior has proofs; rev2 capability and dual-mode selection remain blocked under #718."
+        },
+        {
+          "section": "7.3",
+          "title": "Server Responses - Mailbox Status",
+          "source_section_sha256": "c82b9f8f50c490793487960cf3444b7e746ac55cbdd4e8ffef65e6415d59bf11",
+          "requirements": [
+            "IMAP-RESP-01"
+          ],
+          "note": "Mailbox status data remain untagged."
+        },
+        {
+          "section": "7.3.1",
+          "title": "LIST Response",
+          "source_section_sha256": "ad09ae36520ca4f2e14ea87286f65b3dc01cac6a0b57d1820daa53cfc7b331c2",
+          "requirements": [
+            "IMAP-LIST-01",
+            "IMAP-LIST-02",
+            "IMAP2-RESP-187",
+            "IMAP2-RESP-188",
+            "IMAP2-RESP-189"
+          ],
+          "note": "LIST syntax, attributes, separator consistency and reusable mailbox names have narrow component proofs; arbitrary hidden-child ACLs remain host-side."
+        },
+        {
+          "section": "7.3.2",
+          "title": "NAMESPACE Response",
+          "source_section_sha256": "1b9c93f9ba8e8d9e6925930e7140abe437ba12f147cdec2767b702795c00c462",
+          "requirements": [
+            "IMAP-NAMESPACE-01",
+            "IMAP-NAMESPACE-02"
+          ],
+          "note": "Personal namespace and NIL unavailable namespace classes are offered; shared/other-user namespaces and arbitrary ACLs are not inferred."
+        },
+        {
+          "section": "7.3.3",
+          "title": "STATUS Response",
+          "source_section_sha256": "cab7246ff634aba20626c57c8b993fcfce1170214c27584e8ddad01052d81201",
+          "requirements": [
+            "IMAP-STATUS-01",
+            "IMAP-STATUS-02"
+          ],
+          "note": "STATUS names the requested mailbox and attributes; detailed item/backend identity boundaries remain in the STATUS family."
+        },
+        {
+          "section": "7.3.4",
+          "title": "ESEARCH Response",
+          "source_section_sha256": "cd38f2e3d981a5cc48e4ee48b4ab1cc158ef687e80e13eabec8e6fa293959e4b",
+          "requirements": [
+            "IMAP-ESEARCH-01",
+            "IMAP2-RESP-191",
+            "IMAP2-RESP-192",
+            "IMAP2-RESP-193",
+            "IMAP2-RESP-194",
+            "IMAP2-RESP-195",
+            "IMAP2-RESP-196"
+          ],
+          "note": "ESEARCH item uniqueness, empty-result omissions, matching sets and COUNT have component proofs. Rev2 default SEARCH switching is not implemented."
+        },
+        {
+          "section": "7.3.5",
+          "title": "FLAGS Response",
+          "source_section_sha256": "87ed4e5f1589f8b50d8f9ce0b4dc936a09bd91c158e142a2d5b019878b571ebb",
+          "requirements": [
+            "IMAP-SELECT-01",
+            "IMAP-STORE-06",
+            "IMAP-RESP-CLIENT-01"
+          ],
+          "note": "FLAGS and PERMANENTFLAGS have distinct scopes; keyword persistence and client memory duties remain separate."
+        },
+        {
+          "section": "7.4",
+          "title": "Server Responses - Mailbox Size",
+          "source_section_sha256": "d6f91e01e9d74cfc31a5e8537084be90e14c8f78a9a7fdc415925b498419971e",
+          "requirements": [
+            "IMAP-UPDATE-01"
+          ],
+          "note": "Numeric mailbox totals remain untagged; rev2 removes RECENT rather than proving the rev1 approximation."
+        },
+        {
+          "section": "7.4.1",
+          "title": "EXISTS Response",
+          "source_section_sha256": "14249bf141b161b2f52e4a6d428b0a54ec7f7816d8a0df9b6c46c9d531a2f440",
+          "requirements": [
+            "IMAP-SELECT-01",
+            "IMAP-UPDATE-01",
+            "IMAP-RESP-CLIENT-01"
+          ],
+          "note": "EXISTS reports total messages on selection and updates. Remembering the new count is a client duty."
+        },
+        {
+          "section": "7.5",
+          "title": "Server Responses - Message Status",
+          "source_section_sha256": "286b7b761de6a1257f728b5cb80de2410cf2633f75b14e2ca18ad62701c15b8a",
+          "requirements": [
+            "IMAP-FETCH-01",
+            "IMAP-EXPUNGE-01"
+          ],
+          "note": "Message data use sequence-number prefixes; full FETCH structure semantics remain in the component families."
+        },
+        {
+          "section": "7.5.1",
+          "title": "EXPUNGE Response",
+          "source_section_sha256": "5485c5e00008bc97dce404471073eaf28ba8c16b1aaa0ba2f1ec2718fa8b49fc",
+          "requirements": [
+            "IMAP-EXPUNGE-01",
+            "IMAP2-RESP-199",
+            "IMAP-RESP-CLIENT-01"
+          ],
+          "note": "Sequence renumbering and incomplete-command restrictions are separate. UID commands MAY expunge; current deferral is stricter, not a normative UID prohibition."
+        },
+        {
+          "section": "7.5.2",
+          "title": "FETCH Response",
+          "source_section_sha256": "5108afcab26ef6b22e9f040eaab2721b8e90ab30cccd1cb1162d1708e916f698",
+          "requirements": [
+            "IMAP2-RESP-201",
+            "IMAP2-RESP-202",
+            "IMAP2-RESP-203",
+            "IMAP2-RESP-204",
+            "IMAP2-RESP-205",
+            "IMAP2-RESP-207",
+            "IMAP2-RESP-208",
+            "IMAP2-RESP-209",
+            "IMAP2-RESP-210",
+            "IMAP2-RESP-211",
+            "IMAP2-RESP-212",
+            "IMAP2-RESP-213",
+            "IMAP2-RESP-215"
+          ],
+          "note": "BINARY representation, sizes and refusal paths, partial origins and ordered structures are separate. Text canonicalization, host BODY encoding and unsolicited UID formatting remain recorded rev2 boundaries."
+        },
+        {
+          "section": "7.6",
+          "title": "Server Responses - Command Continuation Request",
+          "source_section_sha256": "dc5d53dfb04c4eb46a0aa02b8b15df77e49595d6951707f793e644589b9e8382",
+          "requirements": [
+            "IMAP-RESP-17",
+            "IMAP-AUTHENTICATE-02"
+          ],
+          "note": "Continuation requests precede synchronizing payloads and SASL challenges. Client wait-before-send duty is distinct from server framing."
+        }
+      ],
+      "codes": [
+        {
+          "code": "ALERT",
+          "requirements": [
+            "IMAP-RESP-05",
+            "IMAP-RESP-CLIENT-01",
+            "IMAP-SECURITY-08"
+          ],
+          "note": "Not emitted; client display and protected/unprotected trust rules are separate obligations."
+        },
+        {
+          "code": "ALREADYEXISTS",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03"
+          ],
+          "note": "Not emitted as a distinct code. A generic NO does not prove this optional condition; host error taxonomy is not added by this audit."
+        },
+        {
+          "code": "APPENDUID",
+          "requirements": [
+            "IMAP-APPENDUID-01",
+            "IMAP2-RESP-174"
+          ],
+          "note": "Single append uses one destination UID, never a UID set; MULTIAPPEND is not implemented."
+        },
+        {
+          "code": "AUTHENTICATIONFAILED",
+          "requirements": [
+            "IMAP2-SEC-243"
+          ],
+          "note": "Credential failure is generic on the wire; backend diagnostics and the supplied secret are not returned."
+        },
+        {
+          "code": "AUTHORIZATIONFAILED",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03",
+            "IMAP-AUTHENTICATE-06"
+          ],
+          "note": "Differing authorization identity is refused, but this distinct optional code is not emitted."
+        },
+        {
+          "code": "BADCHARSET",
+          "requirements": [
+            "IMAP-RESP-06"
+          ],
+          "note": "Unsupported SEARCH charsets return this code with the supported list."
+        },
+        {
+          "code": "CANNOT",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03"
+          ],
+          "note": "Not emitted as a distinct code. A generic NO does not prove this optional condition; host error taxonomy is not added by this audit."
+        },
+        {
+          "code": "CAPABILITY",
+          "requirements": [
+            "IMAP-RESP-02"
+          ],
+          "note": "Greeting capability code matches the explicit capability result; authentication refresh has its own command proofs."
+        },
+        {
+          "code": "CLIENTBUG",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03"
+          ],
+          "note": "Not emitted as a distinct code. A generic NO does not prove this optional condition; host error taxonomy is not added by this audit."
+        },
+        {
+          "code": "CLOSED",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03"
+          ],
+          "note": "Not emitted as a distinct code. A generic NO does not prove this optional condition; host error taxonomy is not added by this audit."
+        },
+        {
+          "code": "CONTACTADMIN",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03"
+          ],
+          "note": "Not emitted as a distinct code. A generic NO does not prove this optional condition; host error taxonomy is not added by this audit."
+        },
+        {
+          "code": "COPYUID",
+          "requirements": [
+            "IMAP-COPY-01",
+            "IMAP-COPY-15"
+          ],
+          "note": "UID mapping and destination privacy are separate; backend unreadable-destination metadata remains a boundary."
+        },
+        {
+          "code": "CORRUPTION",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03"
+          ],
+          "note": "Not emitted as a distinct code. A generic NO does not prove this optional condition; host error taxonomy is not added by this audit."
+        },
+        {
+          "code": "EXPIRED",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03"
+          ],
+          "note": "Not emitted as a distinct code. A generic NO does not prove this optional condition; host error taxonomy is not added by this audit."
+        },
+        {
+          "code": "EXPUNGEISSUED",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03"
+          ],
+          "note": "Not emitted as a distinct code. A generic NO does not prove this optional condition; host error taxonomy is not added by this audit."
+        },
+        {
+          "code": "HASCHILDREN",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03"
+          ],
+          "note": "Not emitted as a distinct code. A generic NO does not prove this optional condition; host error taxonomy is not added by this audit."
+        },
+        {
+          "code": "INUSE",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03"
+          ],
+          "note": "Not emitted as a distinct code. A generic NO does not prove this optional condition; host error taxonomy is not added by this audit."
+        },
+        {
+          "code": "LIMIT",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03"
+          ],
+          "note": "Not emitted as a distinct code. A generic NO does not prove this optional condition; host error taxonomy is not added by this audit."
+        },
+        {
+          "code": "NONEXISTENT",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03"
+          ],
+          "note": "Not emitted as a distinct code. A generic NO does not prove this optional condition; host error taxonomy is not added by this audit."
+        },
+        {
+          "code": "NOPERM",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03"
+          ],
+          "note": "Not emitted as a distinct code. A generic NO does not prove this optional condition; host error taxonomy is not added by this audit."
+        },
+        {
+          "code": "OVERQUOTA",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03"
+          ],
+          "note": "Not emitted as a distinct code. A generic NO does not prove this optional condition; host error taxonomy is not added by this audit."
+        },
+        {
+          "code": "PARSE",
+          "requirements": [
+            "IMAP-RESP-07"
+          ],
+          "note": "Optional parse warning is not emitted; malformed-message handling is not proof of this code."
+        },
+        {
+          "code": "PERMANENTFLAGS",
+          "requirements": [
+            "IMAP-STORE-06",
+            "IMAP2-RESP-175"
+          ],
+          "note": "Permanent flags are distinguished from session-local flags; arbitrary keyword creation and its limit notification are not offered."
+        },
+        {
+          "code": "PRIVACYREQUIRED",
+          "requirements": [
+            "IMAP-AUTHENTICATE-09",
+            "IMAP-LOGIN-02"
+          ],
+          "note": "Configured cleartext authentication is refused before credentials are checked; explicit development cleartext mode is outside this claim."
+        },
+        {
+          "code": "READ-ONLY",
+          "requirements": [
+            "IMAP-RESP-08"
+          ],
+          "note": "EXAMINE selection code is covered; dynamic backend ACL changes are not inferred."
+        },
+        {
+          "code": "READ-WRITE",
+          "requirements": [
+            "IMAP-RESP-08"
+          ],
+          "note": "SELECT selection code is covered; dynamic backend ACL changes are not inferred."
+        },
+        {
+          "code": "SERVERBUG",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03"
+          ],
+          "note": "Not emitted as a distinct code. A generic NO does not prove this optional condition; host error taxonomy is not added by this audit."
+        },
+        {
+          "code": "TRYCREATE",
+          "requirements": [
+            "IMAP-RESP-09"
+          ],
+          "note": "Missing destination is distinguished for APPEND/COPY; MOVE shares the narrow backend sentinel mapping."
+        },
+        {
+          "code": "UIDNEXT",
+          "requirements": [
+            "IMAP-SELECT-01",
+            "IMAP-SELECT-09"
+          ],
+          "note": "Selection exposes UIDNEXT; persistent allocation and fallback identity remain host boundaries."
+        },
+        {
+          "code": "UIDNOTSTICKY",
+          "requirements": [
+            "IMAP2-RESP-176"
+          ],
+          "note": "Not emitted; nonpersistent UID metadata is not offered and stable identities remain a host obligation."
+        },
+        {
+          "code": "UIDVALIDITY",
+          "requirements": [
+            "IMAP-SELECT-01",
+            "IMAP-SELECT-09"
+          ],
+          "note": "Selection exposes validity; stable store lifetime cannot be proved from the fallback."
+        },
+        {
+          "code": "UNAVAILABLE",
+          "requirements": [
+            "IMAP-RESP-AUDIT-03"
+          ],
+          "note": "Not emitted as a distinct code. A generic NO does not prove this optional condition; host error taxonomy is not added by this audit."
+        },
+        {
+          "code": "UNKNOWN-CTE",
+          "requirements": [
+            "IMAP2-RESP-203",
+            "IMAP2-RESP-205"
+          ],
+          "note": "BINARY and BINARY.SIZE refuse unknown decoding; this does not implement all rev2 text canonicalization."
+        }
+      ]
+    }
+  ]
+}

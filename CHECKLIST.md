@@ -27,6 +27,19 @@ and [RFC 9051](https://www.rfc-editor.org/rfc/rfc9051.txt).
 CI runs `go run ./internal/checklist pkg/imap/rfctest`, which fails on an item
 with no test, a test naming an unknown item, or a duplicate ID.
 
+## Core response transcript audit
+
+These narrow proofs and boundaries supplement the existing rows. The complete
+RFC inventory remains PARTIAL; [RFC-RESPONSES.md](RFC-RESPONSES.md) pins every
+numbered section 7 subsection and named core response code from both revisions.
+The crosswalk is provenance evidence, not proof of every prose/grammar alternative.
+
+| ID | Section | Level | Requirement | Tests |
+|----|---------|-------|-------------|-------|
+| IMAP-RESP-AUDIT-01 | RFC 3501 §7.1.3; RFC 9051 §7.1.3 | Normative | A blank command receives untagged BAD, followed by the next pipelined command's own completion, without changing authentication or selection. | TestEmptyCommandBADTranscript |
+| IMAP-RESP-AUDIT-02 | RFC 3501 §§7, 7.1.1–7.1.3; RFC 9051 §§7, 7.1.1–7.1.3 | Normative | Tagged BAD denotes protocol failure, NO operational failure and OK success; each uses the command's tag and permits later commands while the connection remains open. | TestStatusCompletionTranscript |
+| IMAP-RESP-AUDIT-03 | RFC 9051 §7.1 | Normative | Optional standardized failure/warning codes distinguish the conditions defined by each code when offered. | n/a: ALREADYEXISTS, AUTHORIZATIONFAILED, CANNOT, CLIENTBUG, CLOSED, CONTACTADMIN, CORRUPTION, EXPIRED, EXPUNGEISSUED, HASCHILDREN, INUSE, LIMIT, NONEXISTENT, NOPERM, OVERQUOTA, SERVERBUG and UNAVAILABLE are not emitted as distinct codes. Generic NO is not proof of those distinctions; rev2 CLOSED remains rest-mail/rest-mail-server#718 and a host failure taxonomy remains rest-mail/rest-mail-server#374. |
+
 ## RFC 3501: connection, any-state commands and LOGIN
 
 | ID | Section | Level | Requirement | Tests |
@@ -768,7 +781,7 @@ inventory is complete.
 | IMAP-RESP-01 | RFC 3501 §§7, 7.1 | Normative | Server data and status responses are untagged lines starting `* `; a completion carries the command's own tag. | TestTaggedCompletion, TestUntaggedBadForUndeterminedCommand |
 | IMAP-RESP-02 | RFC 3501 §§7.1, 7.1.1 | MAY | The greeting's CAPABILITY response code lists IMAP4rev1 and matches the list a CAPABILITY command then returns. | TestGreetingCapabilityCode |
 | IMAP-RESP-03 | RFC 3501 §7.1.3 | Normative | A line from which no tag and command can be read gets an untagged BAD, and the session goes on to the next command. | TestUntaggedBadForUndeterminedCommand |
-| IMAP-RESP-04 | RFC 3501 §7.1 | SHOULD | Response codes an implementation defines for itself carry an `X` prefix. | n/a: the engine defines none. Every code it sends is registered: CAPABILITY, PERMANENTFLAGS, READ-ONLY, READ-WRITE, UIDNEXT, UIDVALIDITY, UNSEEN and BADCHARSET (RFC 3501), APPENDUID and COPYUID (RFC 4315), AUTHENTICATIONFAILED and PRIVACYREQUIRED (RFC 5530); checked against session.go and extensions.go (now in pkg/imap/server) on 2026-10-22. |
+| IMAP-RESP-04 | RFC 3501 §7.1 | SHOULD | Response codes an implementation defines for itself carry an `X` prefix. | n/a: the engine defines no private code; RFC-RESPONSES.md records each core standard code separately. Registered extension codes such as TOOBIG remain under their extension requirements. A listed core code is not a claim that it is emitted. |
 | IMAP-RESP-05 | RFC 3501 §7.1 | Normative | ALERT text is a special alert for the user. | n/a: the engine sends no ALERT; presenting one is a client duty (IMAP-RESP-CLIENT-01). |
 | IMAP-RESP-06 | RFC 3501 §§6.4.4, 7.1 | Normative | A SEARCH in an unsupported charset fails with NO and a BADCHARSET code listing the supported charsets. | TestSearchCharsets |
 | IMAP-RESP-07 | RFC 3501 §7.1 | Normative | PARSE reports a failure to parse a message's RFC 2822 or MIME headers. | n/a: optional and unsupported; malformed headers are answered as IMAP-ENV-12 and IMAP-MSG-08 describe, without a PARSE warning. |
@@ -776,9 +789,9 @@ inventory is complete.
 | IMAP-RESP-09 | RFC 3501 §7.1 | Normative | TRYCREATE marks an APPEND or COPY that failed because the target mailbox does not exist. | TestTryCreateMissingDestination |
 | IMAP-RESP-10 | RFC 3501 §7.1.2 | Normative | A tagged NO reports that the command failed, and the session goes on. | TestExpungeBackendFailure, TestFetchBackendFailure |
 | IMAP-RESP-11 | RFC 3501 §7.1.4 | Normative | PREAUTH greets a connection that is already authenticated. | n/a: the engine never pre-authenticates; every greeting is OK (TestGreeting). |
-| IMAP-RESP-12 | RFC 3501 §7.4.1 | MUST NOT | Send no EXPUNGE when no command is in progress, or while answering FETCH, STORE or SEARCH (UID forms included), even after another session removed a message. | TestNoExpungeDuringFetchStoreSearch |
+| IMAP-RESP-12 | RFC 3501 §7.4.1 | MUST NOT | Send EXPUNGE with no complete command in progress or while answering sequence-number FETCH, STORE or SEARCH. UID variants MAY expunge; the engine chooses to defer them too. | TestNoExpungeDuringFetchStoreSearch |
 | IMAP-RESP-13 | RFC 3501 §§6.1.3, 7.1.5 | Normative | BYE is always untagged. On LOGOUT it comes before the tagged OK; on a failure the connection closes straight after it. | TestLogout, TestCommandLiteralRefusalCloses |
-| IMAP-RESP-14 | RFC 3501 §7.1.5 | Normative | BYE announces a panic shutdown, an inactivity autologout, or a greeting that refuses the connection. | n/a: not fully supported yet. Autologout and panic BYE are proven in the server package (pkg/imap/server/session_autologout_test.go, session_panic_test.go), not on this harness; the refusal greeting is IMAP-GREET-02. Tracked in rest-mail/rest-mail-server#374. |
+| IMAP-RESP-14 | RFC 3501 §7.1.5; RFC 9051 §7.1.5 | Normative | Panic shutdown and inactivity autologout send untagged BYE and close without a tagged completion. Refusal greetings are IMAP-GREET-02. The timeout fixture injects a transport deadline error, not a real 30-minute wait. | TestPanicByeTranscript, TestAutologoutByeTranscript |
 | IMAP-RESP-15 | RFC 3501 §7.3.2 | Normative | RECENT reports the number of messages with the `\Recent` flag. | n/a: not supported yet; the engine keeps no `\Recent` state and reports the unseen count (see TestSelectionExamples). Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-RESP-16 | RFC 3501 §7.4.2 | MUST | Header data is 7-bit, and non-textual body data is transfer-encoded to text before it is sent. | n/a: not supported yet; the engine returns stored octets as they are and does not re-encode 8-bit headers or binary bodies. NUL is refused (IMAP-ENV-12). Tracked in rest-mail/rest-mail-server#374. |
 | IMAP-RESP-17 | RFC 3501 §§4.3, 7.5 | Normative | A `+` continuation request asks for the rest of a command: before synchronizing literal octets and during IDLE. | TestCommandLiteralAccepted, TestAppendExample, TestIdleDoneAndNextCommand |
@@ -1231,7 +1244,7 @@ Server responses are checked independently of clients' caching, unknown-code han
 | IMAP2-RESP-194 | RFC 9051 §7.3.4 | MUST | Return complete matching sequence/UID sets without ranges that include nonexistent or nonmatching UIDs. | TestESearch |
 | IMAP2-RESP-195 | RFC 9051 §7.3.4 | MUST NOT | Include ALL on an empty ESEARCH result, but still send the response. | TestESearchNoMatches |
 | IMAP2-RESP-196 | RFC 9051 §7.3.4 | MUST | Include a requested COUNT item even when the result count is zero. | TestESearch, TestESearchNoMatches |
-| IMAP2-RESP-199 | RFC 9051 §7.5.1 | MUST NOT | Send EXPUNGE with no command in progress, during argument continuation negotiation, or while answering FETCH/STORE/SEARCH. | TestNoExpungeWhileLiteralPending, TestNoUntaggedResponseWithoutCommand, TestNoExpungeDuringFetchStoreSearch |
+| IMAP2-RESP-199 | RFC 9051 §7.5.1 | MUST NOT | Send EXPUNGE with no complete command in progress, during argument continuation or while answering sequence-number FETCH, STORE or SEARCH. UID variants MAY expunge; the engine also defers these as a valid narrower policy. | TestNoExpungeWhileLiteralPending, TestNoUntaggedResponseWithoutCommand, TestNoExpungeDuringFetchStoreSearch |
 | IMAP2-RESP-201 | RFC 9051 §7.5.2 | SHOULD | Use a normal string for decoded 8-bit BINARY data without NUL, rather than literal8. | TestBinaryFetch |
 | IMAP2-RESP-202 | RFC 9051 §7.5.2 | MUST | Canonicalize line-oriented textual BINARY output to CRLF regardless of stored line endings. | n/a: binaryData returns decoded text without CRLF normalization. Full rev2 textual BINARY behavior awaits rest-mail/rest-mail-server#718. |
 | IMAP2-RESP-203 | RFC 9051 §7.5.2 | MUST | Refuse a BINARY decoding request with NO and UNKNOWN-CTE when the transfer encoding cannot be decoded. | TestBinaryUnknownCTE |
