@@ -447,6 +447,12 @@ grammars.
 
 Recent releases; see [CHANGELOG.md](CHANGELOG.md) for the complete history.
 
+### v0.13.2 (2026-10-27)
+
+Command names, keywords and atoms stay ASCII under UTF8=ACCEPT, untrusted SEARCH
+values never reach response text, and sequence ranges stay unsigned on 32-bit
+hosts. No API changes.
+
 ### v0.13.1 (2026-10-26)
 
 Stricter input: QUOTA commands, SASL PLAIN payloads and mailbox SIZE metadata
