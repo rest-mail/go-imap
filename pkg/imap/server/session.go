@@ -446,6 +446,9 @@ func (s *Session) Handle() {
 		}
 
 		if line == "" {
+			// No command or tag can be determined: the BAD is untagged,
+			// including the empty-line example in RFC3501/RFC9051 §7.1.3.
+			s.send("* BAD Empty command line")
 			continue
 		}
 
