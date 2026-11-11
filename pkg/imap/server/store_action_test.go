@@ -24,9 +24,10 @@ func checkStoreAction(t *testing.T, action string) {
 		return
 	}
 	wantMode := storeReplace
-	if action[0] == '+' {
+	switch action[0] {
+	case '+':
 		wantMode = storeAdd
-	} else if action[0] == '-' {
+	case '-':
 		wantMode = storeRemove
 	}
 	if mode != wantMode || silent != strings.Contains(action, ".") {
