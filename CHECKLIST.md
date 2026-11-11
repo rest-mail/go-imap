@@ -164,6 +164,7 @@ example. Flag lists are sets; this engine orders system flags as \Seen,
 | IMAP-STORE-10 | RFC 3501 §§6.4.6, 9 | Normative | Accept an empty flag-list, bare SP-separated flags, case-insensitive system flags, and keywords or flag-extensions using any ATOM-CHAR, for every action with and without .SILENT. | TestStoreValidFlagList |
 | IMAP-STORE-11 | RFC 3501 §§2.3.2, 6.4.6 | Normative | FLAGS replaces the flags other than \Recent: naming \Recent in a FLAGS, +FLAGS or -FLAGS list sets or clears nothing, and a STORE never answers with \Recent. | TestStoreLeavesRecentAlone |
 | IMAP-STORE-12 | RFC 3501 §6.4.6 | SHOULD | .SILENT suppresses only the STORE's own answer: a flag change from another source the session observes (when an idling session re-reads its mailbox) is still reported with an untagged FETCH carrying the message's flags. | TestStoreSilentStillReportsOtherSourcesChanges |
+| IMAP-STORE-13 | RFC 3501 §§6.4.6, 9 | Normative | STORE data-item names are ASCII case-insensitive FLAGS, +FLAGS or -FLAGS with at most one .SILENT suffix; reject other names, non-ASCII look-alikes such as `FLAGſ`, and surrounding whitespace with BAD before writes, flag changes or FETCH replies, and retain a usable session. | TestStoreInvalidAction, TestStoreActionCaseVariants |
 
 A NO from a multi-message set reports the first refused write; earlier
 messages in the set keep their applied changes, which RFC 3501 permits.

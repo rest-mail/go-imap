@@ -70,7 +70,14 @@ const (
 // the .SILENT suffix was present, and ok=false if the token is not a recognised
 // FLAGS store item.
 func parseStoreAction(action string) (mode storeMode, silent bool, ok bool) {
-	a := strings.ToUpper(strings.TrimSpace(action))
+	// RFC 3501 §9 names these terminals in ASCII. Reject padding and
+	// non-ASCII octets before folding, so long s cannot become FLAGS.
+	for i := 0; i < len(action); i++ {
+		if action[i] <= 0x20 || action[i] >= 0x7f {
+			return 0, false, false
+		}
+	}
+	a := strings.ToUpper(action)
 	if strings.HasSuffix(a, ".SILENT") {
 		silent = true
 		a = strings.TrimSuffix(a, ".SILENT")

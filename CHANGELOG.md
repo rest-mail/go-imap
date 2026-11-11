@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- STORE and UID STORE now reject non-ASCII or padded data-item names before
+  folding case. Names such as `FLAGſ` and `FLAGS` followed by a tab used to
+  update flags instead of returning BAD (RFC 3501 §§6.4.6, 9).
+
 - Preserve literal argument types before materializing their bytes. SEARCH
   dates no longer become valid quoted dates, and atom/number-only positions,
   ENABLE, AUTHENTICATE and no-argument commands refuse literals before soliciting
